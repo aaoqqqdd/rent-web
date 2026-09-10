@@ -56,7 +56,7 @@ export function renderApply(data: ApplyData): string {
     <div class="section-head">
       <div class="kicker">立即租赁</div>
       <h2>填写租赁信息</h2>
-      <p style="color:var(--muted-fg);margin-top:12px">提交后会生成一份租赁合同，你在下一步在线签署即可，全程无需线下跑腿。</p>
+      <p style="color:var(--muted-fg);margin-top:12px">填写并注册后提交申请，订单进入待确认状态；管理员确认后会联系你安排在线签约与付款，全程无需线下跑腿。</p>
     </div>
 
     <form id="apply-form">
@@ -133,10 +133,11 @@ export function renderApply(data: ApplyData): string {
       </div>
 
       <div class="form-card">
+        <p class="hint" style="margin-top:0">下单前需注册一个账号（用于后续付款与在线签约）。已注册过？填相同邮箱和密码即可。</p>
         <div class="row2">
           <div class="field">
-            <label for="contactName">联系人</label>
-            <input id="contactName" name="contactName" maxlength="120" autocomplete="name">
+            <label for="contactName">姓名</label>
+            <input id="contactName" name="contactName" maxlength="120" autocomplete="name" required>
           </div>
           <div class="field">
             <label for="contactPhone">联系电话</label>
@@ -144,8 +145,19 @@ export function renderApply(data: ApplyData): string {
           </div>
         </div>
         <div class="field">
-          <label for="contactEmail">邮箱</label>
-          <input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email">
+          <label for="contactEmail">邮箱（登录账号）</label>
+          <input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="password">设置密码</label>
+            <input type="password" id="password" name="password" minlength="8" autocomplete="new-password" required>
+            <p class="hint">至少 8 位，含字母、数字和符号。</p>
+          </div>
+          <div class="field">
+            <label for="password2">确认密码</label>
+            <input type="password" id="password2" autocomplete="new-password" required>
+          </div>
         </div>
         <div class="field">
           <label for="couponCode">优惠码（选填）</label>
@@ -155,13 +167,25 @@ export function renderApply(data: ApplyData): string {
           <label for="rentalNote">备注（选填）</label>
           <textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea>
         </div>
+        <div class="field" style="display:flex;gap:8px;align-items:flex-start">
+          <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
+          <label for="agree" style="font-weight:400;margin:0">我已阅读并同意
+            <a href="${esc(appUrl)}/terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与
+            <a href="${esc(appUrl)}/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
+        </div>
         ${turnstile}
-        <p class="hint">提交即表示你同意在下一步阅读并签署正式租赁合同。个人信息仅用于本次租赁。</p>
+        <p class="hint">提交后订单进入待确认状态，管理员确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">生成合同并去签署</button>
+      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">注册并提交申请</button>
       <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">产品目录</a> 或联系客服。</p>
     </form>
+
+    <div class="form-card" id="apply-done" hidden style="margin-top:18px">
+      <h3 style="margin-bottom:8px">申请已提交 ✓</h3>
+      <p id="apply-done-msg" style="color:var(--muted-fg);font-size:14px"></p>
+      <p style="margin-top:14px"><a class="btn btn-ghost" href="/products">继续浏览产品</a></p>
+    </div>
   </div>
 </section>
 
@@ -215,9 +239,20 @@ export function renderApply(data: ApplyData): string {
   });
   refresh();
 
+  var pw = document.getElementById('password');
+  var pw2 = document.getElementById('password2');
+  var doneBox = document.getElementById('apply-done');
+  var doneMsg = document.getElementById('apply-done-msg');
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     errBox.hidden = true;
+    if (pw.value !== pw2.value) {
+      errBox.textContent = '两次输入的密码不一致。';
+      errBox.hidden = false;
+      errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     var data = {};
     new FormData(form).forEach(function (v, k) { data[k] = v; });
     var ts = form.querySelector('[name="cf-turnstile-response"]');
@@ -230,8 +265,11 @@ export function renderApply(data: ApplyData): string {
       body: JSON.stringify(data)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (res.ok && res.j && res.j.ok && res.j.signUrl) {
-          window.location.href = res.j.signUrl;
+        if (res.ok && res.j && res.j.ok) {
+          form.hidden = true;
+          doneMsg.textContent = res.j.message || '申请已提交，管理员确认后会联系你。';
+          doneBox.hidden = false;
+          doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return;
         }
         throw new Error((res.j && res.j.message) || '提交失败，请稍后重试。');
@@ -240,7 +278,7 @@ export function renderApply(data: ApplyData): string {
         errBox.textContent = err.message || '提交失败，请稍后重试。';
         errBox.hidden = false;
         submitBtn.disabled = false;
-        submitBtn.textContent = '生成合同并去签署';
+        submitBtn.textContent = '注册并提交申请';
         errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
   });
