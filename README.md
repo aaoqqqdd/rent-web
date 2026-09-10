@@ -19,6 +19,7 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 | `/` | 落地页 | 「为你精选」3 张卡（每类别一台，优先现货）、「最低 $X/day」、页脚联系方式 |
 | `/products` | 全部在售设备，按游戏本 / 轻薄本 / 工作站分组 | 全量 `devices`（排除 RETIRED） |
 | `/apply` | 下单表单：选设备 + 租期 + 取还方式 + 注册信息 | 设备下拉、价格、最短租期、可选自取点 |
+| `/login`（`/register` 302 到此） | 独立注册 / 登录页。注册直接写 `users`，登录跳 `${APP_URL}/login` | 无（表单页） |
 | `/rental-guide` | 租赁流程 + 常见问题 | 无（静态文案） |
 | `/about` | 关于 + 联系方式 | 页面内联系方式来自 `systemSettings.companyDetails` |
 | `/healthz` `/favicon.ico` `/robots.txt` | 运维 / 爬虫 | — |
@@ -33,6 +34,22 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 4. 管理员在 rent 后台确认订单后，走既有 staff 建合同流程，生成 `/contract/sign` 链接让客户在线签署并付款。
 
 > 官网不实现登录态；账号一旦注册，客户可直接用同一邮箱 / 密码登录 rent 查看进度、付款、签约。
+
+## 注册 / 登录页（`/login`）
+
+- **注册**：`src/pages/login.ts` 的注册面板前端 JSON `POST /register` → `src/auth.ts`
+  `registerCustomer()` 直接 `INSERT INTO users`（`role='CUSTOMER'`、`password_hash` 为
+  `pbkdf2$100000$…`、`password_salt='v2'`），哈希算法与字段和 rent `src/lib/password.ts`
+  + `POST /register` 落库结果一致，注册完立即可在 rent 登录。`users_old` 镜像由库里的
+  `sync_users_legacy_parent_insert` 触发器自动完成。
+- **邀请码（选填）**：按 `users.referral_code` 匹配，无效则拒绝注册；命中则写 `referrer_id`
+  并镜像 `referral_codes` / `referrals` / `referral_audit_logs`（同 rent `lockReferralRelationship`
+  核心）。奖励发放仍由 rent 在被推荐人首单时处理；相关表缺失时静默跳过。
+- **人机验证**：配置 `TURNSTILE_SITE_KEY`（vars）+ `TURNSTILE_SECRET_KEY`（secret）后
+  `/register` 会做 siteverify；未配置 secret 则放行（与 `/public/rental-request` 一致）。
+- **限流**：共用 rent 的 `security_rate_limits` 表，scope `web-register`，每 IP 每小时 5 次。
+- **登录**：rent 持有会话、跨站无法在本域写 cookie，登录面板按钮直接把用户带到
+  `${APP_URL}/login`（及 `/forgot-password`）。
 
 ## 本地开发
 

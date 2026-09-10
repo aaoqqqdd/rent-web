@@ -30,6 +30,7 @@ function header(nav: Nav): string {
       <a href="/products">产品目录</a>
       <a href="/rental-guide">租赁说明</a>
       <a href="/about">关于我们</a>
+      <a href="/login">注册 / 登录</a>
     </nav>
     <a class="btn btn-primary" href="/apply">立即租赁</a>
   </div>

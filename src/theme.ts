@@ -187,6 +187,18 @@ p { margin: 0; }
   .row2, .row3 { grid-template-columns: 1fr; }
 }
 
+/* ---------- auth (注册 / 登录) ---------- */
+.auth-wrap { max-width: 560px; }
+.auth-tabs { display: flex; gap: 6px; padding: 5px; margin-bottom: 18px;
+  background: var(--muted); border: 1px solid var(--border); border-radius: 8px; }
+.auth-tab { flex: 1; padding: 10px 12px; font: inherit; font-size: 14px; font-weight: 600;
+  color: var(--muted-fg); background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+  transition: background .15s, color .15s; }
+.auth-tab:hover { color: var(--fg); }
+.auth-tab.is-active { background: var(--bg); color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--border); }
+.auth-panel.is-hidden { display: none; }
+
 /* ---------- content pages ---------- */
 .doc { max-width: 760px; }
 .doc h1 { font-size: clamp(30px, 5vw, 42px); }
