@@ -11,23 +11,11 @@ export function esc(value: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
-// 角标：蓝色 chevron + 白色斜杠（紧凑 44×44 视图框，透明底）。
-const MARK_PATHS = /* html */ `
-  <path d="M24 10 L42 39 L33 39 L24 25 L15 39 L6 39 Z" fill="#2563EB"/>
-  <path d="M5 39 L14 39 L33 4 L24 4 Z" fill="#FFFFFF"/>`
-
-// 横幅：角标 + GeekSlope 字标，作为一个整体缩放。顶栏 / 页脚用。
-const BANNER = /* html */ `
-<svg viewBox="0 0 214 44" fill="none" aria-label="GeekSlope" role="img" class="brand-banner">
-  ${MARK_PATHS}
-  <text x="52" y="31" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" letter-spacing="0.3" fill="#F2F5F9">GeekSlope</text>
+const LOGO = /* html */ `
+<svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+  <path d="M4 26 16 4l4 8-8 14z" fill="#00e6ff"/>
+  <path d="M15 26 24 9l4 8-5 9z" fill="#00c79f"/>
 </svg>`
-
-// 圆形徽标（favicon / 分享图）。
-const BADGE = /* svg */ `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#0A0A0F"/><g transform="translate(10 10)">${MARK_PATHS}</g></svg>`
-
-export const FAVICON_SVG = BADGE
-const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(BADGE)}`
 
 interface Nav {
   appUrl: string
