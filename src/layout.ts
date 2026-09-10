@@ -11,11 +11,23 @@ export function esc(value: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
-const LOGO = /* html */ `
-<svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-  <path d="M4 26 16 4l4 8-8 14z" fill="#00e6ff"/>
-  <path d="M15 26 24 9l4 8-5 9z" fill="#00c79f"/>
+// 角标：蓝色 chevron + 白色斜杠（48×48，透明底）。
+const MARK_PATHS = /* html */ `
+  <path d="M27 15 L44 41 L35.5 41 L27 28 L18.5 41 L10 41 Z" fill="#2563EB"/>
+  <path d="M9 41 L17 41 L34 7 L26 7 Z" fill="#FFFFFF"/>`
+
+// 横幅：角标 + GeekSlope 字标，作为一个整体缩放。顶栏 / 页脚用。
+const BANNER = /* html */ `
+<svg viewBox="0 0 236 48" fill="none" aria-label="GeekSlope" role="img" class="brand-banner">
+  ${MARK_PATHS}
+  <text x="60" y="34" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="29" font-weight="700" letter-spacing="0.4" fill="#EAF0F6">GeekSlope</text>
 </svg>`
+
+// 圆形徽标（favicon / 分享图）。
+const BADGE = /* svg */ `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#0A0A0F"/><g transform="translate(16 16) scale(0.6667)">${MARK_PATHS}</g></svg>`
+
+export const FAVICON_SVG = BADGE
+const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(BADGE)}`
 
 interface Nav {
   appUrl: string
@@ -25,7 +37,7 @@ function header(nav: Nav): string {
   return /* html */ `
 <header class="site-header">
   <div class="wrap">
-    <a class="brand" href="/">${LOGO}<span>GeekSlope</span></a>
+    <a class="brand" href="/">${BANNER}</a>
     <nav class="nav">
       <a href="/products">产品目录</a>
       <a href="/rental-guide">租赁说明</a>
@@ -43,7 +55,7 @@ function footer(contact: SiteContact, appUrl: string): string {
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-brand">
-        <a class="brand" href="/">${LOGO}<span>GeekSlope</span></a>
+        <a class="brand" href="/">${BANNER}</a>
         <p>专业电脑出租平台，为学生和个人用户提供高品质设备租赁服务。灵活租期，品质保障。</p>
       </div>
       <div class="foot-col">
@@ -99,7 +111,7 @@ export function renderPage(opts: PageOptions): string {
 <meta property="og:description" content="${esc(opts.description)}">
 <meta property="og:type" content="website">
 <link rel="canonical" href="${esc(opts.appUrl)}">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 26 16 4l4 8-8 14z' fill='%2300e6ff'/%3E%3Cpath d='M15 26 24 9l4 8-5 9z' fill='%2300c79f'/%3E%3C/svg%3E">
+<link rel="icon" href="${FAVICON_DATA_URI}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">

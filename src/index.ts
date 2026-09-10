@@ -4,7 +4,7 @@
 
 import { Hono, type Context } from 'hono'
 import { STYLES } from './theme'
-import { renderPage } from './layout'
+import { renderPage, FAVICON_SVG } from './layout'
 import {
   getRentalConfig,
   getSiteContact,
@@ -70,13 +70,8 @@ app.get('/styles.css', (c) => {
 
 app.get('/healthz', (c) => c.text('ok'))
 
-const FAVICON =
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">` +
-  `<path d="M4 26 16 4l4 8-8 14z" fill="#00e6ff"/>` +
-  `<path d="M15 26 24 9l4 8-5 9z" fill="#00c79f"/></svg>`
-
 app.get('/favicon.ico', (c) =>
-  c.body(FAVICON, 200, {
+  c.body(FAVICON_SVG, 200, {
     'content-type': 'image/svg+xml',
     'cache-control': `public, max-age=${CSS_TTL}`,
   }),

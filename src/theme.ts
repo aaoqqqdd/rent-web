@@ -42,8 +42,9 @@ p { margin: 0; }
   border-bottom: 1px solid var(--border);
 }
 .site-header .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
-.brand svg { width: 26px; height: 26px; }
+.brand { display: inline-flex; align-items: center; }
+.brand .brand-banner { height: 30px; width: auto; display: block; }
+.site-footer .brand .brand-banner { height: 26px; }
 .nav { display: flex; align-items: center; gap: 30px; }
 .nav a { color: var(--muted-fg); font-size: 14px; transition: color .15s; }
 .nav a:hover { color: var(--fg); }
