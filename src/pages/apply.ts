@@ -290,8 +290,17 @@ export function renderApply(data: ApplyData): string {
     cardMessage.textContent = message;
     cardMessage.style.color = isSuccess ? 'var(--secondary)' : '';
   }
+  function readJsonResponse(response) {
+    return response.text().then(function (text) {
+      var json;
+      try { json = JSON.parse(text); } catch (_) {
+        throw new Error('支付服务返回了无法识别的响应（HTTP ' + response.status + '），请稍后重试或联系客服。');
+      }
+      return { ok: response.ok, json: json };
+    });
+  }
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' } })
-    .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
+    .then(readJsonResponse)
     .then(function (result) {
       if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error((result.json && result.json.message) || '安全付款组件暂不可用。');
       stripe = window.Stripe(result.json.publishableKey);
@@ -330,7 +339,7 @@ export function renderApply(data: ApplyData): string {
     hint.textContent = '正在校验优惠码…';
     var params = new URLSearchParams({ deviceIds: JSON.stringify(cartIds), days: String(days()), code: code });
     fetch(COUPON_ENDPOINT + '?' + params.toString(), { headers: { Accept: 'application/json' } })
-      .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
+      .then(readJsonResponse)
       .then(function (result) {
         if (!result.ok || !result.json || !result.json.ok) throw new Error((result.json && result.json.message) || '优惠码无效。');
         hint.textContent = result.json.message || ('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2));
@@ -361,7 +370,7 @@ export function renderApply(data: ApplyData): string {
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
     submitBtn.disabled = true; submitBtn.textContent = '提交中…';
     fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
+      .then(readJsonResponse)
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
           saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
