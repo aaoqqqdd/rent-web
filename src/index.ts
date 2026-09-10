@@ -15,7 +15,9 @@ import {
 import { renderHome } from './pages/home'
 import { renderProducts } from './pages/products'
 import { renderApply } from './pages/apply'
+import { renderLogin } from './pages/login'
 import { renderAbout, renderNotFound, renderRentalGuide } from './pages/content'
+import { registerCustomer } from './auth'
 
 export interface Env {
   RENT: D1Database
@@ -24,6 +26,9 @@ export interface Env {
   CONTACT_PHONE?: string
   CONTACT_EMAIL?: string
   TURNSTILE_SITE_KEY?: string
+  // Turnstile 服务端密钥（`wrangler secret put TURNSTILE_SECRET_KEY`）。
+  // 未配置时 /register 跳过人机校验（与 rent 公开接口行为一致）。
+  TURNSTILE_SECRET_KEY?: string
 }
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
@@ -152,6 +157,46 @@ app.get('/apply', (c) =>
     })
   }),
 )
+
+app.get('/login', (c) =>
+  cachedHtml(c, HTML_TTL, async () => {
+    const contact = await getSiteContact(c.env)
+    const tab = c.req.query('tab') === 'login' ? 'login' : 'register'
+    return renderPage({
+      title: `注册 / 登录 — ${contact.name}`,
+      description: '注册 GeekSlope 账号，或用已有邮箱和密码登录，管理你的租赁订单、付款与合同签署。',
+      body: renderLogin({
+        appUrl: appUrl(c.env),
+        turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
+        tab,
+      }),
+      contact,
+      appUrl: appUrl(c.env),
+      path: '/login',
+    })
+  }),
+)
+
+// rent 主应用里 /register 是独立注册页；这里统一收敛到本站的 /login 页注册面板。
+app.get('/register', (c) => c.redirect('/login', 302))
+
+// 注册接口：直接写 rent 的 D1 users 表（见 ./auth.ts）。不走边缘缓存。
+app.post('/register', async (c) => {
+  let body: Record<string, unknown> = {}
+  try {
+    body = (await c.req.json()) as Record<string, unknown>
+  } catch {
+    return c.json({ ok: false, code: 'invalid', message: '请求格式错误。' }, 400)
+  }
+  const ip = (
+    c.req.header('CF-Connecting-IP') ||
+    c.req.header('X-Forwarded-For')?.split(',')[0] ||
+    'unknown'
+  ).trim()
+  const result = await registerCustomer(c.env, body, ip)
+  const status = result.ok ? 200 : result.code === 'error' ? 500 : result.code === 'rate_limited' ? 429 : 400
+  return c.json(result, status)
+})
 
 app.get('/rental-guide', (c) =>
   cachedHtml(c, CSS_TTL, async () => {

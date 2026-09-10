@@ -32,6 +32,8 @@
 	}
 	// 可选覆盖项（用 `wrangler secret put` 或在此加 vars）：
 	//   CONTACT_PHONE / CONTACT_EMAIL —— 覆盖 systemSettings.companyDetails 里的联系方式
+	//   TURNSTILE_SECRET_KEY（secret）—— /register 注册接口的服务端人机校验密钥。
+	//     未配置则跳过校验（与 rent 公开接口一致）。与 TURNSTILE_SITE_KEY 配套。
 	//
 	// rent 主应用侧需要相应配置：
 	//   PUBLIC_WEB_ORIGIN = 本站部署 origin，当前 https://rent-web.ydnw6zt6vj.workers.dev

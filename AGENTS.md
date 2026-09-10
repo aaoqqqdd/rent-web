@@ -7,7 +7,9 @@
 
 对外的营销官网，设计还原自参考稿（airo.ai 分享页 `airo.ai/share/…`）。
 展示页实时读 rent 的 D1；`/apply` 页做「注册 + 提交租赁申请」，落到 rent 的公开接口。
-**不实现登录态**：账号一旦注册，客户直接去 rent 登录付款签约。
+`/login` 页做「独立注册 / 登录入口」：注册直接写 rent 的 D1 `users` 表（`src/auth.ts`，
+哈希 / 字段与 rent `/register` 完全一致），登录跳转到 `${APP_URL}/login`。
+**本站不实现登录态**：会话由 rent 持有，注册后客户用同一套邮箱 / 密码去 rent 登录付款签约。
 
 ## 技术栈
 
@@ -36,7 +38,9 @@ src/layout.ts         页面外壳：<head> / 顶栏 / 页脚 / esc()
 src/pages/home.ts     首页：Hero → 四大保障 → 为你精选（实时）→ 三步流程 → 收尾 CTA
 src/pages/products.ts 产品目录：按类别分组的全部在售设备（实时）
 src/pages/apply.ts    下单页：设备/租期/取还 + 注册字段，前端 POST 到 rent 的 /public/rental-request
+src/pages/login.ts    注册 / 登录页：注册面板 POST 到本站 /register，登录面板跳 ${APP_URL}/login
 src/pages/content.ts  租赁说明 / 关于我们 / 404（静态文案）
+src/auth.ts           注册写库：PBKDF2 哈希 + INSERT users（与 rent /register 等价）+ 共用限流表
 ```
 
 ## 数据来源（哪些是实时从 D1 读的）
@@ -52,7 +56,9 @@ src/pages/content.ts  租赁说明 / 关于我们 / 404（静态文案）
 | 最短租期、可选自取点 | `systemSettings` key=`rentalRules` / `companyDetails.pickupLocations` | 1 天 / 单个占位自取点 |
 
 展示类查询都在 `try/catch` 里，D1 不可用或表结构变动时页面仍能出图。
-本项目**不直接写库**：写操作（注册 users、建 orders）全部发生在 rent 侧的 `/public/rental-request`。
+本项目对 D1 的写操作只有一处：`/login` 页注册 → `src/auth.ts` 直接 `INSERT INTO users`
+（CUSTOMER，PBKDF2，与 rent 登录兼容）。建 orders 等其余写操作仍全部发生在 rent 侧的
+`/public/rental-request`。
 
 ## 下单 / 注册流程
 
