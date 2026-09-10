@@ -139,7 +139,7 @@ app.get('/apply', (c) =>
       getSiteContact(c.env),
       getRentalConfig(c.env),
     ])
-    const selectedId = c.req.query('device') || products[0]?.id || ''
+    const selectedId = c.req.query('device') || ''
     const body = renderApply({
       products,
       selectedId,

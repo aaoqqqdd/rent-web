@@ -31,7 +31,7 @@ function header(nav: Nav): string {
       <a href="/rental-guide">租赁说明</a>
       <a href="/about">关于我们</a>
     </nav>
-    <a class="btn btn-primary" href="/apply">立即租赁</a>
+    <a class="btn btn-primary" href="${esc(nav.appUrl)}/login">登录 / 注册</a>
   </div>
 </header>`
 }

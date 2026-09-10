@@ -58,6 +58,15 @@ p { margin: 0; }
 .btn-ghost { background: transparent; color: var(--fg); border-color: var(--border); }
 .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
 .btn-lg { padding: 14px 26px; font-size: 15px; }
+.btn-sm { padding: 7px 14px; font-size: 13px; }
+
+.picked-device {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: rgba(255,255,255,.02);
+}
+.picked-device .chips { margin: 0; }
+.picked-device .btn { flex: none; }
 
 /* ---------- hero ---------- */
 .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--border); }

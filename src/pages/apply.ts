@@ -1,5 +1,6 @@
-// 「立即租赁」下单页。访客填租期 / 取还方式 / 联系方式，提交后由前端 POST 到
-// rent 主应用的 /public/rental-request，拿到 /contract/sign 链接后跳转过去签署。
+// 「立即租赁」下单页。设备在产品目录里选定后带 ?device= 进来，本页锁定该设备
+// （像订酒店 / 订车：先选好具体那一台，再填租期 / 取还 / 联系方式），
+// 提交后由前端 POST 到 rent 主应用的 /public/rental-request。
 
 import { esc } from '../layout'
 import type { Product, RentalConfig } from '../db'
@@ -26,13 +27,26 @@ export function renderApply(data: ApplyData): string {
     </section>`
   }
 
-  const options = rentable
-    .map(
-      (p) =>
-        `<option value="${esc(p.id)}"${p.id === selectedId ? ' selected' : ''}>` +
-        `${esc(p.name)}${p.model ? ` · ${esc(p.model)}` : ''} — $${p.pricePerDay}/day` +
-        `</option>`,
-    )
+  // 必须先在产品目录选定一台设备。没带 ?device= 或设备不可租时，引导回目录挑选。
+  const device = rentable.find((p) => p.id === selectedId)
+  if (!device) {
+    return /* html */ `
+    <section class="section">
+      <div class="wrap form-wrap">
+        <div class="section-head">
+          <div class="kicker">立即租赁</div>
+          <h2>请先选择要租的设备</h2>
+          <p style="color:var(--muted-fg);margin-top:12px">和订酒店、订车一样，需要先从产品目录里选定具体的那一台设备，再填写租期与取还信息。</p>
+        </div>
+        <p style="margin-top:18px"><a class="btn btn-primary btn-lg" href="/products">去产品目录选设备</a></p>
+      </div>
+    </section>`
+  }
+
+  const specChips = [device.gpu, device.cpu, device.ram && `${device.ram} RAM`, device.storage]
+    .map((s) => String(s ?? '').trim())
+    .filter(Boolean)
+    .map((s) => `<span class="chip">${esc(s)}</span>`)
     .join('')
 
   const pickupField = config.pickupLocations.length
@@ -41,9 +55,7 @@ export function renderApply(data: ApplyData): string {
         .join('')}</select>`
     : `<input id="pickupLocation" name="pickupLocation" value="墨尔本 CBD 门店（下单后客服确认具体地址）" readonly>`
 
-  const priceMap = JSON.stringify(
-    Object.fromEntries(rentable.map((p) => [p.id, { day: p.pricePerDay, deposit: p.depositAmount, name: p.name }])),
-  )
+  const priceInfo = JSON.stringify({ day: device.pricePerDay, deposit: device.depositAmount, name: device.name })
 
   const turnstile = turnstileSiteKey
     ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div>
@@ -64,8 +76,15 @@ export function renderApply(data: ApplyData): string {
 
       <div class="form-card">
         <div class="field">
-          <label for="deviceId">选择设备</label>
-          <select id="deviceId" name="deviceId" required>${options}</select>
+          <label>已选设备</label>
+          <div class="picked-device">
+            <div>
+              <strong>${esc(device.name)}</strong>${device.model ? ` <span style="color:var(--muted-fg)">· ${esc(device.model)}</span>` : ''}
+              ${specChips ? `<div class="chips" style="margin-top:8px">${specChips}</div>` : ''}
+            </div>
+            <a class="btn btn-ghost btn-sm" href="/products">换一台</a>
+          </div>
+          <input type="hidden" id="deviceId" name="deviceId" value="${esc(device.id)}">
         </div>
         <div class="form-summary" id="summary"></div>
       </div>
@@ -191,13 +210,12 @@ export function renderApply(data: ApplyData): string {
 
 <script>
 (() => {
-  var PRICES = ${priceMap};
+  var PRICE = ${priceInfo};
   var ENDPOINT = ${JSON.stringify(`${appUrl}/public/rental-request`)};
   var MIN_DAYS = ${config.minimumRentalDays};
   var form = document.getElementById('apply-form');
   var errBox = document.getElementById('form-error');
   var summary = document.getElementById('summary');
-  var deviceSel = document.getElementById('deviceId');
   var startD = document.getElementById('startDate');
   var endD = document.getElementById('endDate');
   var startP = document.getElementById('startPeriod');
@@ -220,9 +238,8 @@ export function renderApply(data: ApplyData): string {
     return half > 0 ? Math.ceil(half / 2) : 0;
   }
   function refresh() {
-    var p = PRICES[deviceSel.value];
+    var p = PRICE;
     var n = days();
-    if (!p) { summary.textContent = ''; return; }
     if (!n) { summary.innerHTML = '<strong>' + p.name + '</strong> · $' + p.day + '/day · 押金 $' + p.deposit + '（可退）'; return; }
     var rent = n * p.day;
     summary.innerHTML = '<strong>' + p.name + '</strong> · ' + n + ' 天 · 租金 $' + rent.toFixed(2) +
@@ -230,7 +247,7 @@ export function renderApply(data: ApplyData): string {
       (n < MIN_DAYS ? ' <span style="color:#ff9a9a">（低于最短租期 ' + MIN_DAYS + ' 天）</span>' : '');
   }
   ['change', 'input'].forEach(function (ev) {
-    [deviceSel, startD, endD, startP, endP].forEach(function (el) { el.addEventListener(ev, refresh); });
+    [startD, endD, startP, endP].forEach(function (el) { el.addEventListener(ev, refresh); });
   });
   method.addEventListener('change', function () {
     var delivery = method.value === 'Delivery';
