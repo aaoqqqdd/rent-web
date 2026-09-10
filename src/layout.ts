@@ -11,11 +11,20 @@ export function esc(value: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
-const LOGO = /* html */ `
-<svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-  <path d="M4 26 16 4l4 8-8 14z" fill="#00e6ff"/>
-  <path d="M15 26 24 9l4 8-5 9z" fill="#00c79f"/>
+const MARK_PATHS = /* html */ `
+  <path d="M27 15 L44 41 L35.5 41 L27 28 L18.5 41 L10 41 Z" fill="#2563EB"/>
+  <path d="M9 41 L17 41 L34 7 L26 7 Z" fill="#FFFFFF"/>`
+
+const BANNER = /* html */ `
+<svg viewBox="0 0 236 48" fill="none" aria-label="GeekSlope" role="img" class="brand-banner">
+  ${MARK_PATHS}
+  <text x="60" y="34" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="29" font-weight="700" letter-spacing="0.4" fill="#EAF0F6">GeekSlope</text>
 </svg>`
+
+const BADGE = /* svg */ `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#0A0A0F"/><g transform="translate(16 16) scale(0.6667)">${MARK_PATHS}</g></svg>`
+
+export const FAVICON_SVG = BADGE
+const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(BADGE)}`
 
 interface Nav {
   appUrl: string
