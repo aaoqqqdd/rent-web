@@ -1,6 +1,7 @@
 // 页面外壳：<head>、顶栏、页脚。所有页面通过 renderPage() 拼装。
 
 import type { SiteContact } from './db'
+import { STYLE_VERSION } from './theme'
 
 export function esc(value: unknown): string {
   return String(value ?? '')
@@ -112,7 +113,7 @@ export function renderPage(opts: PageOptions): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/styles.css?v=${STYLE_VERSION}">
 </head>
 <body>
 ${header({ appUrl: opts.appUrl })}

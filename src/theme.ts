@@ -226,3 +226,11 @@ p { margin: 0; }
   .hero .wrap { padding: 88px 24px 72px; }
 }
 `
+
+// 内容指纹：STYLES 一变就变。页面用 /styles.css?v=${STYLE_VERSION} 引样式，
+// 使改版后回访用户不被 1 天的长缓存卡在旧样式（例如旧的 logo 尺寸）。
+export const STYLE_VERSION = ((): string => {
+  let h = 5381
+  for (let i = 0; i < STYLES.length; i++) h = (((h << 5) + h) ^ STYLES.charCodeAt(i)) >>> 0
+  return h.toString(36)
+})()

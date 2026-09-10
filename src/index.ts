@@ -181,18 +181,14 @@ app.get('/about', (c) =>
   }),
 )
 
-app.notFound((c) => {
+app.notFound(async (c) => {
+  const contact = await getSiteContact(c.env)
   return c.html(
     renderPage({
-      title: '页面走丢了 — GeekSlope',
+      title: `页面走丢了 — ${contact.name}`,
       description: '',
       body: renderNotFound(),
-      contact: {
-        name: 'GeekSlope',
-        phone: '400-888-0000',
-        email: 'hello@geekslope.com',
-        address: '送货：墨尔本 CBD 及内城区 · 其他郊区到店自取',
-      },
+      contact,
       appUrl: appUrl(c.env),
       path: '*',
     }),
