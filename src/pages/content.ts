@@ -10,9 +10,10 @@ function pickupSummary(config: RentalConfig): string {
 }
 
 export function renderRentalGuide(config: RentalConfig): string {
+  const deliveryAreas = config.deliveryAreas.length ? config.deliveryAreas.join('、') : '墨尔本 CBD 及周边内城区'
   const pickupLocations = config.pickupLocations.length
     ? `<ul class="check-list">${config.pickupLocations.map((location) => `<li>${esc(location)}</li>`).join('')}</ul>`
-    : '<p>管理员尚未配置公开自取点，请在提交前联系客服确认。</p>'
+    : '<p>我们尚未配置公开自取点，请在提交前联系客服确认。</p>'
   return /* html */ `
 <section class="page-hero compact guide-hero">
   <div class="wrap">
@@ -26,7 +27,7 @@ export function renderRentalGuide(config: RentalConfig): string {
     <div class="guide-steps">
       <article><span>01 / 选择</span><h2>在设备库确定具体机型</h2><p>按用途、配置、价格与现货状态筛选。打开详情页核对处理器、显卡、内存、存储和操作系统。</p><a href="/products" class="text-link">浏览设备库 →</a></article>
       <article><span>02 / 申请</span><h2>填写日期、取还与账号信息</h2><p>下单页会即时估算租金与押金。已有账号时使用相同邮箱和密码；新用户会同时创建账户。</p></article>
-      <article><span>03 / 确认</span><h2>管理员核对档期与费用</h2><p>订单先进入待确认状态。我们会核对设备、配送地址、优惠码与最终费用，然后联系你。</p></article>
+      <article><span>03 / 确认</span><h2>我们核对档期与费用</h2><p>订单先进入待确认状态。我们会核对设备、配送地址、优惠码与最终费用，然后联系你。</p></article>
       <article><span>04 / 交付</span><h2>在线签约付款，再取机</h2><p>确认后进入租赁系统完成合同和付款。内城区安排配送，也可以前往数据库中当前开放的自取点取机。</p></article>
     </div>
   </div>
@@ -47,7 +48,7 @@ export function renderRentalGuide(config: RentalConfig): string {
 
 <section class="section">
   <div class="wrap delivery-grid">
-    <div><div class="kicker">取还范围</div><h2>墨尔本本地交付</h2><p>CBD 与周边内城区可安排送货上门，包括 Docklands、Southbank、South Yarra、Carlton、East Melbourne 等。是否覆盖以及运费，会结合具体地址确认。</p><p>当前可选自取 / 归还地点：</p>${pickupLocations}</div>
+    <div><div class="kicker">取还范围</div><h2>墨尔本本地交付</h2><p>${esc(config.deliveryNote)} 可配送区域包括：${esc(deliveryAreas)}。</p><p>当前可选自取 / 归还地点：</p>${pickupLocations}</div>
     <div class="map-card" aria-label="配送范围示意"><span class="map-ring ring-1"></span><span class="map-ring ring-2"></span><span class="map-pin">MEL</span><div><strong>INNER MELBOURNE</strong><small>DELIVERY ZONE · CONFIRM ON REVIEW</small></div></div>
   </div>
 </section>

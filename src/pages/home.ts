@@ -13,7 +13,7 @@ const FEATURES = [
 const STEPS = [
   { n: '01', t: '选择设备与租期', d: '按用途、预算和配置筛选，打开详情确认设备规格，再填写取还日期。' },
   { n: '02', t: '提交租赁申请', d: '留下联系与取还信息。提交只是锁定申请，不会立即扣款。' },
-  { n: '03', t: '确认后签约交付', d: '管理员确认档期与费用后联系你，在线完成签约与付款，再配送或安排自取。' },
+  { n: '03', t: '确认后签约交付', d: '我们确认档期与费用后联系你，在线完成签约与付款，再配送或安排自取。' },
 ]
 
 const CARD_TAGS = ['热门', '推荐', '专业']
@@ -54,8 +54,9 @@ export function renderHome(data: HomeData): string {
   const pickupSummary = config.pickupLocations.length
     ? `可选自取点：${config.pickupLocations.join('、')}`
     : '自取地点请联系客服确认'
+  const deliverySummary = config.deliveryAreas.length ? config.deliveryAreas.join('、') : '墨尔本 CBD 及周边内城区'
   const features = FEATURES.map((feature, index) => index === 2
-    ? { ...feature, d: `墨尔本 CBD 与内城区可配送；${pickupSummary}` }
+    ? { ...feature, d: `可配送区域：${deliverySummary}；${pickupSummary}` }
     : feature)
 
   return /* html */ `
@@ -90,13 +91,13 @@ export function renderHome(data: HomeData): string {
 <section class="features">
   <div class="wrap">
     ${features.map(
-      (f) => `
+    (f) => `
     <div class="feature">
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${f.ic}"/></svg>
       <h3>${esc(f.t)}</h3>
       <p>${esc(f.d)}</p>
     </div>`,
-    ).join('')}
+  ).join('')}
   </div>
 </section>
 
@@ -107,11 +108,10 @@ export function renderHome(data: HomeData): string {
       <p>每类挑一台代表设备。库存和价格来自租赁系统，最多延迟 60 秒。</p>
     </div>
     <div class="grid">
-      ${
-        featured.length
-          ? featured.map((p, i) => productCard(p, i, multiplier)).join('')
-          : '<div class="empty-state"><strong>设备库正在更新</strong><p>暂时没有推荐设备，可稍后刷新或直接联系我们。</p></div>'
-      }
+      ${featured.length
+      ? featured.map((p, i) => productCard(p, i, multiplier)).join('')
+      : '<div class="empty-state"><strong>设备库正在更新</strong><p>暂时没有推荐设备，可稍后刷新或直接联系我们。</p></div>'
+    }
     </div>
     <div class="center-cta"><a class="text-link" href="/products">查看全部设备与实时库存 <span>→</span></a></div>
   </div>
@@ -136,15 +136,39 @@ export function renderHome(data: HomeData): string {
     </div>
     <div class="steps">
       ${STEPS.map(
-        (s) => `
+      (s) => `
       <div class="step">
         <div class="n">${s.n}</div>
         <h3>${s.t}</h3>
         <p>${s.d}</p>
       </div>`,
-      ).join('')}
+    ).join('')}
     </div>
     <div class="process-note"><span>重要</span><p>官网订单先进入“待确认”。我们确认设备档期、配送范围与最终费用后，才会请你签署合同并付款。</p></div>
+  </div>
+</section>
+
+<section class="section home-essentials">
+  <div class="wrap">
+    <div class="section-head"><div><div class="kicker">租之前先知道</div><h2>把预算和交付安排一次看明白</h2></div><p>产品页展示的是实时基础信息，最终金额和档期会在人工审核后确认。</p></div>
+    <div class="info-grid three">
+      <article class="info-card"><span>费用</span><h3>租金 + 押金</h3><p>租金按日租价乘以实际租期计算；押金在设备归还并验收无误后按规则退回。</p></article>
+      <article class="info-card"><span>交付</span><h3>配送或到店自取</h3><p>墨尔本 CBD 与周边内城区可安排配送，其他郊区可咨询自取地点。配送费会随地址确认。</p></article>
+      <article class="info-card"><span>适合</span><h3>短期项目与临时升级</h3><p>课程作业、剪辑渲染、开发测试、游戏活动或差旅办公，都可以按实际使用时间申请。</p></article>
+    </div>
+    <div class="home-essentials-note"><strong>当前最短租期：${esc(config.minimumRentalDays)} 天</strong><span>提交申请不会立即扣款，确认档期后才进入合同与付款。</span><a class="text-link" href="/rental-guide">查看完整租赁规则 <span>→</span></a></div>
+  </div>
+</section>
+
+<section class="section alt home-service-standard">
+  <div class="wrap">
+    <div class="section-head"><div><div class="kicker">服务标准</div><h2>从交付前到归还后，都有明确节点</h2></div><p>租赁不是把设备交给你就结束。每个阶段都有可确认的事项，遇到问题也知道应该联系谁。</p></div>
+    <div class="service-standard-grid">
+      <article><span>01 / 交付前</span><h3>确认设备状态</h3><ul><li>核对型号、核心配置和配件</li><li>检查基础功能与外观</li><li>确认取货时间或配送地址</li></ul></article>
+      <article><span>02 / 使用中</span><h3>租期内有人响应</h3><ul><li>提供 7×12 小时技术支持</li><li>先排查软件、连接和使用问题</li><li>符合条件时安排故障换机</li></ul></article>
+      <article><span>03 / 归还时</span><h3>按清单完成验收</h3><ul><li>确认设备、充电器和配件齐全</li><li>请提前备份并退出个人账户</li><li>记录归还时间与设备状态</li></ul></article>
+      <article><span>04 / 归还后</span><h3>完成结算与押金处理</h3><ul><li>检查逾期、缺件或损坏情况</li><li>无额外费用时按规则退还押金</li><li>需要说明时提供结算明细</li></ul></article>
+    </div>
   </div>
 </section>
 
@@ -152,8 +176,8 @@ export function renderHome(data: HomeData): string {
   <div class="wrap split-head">
     <div><div class="kicker">开始前</div><h2>几个最常问的问题</h2><p>规则不绕弯。更完整的押金、续租、配送与故障处理说明都在租赁指南里。</p><a class="text-link" href="/rental-guide#faq">查看全部常见问题 <span>→</span></a></div>
     <div class="faq-list">
-      <details><summary>提交申请会立即扣款吗？</summary><p>不会。申请先由管理员确认档期和费用，之后才进入在线签约与付款。</p></details>
-      <details><summary>哪些区域可以送货或自取？</summary><p>墨尔本 CBD、Docklands、Southbank、South Yarra、Carlton 等内城区可安排配送；${esc(pickupSummary)}。</p></details>
+      <details><summary>提交申请会立即扣款吗？</summary><p>不会。申请先由我们确认档期和费用，之后才进入在线签约与付款。</p></details>
+      <details><summary>哪些区域可以送货或自取？</summary><p>可配送区域包括 ${esc(deliverySummary)}；${esc(pickupSummary)}。</p></details>
       <details><summary>最短可以租多久？</summary><p>当前最短租期为 ${esc(config.minimumRentalDays)} 天，具体可用档期以下单页校验为准。</p></details>
       <details><summary>设备出故障怎么办？</summary><p>租期内可联系 7×12 小时技术支持；确认属于设备故障且符合条件时，会安排免费换机。</p></details>
     </div>

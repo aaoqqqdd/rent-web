@@ -187,6 +187,8 @@ export interface RentalConfig {
   unavailableDates: string[]
   unavailableTimeSlots: Record<string, string[]>
   pickupLocations: string[]
+  deliveryAreas: string[]
+  deliveryNote: string
 }
 
 /** 下单与说明页需要的租赁规则。均来自 systemSettings，缺失时给安全默认值。 */
@@ -197,6 +199,8 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     unavailableDates: [],
     unavailableTimeSlots: {},
     pickupLocations: [],
+    deliveryAreas: ['墨尔本 CBD', 'Docklands', 'Southbank', 'South Yarra', 'Carlton', 'East Melbourne'],
+    deliveryNote: '送货上门仅限墨尔本 CBD 及周边内城区，运费由客服在审核时确认。',
   }
   try {
     const rows = await env.RENT.prepare(
@@ -230,6 +234,14 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
         cfg.pickupLocations = [...new Set(
           parsed.pickupLocations.map((value) => String(value).trim()).filter(Boolean),
         )]
+      }
+      if (row.key === 'companyDetails' && Array.isArray(parsed.deliveryAreas)) {
+        cfg.deliveryAreas = [...new Set(
+          parsed.deliveryAreas.map((value) => String(value).trim()).filter(Boolean),
+        )]
+      }
+      if (row.key === 'companyDetails' && typeof parsed.deliveryNote === 'string' && parsed.deliveryNote.trim()) {
+        cfg.deliveryNote = parsed.deliveryNote.trim()
       }
     }
   } catch {

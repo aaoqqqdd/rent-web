@@ -20,6 +20,7 @@ export function renderApply(data: ApplyData): string {
   const { products, selectedId, config, appUrl, turnstileSiteKey } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
+  const deliveryAreas = config.deliveryAreas.join('、')
 
   if (!rentable.length) {
     return /* html */ `
@@ -33,9 +34,9 @@ export function renderApply(data: ApplyData): string {
 
   const pickupField = hasPickupLocations
     ? `<select id="pickupLocation" name="pickupLocation" required>${config.pickupLocations
-        .map((location) => `<option value="${esc(location)}">${esc(location)}</option>`)
-        .join('')}</select>`
-    : `<select id="pickupLocation" name="pickupLocation" disabled><option value="">管理员尚未配置公开自取点</option></select>`
+      .map((location) => `<option value="${esc(location)}">${esc(location)}</option>`)
+      .join('')}</select>`
+    : `<select id="pickupLocation" name="pickupLocation" disabled><option value="">我们尚未配置公开自取点</option></select>`
 
   const cartProducts = rentable.map((product) => ({
     id: product.id,
@@ -83,7 +84,7 @@ export function renderApply(data: ApplyData): string {
           </div>
           <button class="btn btn-ghost" type="button" id="coupon-check">使用优惠码</button>
         </div>
-        <p class="hint" id="coupon-hint">优惠资格与最终金额会在提交时由租赁系统校验。</p>
+        <p class="coupon-hint" id="coupon-hint" aria-live="polite">有优惠码？提交时会同时校验适用设备、租期和折扣金额。</p>
       </div>
 
       <div class="form-card">
@@ -103,7 +104,7 @@ export function renderApply(data: ApplyData): string {
         <div class="form-card-head"><span>03</span><div><h3>取还方式</h3><p>配送范围与运费会在审核时确认</p></div></div>
         <div class="field">
           <label for="deliveryMethod">取还方式</label>
-          <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门（仅限墨尔本 CBD 及内城区）</option></select>
+          <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
         </div>
         <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
         <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
@@ -113,7 +114,7 @@ export function renderApply(data: ApplyData): string {
             <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
           </div>
           <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
-          <p class="hint">送货上门仅覆盖墨尔本 CBD 及周边内城区；其他郊区请选到店自取。运费由客服在审核时确认。</p>
+          <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? ` 可配送区域：${esc(deliveryAreas)}。` : ''} 其他郊区请选到店自取。</p>
         </div>
       </div>
 
@@ -135,7 +136,13 @@ export function renderApply(data: ApplyData): string {
           <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
         </div>
         ${turnstile}
-        <p class="hint">提交后订单进入待确认状态，管理员确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
+        <p class="hint">提交后订单进入待确认状态，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
+      </div>
+
+      <div class="apply-expectations" aria-label="提交申请后的流程">
+        <div><span>提交时</span><strong>不会立即扣款</strong><p>先创建待确认申请，保留你的设备、租期和联系信息。</p></div>
+        <div><span>审核时</span><strong>确认档期与费用</strong><p>我们会核对库存、地址、优惠码和最终配送安排。</p></div>
+        <div><span>确认后</span><strong>签约再付款</strong><p>档期确认后进入租赁系统，完成合同、付款和取机安排。</p></div>
       </div>
 
       <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">注册并提交申请</button>
@@ -159,6 +166,7 @@ export function renderApply(data: ApplyData): string {
   var MIN_DAYS = ${config.minimumRentalDays};
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
+  var COUPON_ENDPOINT = ${scriptJson(`${appUrl}/api/coupons/rental-cart-preview`)};
   var productMap = new Map(PRODUCTS.map(function (product) { return [product.id, product]; }));
   function readCart() {
     try {
@@ -187,6 +195,7 @@ export function renderApply(data: ApplyData): string {
   var pickupField = document.getElementById('pickup-field');
   var deliveryFields = document.getElementById('delivery-fields');
   var submitBtn = document.getElementById('submit-btn');
+  var appliedDiscount = 0;
 
   function todayStr() {
     var date = new Date();
@@ -231,8 +240,9 @@ export function renderApply(data: ApplyData): string {
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
     var rentTotal = rentalDays ? dailyTotal * rentalDays : 0;
+    var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
     summary.textContent = rentalDays
-      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + ' + 押金 $' + depositTotal.toFixed(2) + ' = 预计 $' + (rentTotal + depositTotal).toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
+      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' = 预计 $' + total.toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
       : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2) + '（可退）';
     validateAvailability();
   }
@@ -248,7 +258,7 @@ export function renderApply(data: ApplyData): string {
       var meta = document.createElement('span'); meta.textContent = (product.model ? product.model + ' · ' : '') + '$' + product.day + '/day · 押金 $' + product.deposit;
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.textContent = '移除'; remove.setAttribute('aria-label', '从购物车移除 ' + product.name);
       remove.addEventListener('click', function () {
-        var finish = function () { cartIds = cartIds.filter(function (item) { return item !== id; }); saveCart(cartIds); renderCart(); };
+        var finish = function () { cartIds = cartIds.filter(function (item) { return item !== id; }); appliedDiscount = 0; saveCart(cartIds); renderCart(); };
         if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
           window.gsap.to(row, { x: 28, scale: 0.98, autoAlpha: 0, duration: 0.24, ease: 'power2.in', overwrite: 'auto', onComplete: finish });
         } else finish();
@@ -258,7 +268,7 @@ export function renderApply(data: ApplyData): string {
     submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
     refreshSummary();
   }
-  ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, refreshSummary); }); });
+  ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, function () { appliedDiscount = 0; refreshSummary(); }); }); });
   method.addEventListener('change', function () {
     var delivery = method.value === 'Delivery'; deliveryFields.hidden = !delivery; pickupField.hidden = delivery;
     var pickupLocation = document.getElementById('pickupLocation');
@@ -270,8 +280,18 @@ export function renderApply(data: ApplyData): string {
   document.getElementById('coupon-check').addEventListener('click', function () {
     var code = document.getElementById('couponCode').value.trim();
     var hint = document.getElementById('coupon-hint');
-    hint.textContent = code ? '已添加优惠码 “' + code.toUpperCase() + '”，提交时会校验适用设备与折扣金额。' : '请先输入优惠码。';
-    if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) window.gsap.fromTo(hint, { y: 5, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.35, ease: 'power2.out', overwrite: 'auto', clearProps: 'transform,opacity,visibility' });
+    if (!code) { hint.textContent = '请先输入优惠码。'; return; }
+    hint.textContent = '正在校验优惠码…';
+    var params = new URLSearchParams({ deviceIds: JSON.stringify(cartIds), days: String(days()), code: code });
+    fetch(COUPON_ENDPOINT + '?' + params.toString(), { headers: { Accept: 'application/json' } })
+      .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
+      .then(function (result) {
+        if (!result.ok || !result.json || !result.json.ok) throw new Error((result.json && result.json.message) || '优惠码无效。');
+        hint.textContent = result.json.message || ('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2));
+        appliedDiscount = Number(result.json.discount || 0);
+        refreshSummary();
+      })
+      .catch(function (error) { hint.textContent = error.message || '优惠码校验失败，请稍后重试。'; });
   });
   renderCart();
 
@@ -299,7 +319,7 @@ export function renderApply(data: ApplyData): string {
       .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
-          saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，管理员确认后会联系你。'; doneBox.hidden = false;
+          saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。'; doneBox.hidden = false;
           if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) window.gsap.fromTo(doneBox, { y: 22, scale: 0.985, autoAlpha: 0 }, { y: 0, scale: 1, autoAlpha: 1, duration: 0.62, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
         }

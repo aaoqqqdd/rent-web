@@ -42,7 +42,10 @@ function header(nav: Nav, contact: SiteContact): string {
 <a class="skip-link" href="#main-content">跳到主要内容</a>
 <header class="site-header">
   <div class="wrap">
-    <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${banner(contact)}</a>
+    <div class="header-brand-group">
+      <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${banner(contact)}</a>
+      <span class="header-location">MELBOURNE · LOCAL RENTAL</span>
+    </div>
     <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单">
       <span></span><span></span><span></span>
     </button>
@@ -52,11 +55,13 @@ function header(nav: Nav, contact: SiteContact): string {
       <a href="/about"${active('/about')}>关于我们</a>
       <a href="/contact"${active('/contact')}>联系</a>
     </nav>
-    <a class="header-cart" href="/apply" aria-label="购物车，0 件设备"${active('/apply')}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20.5 8H6.1M10 20h.01M17 20h.01"></path></svg>
-      <span>购物车</span><b class="cart-count" data-cart-count hidden>0</b>
-    </a>
-    <a class="btn btn-primary header-account" href="/login"${active('/login')}>账号中心</a>
+    <div class="header-actions">
+      <a class="header-cart" href="/apply" aria-label="购物车，0 件设备"${active('/apply')}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20.5 8H6.1M10 20h.01M17 20h.01"></path></svg>
+        <span>购物车</span><b class="cart-count" data-cart-count hidden>0</b>
+      </a>
+      <a class="btn btn-primary header-account" href="/login"${active('/login')}>账号中心</a>
+    </div>
   </div>
 </header>`
 }
@@ -69,7 +74,7 @@ function footer(contact: SiteContact): string {
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${banner(contact)}</a>
-        <p>专业电脑出租平台，为学生和个人用户提供高品质设备租赁服务。灵活租期，品质保障。</p>
+        <p>为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。</p>
       </div>
       <div class="foot-col">
         <h4>产品</h4>
@@ -85,6 +90,13 @@ function footer(contact: SiteContact): string {
         <a href="/about">关于我们</a>
         <a href="/contact">联系我们</a>
       </div>
+      <div class="foot-col foot-legal">
+        <h4>条款</h4>
+        <a href="/terms">用户协议</a>
+        <a href="/service-terms">服务条款</a>
+        <a href="/refund-policy">退款政策</a>
+        <a href="/privacy">隐私政策</a>
+      </div>
       <div class="foot-col">
         <h4>联系我们</h4>
         <a href="tel:${esc(contact.phone.replace(/[^+\d]/g, ''))}">${esc(contact.phone)}</a>
@@ -95,8 +107,8 @@ function footer(contact: SiteContact): string {
     <div class="foot-bottom">
       <span>© ${year} ${esc(contact.name)}. 保留所有权利。</span>
       <span>
-        <a href="/service-terms">服务条款</a>
         <a href="/privacy">隐私政策</a>
+        <a href="/contact">获取帮助</a>
       </span>
     </div>
   </div>

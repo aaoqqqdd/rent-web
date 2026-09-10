@@ -20,6 +20,9 @@ export function renderProductDetail({ product, multiplier, config }: ProductDeta
   const pickupText = config.pickupLocations.length
     ? `自取点：${config.pickupLocations.join('、')}`
     : '自取地点请联系客服确认'
+  const deliveryText = config.deliveryAreas.length
+    ? `配送区域：${config.deliveryAreas.join('、')}`
+    : config.deliveryNote
 
   return /* html */ `
 <nav class="crumbs wrap" aria-label="面包屑">
@@ -47,7 +50,7 @@ export function renderProductDetail({ product, multiplier, config }: ProductDeta
         <a class="btn btn-primary btn-lg" href="${applyHref}">${product.available ? '选择租期并申请' : '提交预约申请'}</a>
         <a class="btn btn-ghost btn-lg" href="/contact?subject=${encodeURIComponent(`咨询 ${product.name}`)}">咨询这台设备</a>
       </div>
-      <p class="microcopy">先提交申请，不会立即扣款。管理员确认档期后再安排签约与付款。</p>
+      <p class="microcopy">先提交申请，不会立即扣款。我们确认档期后再安排签约与付款。</p>
     </div>
   </div>
 </section>
@@ -75,7 +78,7 @@ export function renderProductDetail({ product, multiplier, config }: ProductDeta
         <li>设备适配的电源与必要配件</li>
         <li>7×12 小时租期内技术支持</li>
         <li>符合条件的故障免费换机</li>
-        <li>墨尔本内城区配送；${esc(pickupText)}</li>
+        <li>${esc(deliveryText)}；${esc(pickupText)}</li>
       </ul>
       <a href="/rental-guide" class="text-link">查看租赁规则 <span>→</span></a>
     </aside>
@@ -88,7 +91,7 @@ export function renderProductDetail({ product, multiplier, config }: ProductDeta
     <div class="info-grid three">
       <article class="info-card"><span>租金</span><h3>按实际租期计算</h3><p>下单页会根据取还日期即时预估。月租展示价仅供长期租赁预算参考。</p></article>
       <article class="info-card"><span>押金</span><h3>验收无误后退还</h3><p>归还后完成设备检查；无损坏、缺件或逾期费用时，押金按原支付方式退回。</p></article>
-      <article class="info-card"><span>配送</span><h3>审核时确认</h3><p>CBD 与周边内城区支持配送，具体运费取决于地址与时段；${esc(pickupText)}。</p></article>
+      <article class="info-card"><span>配送</span><h3>审核时确认</h3><p>${esc(config.deliveryNote)} ${esc(pickupText)}。</p></article>
     </div>
   </div>
 </section>`
