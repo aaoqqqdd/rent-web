@@ -1,0 +1,21 @@
+{
+  "name": "rent-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GeekSlope 市场官网 —— 独立部署的营销站点，产品数据实时读取 rent 的 D1 数据库",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.13.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.118.0"
+  }
+}

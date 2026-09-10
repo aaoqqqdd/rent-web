@@ -1,0 +1,249 @@
+// 「立即租赁」下单页。访客填租期 / 取还方式 / 联系方式，提交后由前端 POST 到
+// rent 主应用的 /public/rental-request，拿到 /contract/sign 链接后跳转过去签署。
+
+import { esc } from '../layout'
+import type { Product, RentalConfig } from '../db'
+
+interface ApplyData {
+  products: Product[]
+  selectedId: string
+  config: RentalConfig
+  appUrl: string
+  turnstileSiteKey: string
+}
+
+export function renderApply(data: ApplyData): string {
+  const { products, selectedId, config, appUrl, turnstileSiteKey } = data
+  const rentable = products.filter((p) => p.pricePerDay > 0)
+
+  if (!rentable.length) {
+    return /* html */ `
+    <section class="section">
+      <div class="wrap form-wrap">
+        <div class="section-head"><div class="kicker">立即租赁</div><h2>暂无可租设备</h2></div>
+        <p style="color:var(--muted-fg)">产品目录正在更新，请稍后再试，或直接联系客服。</p>
+      </div>
+    </section>`
+  }
+
+  const options = rentable
+    .map(
+      (p) =>
+        `<option value="${esc(p.id)}"${p.id === selectedId ? ' selected' : ''}>` +
+        `${esc(p.name)}${p.model ? ` · ${esc(p.model)}` : ''} — $${p.pricePerDay}/day` +
+        `</option>`,
+    )
+    .join('')
+
+  const pickupField = config.pickupLocations.length
+    ? `<select id="pickupLocation" name="pickupLocation">${config.pickupLocations
+        .map((loc) => `<option value="${esc(loc)}">${esc(loc)}</option>`)
+        .join('')}</select>`
+    : `<input id="pickupLocation" name="pickupLocation" value="墨尔本 CBD 门店（下单后客服确认具体地址）" readonly>`
+
+  const priceMap = JSON.stringify(
+    Object.fromEntries(rentable.map((p) => [p.id, { day: p.pricePerDay, deposit: p.depositAmount, name: p.name }])),
+  )
+
+  const turnstile = turnstileSiteKey
+    ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div>
+       <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
+    : ''
+
+  return /* html */ `
+<section class="section">
+  <div class="wrap form-wrap">
+    <div class="section-head">
+      <div class="kicker">立即租赁</div>
+      <h2>填写租赁信息</h2>
+      <p style="color:var(--muted-fg);margin-top:12px">提交后会生成一份租赁合同，你在下一步在线签署即可，全程无需线下跑腿。</p>
+    </div>
+
+    <form id="apply-form">
+      <div class="form-alert" id="form-error" hidden></div>
+
+      <div class="form-card">
+        <div class="field">
+          <label for="deviceId">选择设备</label>
+          <select id="deviceId" name="deviceId" required>${options}</select>
+        </div>
+        <div class="form-summary" id="summary"></div>
+      </div>
+
+      <div class="form-card">
+        <div class="row2">
+          <div class="field">
+            <label for="startDate">取货日期</label>
+            <input type="date" id="startDate" name="startDate" required>
+          </div>
+          <div class="field">
+            <label for="startPeriod">取货时段</label>
+            <select id="startPeriod" name="startPeriod"><option value="AM">上午</option><option value="PM">下午</option></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="endDate">归还日期</label>
+            <input type="date" id="endDate" name="endDate" required>
+          </div>
+          <div class="field">
+            <label for="endPeriod">归还时段</label>
+            <select id="endPeriod" name="endPeriod"><option value="AM">上午</option><option value="PM">下午</option></select>
+          </div>
+        </div>
+        <p class="hint">最短租期 ${config.minimumRentalDays} 天。具体可用日期以合同签署页为准。</p>
+      </div>
+
+      <div class="form-card">
+        <div class="field">
+          <label for="deliveryMethod">取还方式</label>
+          <select id="deliveryMethod" name="deliveryMethod">
+            <option value="Pickup">到店自取（墨尔本全城可选）</option>
+            <option value="Delivery">送货上门（仅限墨尔本 CBD 及内城区）</option>
+          </select>
+        </div>
+        <div class="field" id="pickup-field">
+          <label for="pickupLocation">自取门店</label>
+          ${pickupField}
+        </div>
+        <div id="delivery-fields" hidden>
+          <div class="field">
+            <label for="deliveryStreet">街道地址</label>
+            <input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1">
+          </div>
+          <div class="row3">
+            <div class="field">
+              <label for="deliverySuburb">Suburb</label>
+              <input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra">
+            </div>
+            <div class="field">
+              <label for="deliveryState">州</label>
+              <select id="deliveryState" name="deliveryState">
+                <option>VIC</option><option>NSW</option><option>QLD</option><option>SA</option>
+                <option>WA</option><option>TAS</option><option>NT</option><option>ACT</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="deliveryPostcode">邮编</label>
+            <input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字">
+          </div>
+          <p class="hint">送货上门仅覆盖墨尔本 CBD 及周边内城区；其他郊区请选到店自取。运费由客服在审核时确认。</p>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="row2">
+          <div class="field">
+            <label for="contactName">联系人</label>
+            <input id="contactName" name="contactName" maxlength="120" autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="contactPhone">联系电话</label>
+            <input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel">
+          </div>
+        </div>
+        <div class="field">
+          <label for="contactEmail">邮箱</label>
+          <input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="couponCode">优惠码（选填）</label>
+          <input id="couponCode" name="couponCode" maxlength="40">
+        </div>
+        <div class="field">
+          <label for="rentalNote">备注（选填）</label>
+          <textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea>
+        </div>
+        ${turnstile}
+        <p class="hint">提交即表示你同意在下一步阅读并签署正式租赁合同。个人信息仅用于本次租赁。</p>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">生成合同并去签署</button>
+      <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">产品目录</a> 或联系客服。</p>
+    </form>
+  </div>
+</section>
+
+<script>
+(() => {
+  var PRICES = ${priceMap};
+  var ENDPOINT = ${JSON.stringify(`${appUrl}/public/rental-request`)};
+  var MIN_DAYS = ${config.minimumRentalDays};
+  var form = document.getElementById('apply-form');
+  var errBox = document.getElementById('form-error');
+  var summary = document.getElementById('summary');
+  var deviceSel = document.getElementById('deviceId');
+  var startD = document.getElementById('startDate');
+  var endD = document.getElementById('endDate');
+  var startP = document.getElementById('startPeriod');
+  var endP = document.getElementById('endPeriod');
+  var method = document.getElementById('deliveryMethod');
+  var pickupField = document.getElementById('pickup-field');
+  var deliveryFields = document.getElementById('delivery-fields');
+  var submitBtn = document.getElementById('submit-btn');
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  startD.min = todayStr(); endD.min = todayStr();
+
+  function days() {
+    if (!startD.value || !endD.value) return 0;
+    var a = new Date(startD.value + 'T00:00:00Z'), b = new Date(endD.value + 'T00:00:00Z');
+    var half = Math.round((b - a) / 86400000) * 2 + (endP.value === 'PM' ? 1 : 0) - (startP.value === 'PM' ? 1 : 0);
+    return half > 0 ? Math.ceil(half / 2) : 0;
+  }
+  function refresh() {
+    var p = PRICES[deviceSel.value];
+    var n = days();
+    if (!p) { summary.textContent = ''; return; }
+    if (!n) { summary.innerHTML = '<strong>' + p.name + '</strong> · $' + p.day + '/day · 押金 $' + p.deposit + '（可退）'; return; }
+    var rent = n * p.day;
+    summary.innerHTML = '<strong>' + p.name + '</strong> · ' + n + ' 天 · 租金 $' + rent.toFixed(2) +
+      ' + 押金 $' + p.deposit.toFixed(2) + ' = <strong>应付 $' + (rent + p.deposit).toFixed(2) + '</strong>' +
+      (n < MIN_DAYS ? ' <span style="color:#ff9a9a">（低于最短租期 ' + MIN_DAYS + ' 天）</span>' : '');
+  }
+  ['change', 'input'].forEach(function (ev) {
+    [deviceSel, startD, endD, startP, endP].forEach(function (el) { el.addEventListener(ev, refresh); });
+  });
+  method.addEventListener('change', function () {
+    var delivery = method.value === 'Delivery';
+    deliveryFields.hidden = !delivery;
+    pickupField.hidden = delivery;
+  });
+  refresh();
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    errBox.hidden = true;
+    var data = {};
+    new FormData(form).forEach(function (v, k) { data[k] = v; });
+    var ts = form.querySelector('[name="cf-turnstile-response"]');
+    if (ts) data['cf-turnstile-response'] = ts.value;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '提交中…';
+    fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok && res.j && res.j.ok && res.j.signUrl) {
+          window.location.href = res.j.signUrl;
+          return;
+        }
+        throw new Error((res.j && res.j.message) || '提交失败，请稍后重试。');
+      })
+      .catch(function (err) {
+        errBox.textContent = err.message || '提交失败，请稍后重试。';
+        errBox.hidden = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = '生成合同并去签署';
+        errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+  });
+})();
+</script>`
+}
