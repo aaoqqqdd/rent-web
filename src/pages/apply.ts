@@ -136,9 +136,9 @@ export function renderApply(data: ApplyData): string {
         </div>
         <div class="refund-choice">
           <label>押金退还方式</label>
-          <p class="hint">设备归还并完成验收后，押金会按你选择的方式处理。</p>
+          <p class="hint">设备归还并完成验收后，押金会按你选择的方式处理。退回账号余额仅限已存在的正式账户；新注册或临时账户请选原路退回。</p>
           <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
-          <label class="choice-line"><input type="radio" name="refundMethod" value="balance"> 退回账号余额</label>
+          <label class="choice-line"><input type="radio" name="refundMethod" value="balance"> 退回账号余额（仅正式账户）</label>
         </div>
         <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
         <div class="field" style="display:flex;gap:8px;align-items:flex-start">
