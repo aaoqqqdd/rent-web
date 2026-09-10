@@ -49,9 +49,10 @@ export function renderApply(data: ApplyData): string {
     ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div>
        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
     : ''
+  const stripeScript = '<script src="https://js.stripe.com/v3/"></script>'
 
   return /* html */ `
-<section class="page-hero compact apply-hero"><div class="wrap"><div class="kicker">租赁申请</div><h1>确认设备，安排你的使用时间</h1><p>现在只提交申请。档期和费用经人工确认后，再进入合同与付款。</p><div class="apply-progress"><span class="is-current"><i>1</i>填写申请</span><b></b><span><i>2</i>人工确认</span><b></b><span><i>3</i>签约交付</span></div></div></section>
+<section class="page-hero compact apply-hero"><div class="wrap"><div class="kicker">租赁申请</div><h1>确认设备，安排你的使用时间</h1><p>现在只提交申请。档期和费用确认后，再进入合同与付款。</p><div class="apply-progress"><span class="is-current"><i>1</i>填写申请</span><b></b><span><i>2</i>确认档期</span><b></b><span><i>3</i>签约交付</span></div></div></section>
 <section class="section apply-section">
   <div class="wrap form-wrap">
     <div class="section-head">
@@ -120,27 +121,36 @@ export function renderApply(data: ApplyData): string {
 
       <div class="form-card">
         <div class="form-card-head"><span>04</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
-        <p class="hint" style="margin-top:0">下单前需注册一个账号（用于后续付款与在线签约）。已注册过？填相同邮箱和密码即可。</p>
+        <p class="hint" style="margin-top:0">申请会生成临时账户。Apple Pay 可自动带入账单姓名和邮箱，普通卡片也可以手动填写。</p>
         <div class="row2">
-          <div class="field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name" required></div>
+          <div class="field" id="contact-name-field"><label for="contactName">姓名（Apple Pay 可自动带入）</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name"></div>
           <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel"></div>
         </div>
-        <div class="field"><label for="contactEmail">邮箱（登录账号）</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
-        <div class="row2">
-          <div class="field"><label for="password">设置密码</label><input type="password" id="password" name="password" minlength="8" autocomplete="new-password" required><p class="hint">至少 8 位，含字母、数字和符号。</p></div>
-          <div class="field"><label for="password2">确认密码</label><input type="password" id="password2" autocomplete="new-password" required></div>
+        <div class="field" id="contact-email-field"><label for="contactEmail">邮箱（Apple Pay 可自动带入）</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email"></div>
+        <div class="stripe-setup-box">
+          <div class="stripe-setup-head"><div><label>信用卡资料</label><p>仅验证支付方式，不会在提交申请时扣款。</p></div><span>SECURE / STRIPE</span></div>
+          <div id="stripe-card-element" class="stripe-card-element"></div>
+          <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
+          <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证信用卡（不会扣款）</button>
+          <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
+        </div>
+        <div class="refund-choice">
+          <label>押金退还方式</label>
+          <p class="hint">设备归还并完成验收后，押金会按你选择的方式处理。</p>
+          <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
+          <label class="choice-line"><input type="radio" name="refundMethod" value="balance"> 退回账号余额</label>
         </div>
         <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
         <div class="field" style="display:flex;gap:8px;align-items:flex-start">
           <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
           <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
         </div>
-        ${turnstile}
-        <p class="hint">提交后订单进入待确认状态，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
+        ${stripeScript}${turnstile}
+        <p class="hint">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
       </div>
 
       <div class="apply-expectations" aria-label="提交申请后的流程">
-        <div><span>提交时</span><strong>不会立即扣款</strong><p>先创建待确认申请，保留你的设备、租期和联系信息。</p></div>
+        <div><span>提交时</span><strong>不会立即扣款</strong><p>先创建租赁申请，保留你的设备、租期和联系信息。</p></div>
         <div><span>审核时</span><strong>确认档期与费用</strong><p>我们会核对库存、地址、优惠码和最终配送安排。</p></div>
         <div><span>确认后</span><strong>签约再付款</strong><p>档期确认后进入租赁系统，完成合同、付款和取机安排。</p></div>
       </div>
@@ -152,7 +162,8 @@ export function renderApply(data: ApplyData): string {
     <div class="form-card" id="apply-done" hidden style="margin-top:18px">
       <h3 class="success-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 2.5 2.5L16.5 9"></path></svg><span>申请已提交</span></h3>
       <p id="apply-done-msg" style="color:var(--muted-fg);font-size:14px"></p>
-      <p style="margin-top:14px"><a class="btn btn-ghost" href="/products">继续浏览产品</a></p>
+      <div class="temporary-credentials" id="temporary-credentials" hidden><span>请立即保存</span><strong>订单编号：<b id="done-order-no"></b></strong><strong>临时账户密码：<b id="done-temp-password"></b></strong><p>已注册用户请直接登录账号中心；临时密码只在这里显示。</p></div>
+      <p style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px"><a class="btn btn-primary" href="${esc(appUrl)}/login">进入账号中心查看申请</a><a class="btn btn-ghost" href="/products">继续浏览产品</a></p>
     </div>
   </div>
 </section>
@@ -163,6 +174,7 @@ export function renderApply(data: ApplyData): string {
   var PRODUCTS = ${scriptJson(cartProducts)};
   var SELECTED_ID = ${scriptJson(selectedId)};
   var ENDPOINT = ${scriptJson(`${appUrl}/public/rental-request`)};
+  var SETUP_ENDPOINT = ${scriptJson(`${appUrl}/public/rental-setup-intent`)};
   var MIN_DAYS = ${config.minimumRentalDays};
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
@@ -196,6 +208,13 @@ export function renderApply(data: ApplyData): string {
   var deliveryFields = document.getElementById('delivery-fields');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
+  var stripe = null;
+  var stripeElements = null;
+  var setupIntent = null;
+  var cardReady = false;
+  var cardMessage = document.getElementById('stripe-card-message');
+  var cardConfirm = document.getElementById('stripe-card-confirm');
+  var setupIntentInput = document.getElementById('stripeSetupIntentId');
 
   function todayStr() {
     var date = new Date();
@@ -268,6 +287,34 @@ export function renderApply(data: ApplyData): string {
     submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
     refreshSummary();
   }
+  function setCardMessage(message, isSuccess) {
+    cardMessage.textContent = message;
+    cardMessage.style.color = isSuccess ? 'var(--secondary)' : '';
+  }
+  fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' } })
+    .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
+    .then(function (result) {
+      if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error((result.json && result.json.message) || '安全付款组件暂不可用。');
+      stripe = window.Stripe(result.json.publishableKey);
+      stripeElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: { theme: 'night', variables: { colorPrimary: '#7c6cff', borderRadius: '8px' } } });
+      var paymentElement = stripeElements.create('payment', { layout: 'tabs' });
+      paymentElement.mount('#stripe-card-element');
+      paymentElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage('填写卡片信息后，点击按钮完成验证。不会扣款。'); });
+      paymentElement.on('change', function (event) { var wallet = event.value && ['apple_pay', 'google_pay'].indexOf(event.value.type) >= 0; document.getElementById('contact-name-field').hidden = wallet; document.getElementById('contact-email-field').hidden = wallet; });
+      cardConfirm.addEventListener('click', function () {
+        cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
+        stripe.confirmSetup({ elements: stripeElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
+          .then(function (result) {
+            if (result.error) throw new Error(result.error.message || '卡片验证失败，请检查信息。');
+            setupIntent = result.setupIntent;
+            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('卡片验证尚未完成，请重试。');
+            setupIntentInput.value = setupIntent.id;
+            cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证，申请提交时不会扣款。', true);
+          })
+          .catch(function (error) { cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡（不会扣款）'; setCardMessage(error.message || '卡片验证失败，请重试。'); });
+      });
+    })
+    .catch(function (error) { setCardMessage(error.message || '安全付款组件暂不可用，请联系客服。'); });
   ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, function () { appliedDiscount = 0; refreshSummary(); }); }); });
   method.addEventListener('change', function () {
     var delivery = method.value === 'Delivery'; deliveryFields.hidden = !delivery; pickupField.hidden = delivery;
@@ -295,19 +342,18 @@ export function renderApply(data: ApplyData): string {
   });
   renderCart();
 
-  var pw = document.getElementById('password');
-  var pw2 = document.getElementById('password2');
   var doneBox = document.getElementById('apply-done');
   var doneMsg = document.getElementById('apply-done-msg');
+  var credentialBox = document.getElementById('temporary-credentials');
   form.addEventListener('submit', function (event) {
     event.preventDefault(); errBox.hidden = true;
     if (!cartIds.length) { renderCart(); return; }
     if (!form.reportValidity()) return;
+    if (!cardReady || !setupIntentInput.value) {
+      errBox.textContent = '请先填写并验证信用卡信息。验证过程不会扣款。'; errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    }
     if (days() < MIN_DAYS) {
       errBox.textContent = '租期不能少于 ' + MIN_DAYS + ' 天，请调整归还日期。'; errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
-    }
-    if (pw.value !== pw2.value) {
-      errBox.textContent = '两次输入的密码不一致。'; errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
@@ -319,7 +365,9 @@ export function renderApply(data: ApplyData): string {
       .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
-          saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。'; doneBox.hidden = false;
+          saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
+          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-temp-password').textContent = result.json.temporaryPassword || '请进入账号中心登录'; credentialBox.hidden = false; }
+          doneBox.hidden = false;
           if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) window.gsap.fromTo(doneBox, { y: 22, scale: 0.985, autoAlpha: 0 }, { y: 0, scale: 1, autoAlpha: 1, duration: 0.62, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
         }

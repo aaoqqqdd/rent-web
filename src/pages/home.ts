@@ -41,16 +41,17 @@ function productCard(p: Product, index: number, multiplier: number): string {
 
 interface HomeData {
   featured: Product[]
+  products: Product[]
   minRate: number
   multiplier: number
   config: RentalConfig
 }
 
 export function renderHome(data: HomeData): string {
-  const { featured, minRate, multiplier, config } = data
+  const { featured, products, minRate, multiplier, config } = data
   const fromLine = minRate > 0 ? `最低 $${minRate}/day 起` : '灵活租期，按需计费'
-  const heroDevice = featured[0]
-  const availableCount = featured.filter((p) => p.available).length
+  const heroDevice = products.length ? products[Math.floor(Math.random() * products.length)] : featured[0]
+  const availableCount = products.filter((p) => p.available).length
   const pickupSummary = config.pickupLocations.length
     ? `可选自取点：${config.pickupLocations.join('、')}`
     : '自取地点请联系客服确认'
@@ -79,9 +80,9 @@ export function renderHome(data: HomeData): string {
         <div class="console-device-copy"><small>NEXT AVAILABLE</small><strong>${esc(heroDevice?.name || '设备目录更新中')}</strong><span>${esc(heroDevice?.specs.slice(0, 2).join(' · ') || '查看设备库获取实时配置')}</span></div>
       </div>
       <div class="console-metrics">
-        <div><span>精选现货</span><strong>${availableCount || '—'}<small> / ${featured.length || '—'}</small></strong></div>
-        <div><span>起租价格</span><strong>${minRate > 0 ? `$${minRate}` : '询价'}<small>${minRate > 0 ? ' / DAY' : ''}</small></strong></div>
-        <div><span>申请状态</span><strong>人工确认</strong></div>
+        <div><span>实时现货</span><strong>${availableCount || '—'}<small> / ${products.length || '—'}</small></strong></div>
+        <div><span>起租价格</span><strong>${minRate > 0 ? `$${minRate}` : '询价'}<small>${minRate > 0 ? ' / DAY 起' : ''}</small></strong></div>
+        <div><span>申请状态</span><strong>确认档期</strong></div>
       </div>
       <a href="/products" class="console-link"><span>浏览全部实时库存</span><span>↗</span></a>
     </div>
@@ -144,13 +145,13 @@ export function renderHome(data: HomeData): string {
       </div>`,
     ).join('')}
     </div>
-    <div class="process-note"><span>重要</span><p>官网订单先进入“待确认”。我们确认设备档期、配送范围与最终费用后，才会请你签署合同并付款。</p></div>
+    <div class="process-note"><span>重要</span><p>官网订单先进入审核流程。确认设备档期、配送范围与最终费用后，再签署合同并付款。</p></div>
   </div>
 </section>
 
 <section class="section home-essentials">
   <div class="wrap">
-    <div class="section-head"><div><div class="kicker">租之前先知道</div><h2>把预算和交付安排一次看明白</h2></div><p>产品页展示的是实时基础信息，最终金额和档期会在人工审核后确认。</p></div>
+    <div class="section-head"><div><div class="kicker">租之前先知道</div><h2>把预算和交付安排一次看明白</h2></div><p>产品页展示的是实时基础信息，最终金额和档期会在提交申请后确认。</p></div>
     <div class="info-grid three">
       <article class="info-card"><span>费用</span><h3>租金 + 押金</h3><p>租金按日租价乘以实际租期计算；押金在设备归还并验收无误后按规则退回。</p></article>
       <article class="info-card"><span>交付</span><h3>配送或到店自取</h3><p>墨尔本 CBD 与周边内城区可安排配送，其他郊区可咨询自取地点。配送费会随地址确认。</p></article>

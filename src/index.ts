@@ -19,7 +19,7 @@ import { renderProducts } from './pages/products'
 import { renderProductDetail } from './pages/product-detail'
 import { renderApply } from './pages/apply'
 import { renderLogin } from './pages/login'
-import { renderAbout, renderContact, renderNotFound, renderRentalGuide } from './pages/content'
+import { renderAbout, renderContact, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
 import { registerCustomer } from './auth'
 
@@ -96,7 +96,7 @@ app.get('/robots.txt', (c) =>
 
 app.get('/sitemap.xml', (c) => {
   const base = siteUrl(c.req.url)
-  const paths = ['/', '/products', '/rental-guide', '/about', '/contact', '/login', '/service-terms', '/privacy']
+  const paths = ['/', '/products', '/rental-guide', '/about', '/contact', '/order-lookup', '/login', '/service-terms', '/privacy']
   const urls = paths.map((path) => `<url><loc>${base}${path}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
     'content-type': 'application/xml; charset=utf-8',
@@ -113,6 +113,7 @@ app.get('/', (c) =>
     ])
     const body = renderHome({
       featured: pickFeatured(products),
+      products,
       minRate: minDailyRate(products),
       multiplier: multiplier(c.env),
       config,
@@ -241,17 +242,17 @@ const LEGAL_PAGES: Array<{
   code: string
   rentalTemplate?: boolean
 }> = [
-  { paths: ['/terms', '/user-terms'], title: '用户协议', documentKey: 'userTerms', metadataKey: 'user', variablePrefix: 'user_agreement', code: 'LEGAL / USER TERMS' },
-  { paths: ['/service-terms'], title: '服务条款', documentKey: 'serviceTerms', metadataKey: 'service', variablePrefix: 'service_terms', code: 'LEGAL / SERVICE TERMS' },
-  { paths: ['/privacy'], title: '隐私政策', documentKey: 'privacyPolicy', metadataKey: 'privacy', variablePrefix: 'privacy_policy', code: 'LEGAL / PRIVACY' },
-  { paths: ['/software-terms'], title: '软件使用协议', documentKey: 'softwareTerms', metadataKey: 'software', variablePrefix: 'software_terms', code: 'LEGAL / SOFTWARE' },
-  { paths: ['/refund-policy', '/copyright'], title: '退款政策', documentKey: 'copyrightNotice', metadataKey: 'copyright', variablePrefix: 'refund_policy', code: 'LEGAL / REFUND POLICY' },
-  { paths: ['/cookies', '/cookie-policy'], title: 'Cookie 政策', documentKey: 'cookiePolicy', metadataKey: 'cookie', variablePrefix: 'cookie_policy', code: 'LEGAL / COOKIE POLICY' },
-  { paths: ['/complaints', '/dispute-resolution'], title: '投诉与争议解决政策', documentKey: 'complaintsPolicy', metadataKey: 'complaints', variablePrefix: 'complaints_policy', code: 'LEGAL / COMPLAINTS' },
-  { paths: ['/acceptable-use', '/aup'], title: '可接受使用政策', documentKey: 'acceptableUsePolicy', metadataKey: 'aup', variablePrefix: 'acceptable_use_policy', code: 'LEGAL / ACCEPTABLE USE' },
-  { paths: ['/consumer-rights'], title: '澳大利亚消费者法下的权利', documentKey: 'consumerRights', metadataKey: 'consumer', variablePrefix: 'consumer_rights', code: 'LEGAL / CONSUMER RIGHTS' },
-  { paths: ['/rental-terms', '/rental-agreement'], title: '设备租赁协议', documentKey: 'rentalTerms', metadataKey: 'rental', variablePrefix: 'rental_agreement', code: 'LEGAL / RENTAL AGREEMENT', rentalTemplate: true },
-]
+    { paths: ['/terms', '/user-terms'], title: '用户协议', documentKey: 'userTerms', metadataKey: 'user', variablePrefix: 'user_agreement', code: 'LEGAL / USER TERMS' },
+    { paths: ['/service-terms'], title: '服务条款', documentKey: 'serviceTerms', metadataKey: 'service', variablePrefix: 'service_terms', code: 'LEGAL / SERVICE TERMS' },
+    { paths: ['/privacy'], title: '隐私政策', documentKey: 'privacyPolicy', metadataKey: 'privacy', variablePrefix: 'privacy_policy', code: 'LEGAL / PRIVACY' },
+    { paths: ['/software-terms'], title: '软件使用协议', documentKey: 'softwareTerms', metadataKey: 'software', variablePrefix: 'software_terms', code: 'LEGAL / SOFTWARE' },
+    { paths: ['/refund-policy', '/copyright'], title: '退款政策', documentKey: 'copyrightNotice', metadataKey: 'copyright', variablePrefix: 'refund_policy', code: 'LEGAL / REFUND POLICY' },
+    { paths: ['/cookies', '/cookie-policy'], title: 'Cookie 政策', documentKey: 'cookiePolicy', metadataKey: 'cookie', variablePrefix: 'cookie_policy', code: 'LEGAL / COOKIE POLICY' },
+    { paths: ['/complaints', '/dispute-resolution'], title: '投诉与争议解决政策', documentKey: 'complaintsPolicy', metadataKey: 'complaints', variablePrefix: 'complaints_policy', code: 'LEGAL / COMPLAINTS' },
+    { paths: ['/acceptable-use', '/aup'], title: '可接受使用政策', documentKey: 'acceptableUsePolicy', metadataKey: 'aup', variablePrefix: 'acceptable_use_policy', code: 'LEGAL / ACCEPTABLE USE' },
+    { paths: ['/consumer-rights'], title: '澳大利亚消费者法下的权利', documentKey: 'consumerRights', metadataKey: 'consumer', variablePrefix: 'consumer_rights', code: 'LEGAL / CONSUMER RIGHTS' },
+    { paths: ['/rental-terms', '/rental-agreement'], title: '设备租赁协议', documentKey: 'rentalTerms', metadataKey: 'rental', variablePrefix: 'rental_agreement', code: 'LEGAL / RENTAL AGREEMENT', rentalTemplate: true },
+  ]
 
 for (const page of LEGAL_PAGES) {
   app.on('GET', page.paths, (c) =>
@@ -342,6 +343,13 @@ app.get('/contact', (c) =>
       path: '/contact',
       siteUrl: siteUrl(c.req.url),
     })
+  }),
+)
+
+app.get('/order-lookup', (c) =>
+  cachedHtml(c, HTML_TTL, async () => {
+    const contact = await getSiteContact(c.env)
+    return renderPage({ title: `订单查询 — ${contact.name}`, description: '使用订单编号和申请邮箱查询电脑租赁申请。', body: renderOrderLookup(appUrl(c.env)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url) })
   }),
 )
 

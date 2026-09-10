@@ -54,13 +54,14 @@ function header(nav: Nav, contact: SiteContact): string {
       <a href="/rental-guide"${active('/rental-guide')}>如何租</a>
       <a href="/about"${active('/about')}>关于我们</a>
       <a href="/contact"${active('/contact')}>联系</a>
+      <a href="/order-lookup"${active('/order-lookup')}>查订单</a>
     </nav>
     <div class="header-actions">
       <a class="header-cart" href="/apply" aria-label="购物车，0 件设备"${active('/apply')}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20.5 8H6.1M10 20h.01M17 20h.01"></path></svg>
         <span>购物车</span><b class="cart-count" data-cart-count hidden>0</b>
       </a>
-      <a class="btn btn-primary header-account" href="/login"${active('/login')}>账号中心</a>
+      <a class="btn btn-primary header-account" href="${esc(nav.appUrl)}/login">账号中心</a>
     </div>
   </div>
 </header>`
@@ -170,6 +171,40 @@ ${footer(opts.contact)}
         toggle.setAttribute('aria-expanded', 'false');
         nav.classList.remove('is-open');
       }
+    });
+  }
+
+  if (window.gsap) {
+    var motion = window.gsap.matchMedia();
+    motion.add({ reduceMotion: '(prefers-reduced-motion: reduce)' }, function (context) {
+      var reduceMotion = context.conditions.reduceMotion;
+      var introTargets = document.querySelectorAll('.hero-copy, .page-hero .wrap');
+      if (!reduceMotion && introTargets.length) {
+        window.gsap.from(introTargets, { y: 24, autoAlpha: 0, duration: 0.72, stagger: 0.08, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
+      }
+
+      var consolePanel = document.querySelector('.rental-console');
+      if (consolePanel && !reduceMotion) {
+        window.gsap.fromTo(consolePanel, { y: 18, rotation: 3, autoAlpha: 0 }, { y: 0, rotation: 1.2, autoAlpha: 1, duration: 0.9, delay: 0.16, ease: 'power3.out', clearProps: 'opacity,visibility' });
+        window.gsap.to(consolePanel, { y: '-=5', duration: 2.8, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: 1.1 });
+      }
+
+      var revealItems = document.querySelectorAll('.feature, .card:not(.cart-checkout-item), .scenario, .step, .info-card, .service-standard-grid article, .faq-list details, .contact-option');
+      if (!reduceMotion && revealItems.length && 'IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            observer.unobserve(entry.target);
+            window.gsap.fromTo(entry.target, { y: 22, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.62, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
+          });
+        }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+        revealItems.forEach(function (item) { observer.observe(item); });
+      }
+
+      var onScroll = function () { document.querySelector('.site-header').classList.toggle('is-scrolled', window.scrollY > 18); };
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+      return function () { window.removeEventListener('scroll', onScroll); };
     });
   }
 

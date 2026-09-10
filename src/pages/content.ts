@@ -77,7 +77,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
 <section class="page-hero compact about-hero"><div class="wrap"><div class="kicker">关于 ${esc(contact.name)}</div><h1>让好设备跟着项目走，而不是闲在桌上</h1><p>我们服务在墨尔本学习、工作与创作的人：需要性能时随时接上，用完以后轻松归还。</p></div></section>
 <section class="section"><div class="wrap story-grid">
   <div class="story-lead"><span>WHY RENT</span><h2>购买不是获得算力的唯一方式。</h2></div>
-  <div class="story-copy"><p>一次课程项目、几周的剪辑工作、临时出差，往往都需要一台更合适的电脑，却不一定值得长期持有。${esc(contact.name)} 把设备采购、基础检测、周转与支持放在后台，让用户只为真正使用的时间做决定。</p><p>我们提供游戏笔记本、轻薄商务本和台式工作站。当前最短租期为 ${esc(config.minimumRentalDays)} 天，也可以覆盖更长项目；每次申请都会人工确认设备档期与交付安排。</p></div>
+  <div class="story-copy"><p>一次课程项目、几周的剪辑工作、临时出差，往往都需要一台更合适的电脑，却不一定值得长期持有。${esc(contact.name)} 把设备采购、基础检测、周转与支持放在后台，让用户只为真正使用的时间做决定。</p><p>我们提供游戏笔记本、轻薄商务本和台式工作站。当前最短租期为 ${esc(config.minimumRentalDays)} 天，也可以覆盖更长项目；每次申请都会确认设备档期与交付安排。</p></div>
 </div></section>
 <section class="section alt"><div class="wrap"><div class="section-head tight"><div><div class="kicker">我们怎么做</div><h2>把租赁做得更确定</h2></div></div><div class="principle-grid">
   <article><span>01</span><h3>信息透明</h3><p>配置、日租价、押金与库存状态直接同步展示。最终费用在签约付款前再次确认。</p></article>
@@ -134,4 +134,49 @@ export function renderNotFound(): string {
     <div class="hero-actions"><a class="btn btn-primary btn-lg" href="/products">查看设备库</a><a class="btn btn-ghost btn-lg" href="/">返回首页</a></div>
   </div>
 </section>`
+}
+
+export function renderOrderLookup(appUrl: string): string {
+  return /* html */ `
+<section class="page-hero compact"><div class="wrap"><div class="kicker">订单查询</div><h1>用订单编号查看申请进度</h1><p>输入订单编号和申请时使用的邮箱。临时账户可重新生成一次临时密码，正式账户请直接登录。</p></div></section>
+<section class="section"><div class="wrap form-wrap lookup-wrap">
+  <form class="form-card" id="order-lookup-form">
+    <div class="form-alert" id="lookup-error" hidden></div>
+    <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="例如 OD-20260911-ABC123" autocomplete="off" required></div>
+    <div class="field"><label for="lookup-email">申请邮箱</label><input id="lookup-email" name="email" type="email" autocomplete="email" required></div>
+    <button class="btn btn-primary btn-lg" type="submit" id="lookup-submit">查询订单</button>
+  </form>
+  <div class="form-card lookup-result" id="lookup-result" hidden>
+    <h2 id="lookup-title">订单信息</h2><p id="lookup-message" class="form-intro"></p>
+    <div id="lookup-credentials" class="temporary-credentials" hidden><span>临时账户</span><strong>订单编号：<b id="lookup-result-order"></b></strong><strong>临时密码：<b id="lookup-result-password"></b></strong><p>密码已更新，请立即保存。之后可进入账号中心登录。</p></div>
+    <div id="lookup-order-info" class="lookup-order-info" hidden></div>
+    <p class="lookup-login"><a class="btn btn-primary" href="${esc(appUrl)}/login">进入账号中心</a></p>
+  </div>
+</div></section>
+<script>
+(() => {
+  var form = document.getElementById('order-lookup-form');
+  var error = document.getElementById('lookup-error');
+  var result = document.getElementById('lookup-result');
+  var submit = document.getElementById('lookup-submit');
+  form.addEventListener('submit', function (event) {
+    event.preventDefault(); error.hidden = true; submit.disabled = true; submit.textContent = '查询中…';
+    var data = new FormData(form);
+    fetch(${JSON.stringify(`${appUrl}/public/order-lookup`)}, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ orderNo: data.get('orderNo'), email: data.get('email') }) })
+      .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
+      .then(function (response) {
+        if (!response.ok || !response.json.ok) throw new Error(response.json.message || '查询失败。');
+        result.hidden = false; document.getElementById('lookup-message').textContent = response.json.message || '已找到订单。';
+        if (response.json.registered) return;
+        var order = response.json.order;
+        document.getElementById('lookup-credentials').hidden = false;
+        document.getElementById('lookup-result-order').textContent = order.orderNo;
+        document.getElementById('lookup-result-password').textContent = response.json.temporaryPassword;
+        var info = document.getElementById('lookup-order-info'); info.hidden = false; info.replaceChildren(); [order.deviceName, order.startDate + ' 至 ' + order.endDate, '状态：' + order.status, '预计金额：AUD$' + Number(order.totalAmount || 0).toFixed(2)].forEach(function (text, index) { var node = document.createElement(index === 0 ? 'strong' : 'span'); node.textContent = text || ''; info.appendChild(node); });
+      })
+      .catch(function (reason) { error.textContent = reason.message || '查询失败，请稍后重试。'; error.hidden = false; })
+      .finally(function () { submit.disabled = false; submit.textContent = '查询订单'; });
+  });
+})();
+</script>`
 }
