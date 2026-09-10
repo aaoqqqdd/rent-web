@@ -1,6 +1,7 @@
 // 页面外壳：<head>、顶栏、页脚。所有页面通过 renderPage() 拼装。
 
 import type { SiteContact } from './db'
+import type { SessionUser } from './auth'
 
 export function esc(value: unknown): string {
   return String(value ?? '')
@@ -19,9 +20,16 @@ const LOGO = /* html */ `
 
 interface Nav {
   appUrl: string
+  user: SessionUser | null
 }
 
 function header(nav: Nav): string {
+  const cta = nav.user
+    ? /* html */ `<span class="nav-account">
+        <a class="btn btn-primary" href="/sso/start">进入用户中心</a>
+        <a class="nav-logout" href="/logout" title="退出登录（同时退出 rent）">退出</a>
+      </span>`
+    : /* html */ `<a class="btn btn-primary" href="/login">登录 / 注册</a>`
   return /* html */ `
 <header class="site-header">
   <div class="wrap">
@@ -31,7 +39,7 @@ function header(nav: Nav): string {
       <a href="/rental-guide">租赁说明</a>
       <a href="/about">关于我们</a>
     </nav>
-    <a class="btn btn-primary" href="${esc(nav.appUrl)}/login">登录 / 注册</a>
+    ${cta}
   </div>
 </header>`
 }
@@ -85,6 +93,7 @@ export interface PageOptions {
   contact: SiteContact
   appUrl: string
   path: string
+  user: SessionUser | null
 }
 
 export function renderPage(opts: PageOptions): string {
@@ -106,7 +115,7 @@ export function renderPage(opts: PageOptions): string {
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-${header({ appUrl: opts.appUrl })}
+${header({ appUrl: opts.appUrl, user: opts.user })}
 <main>
 ${opts.body}
 </main>

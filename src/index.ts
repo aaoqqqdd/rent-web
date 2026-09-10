@@ -15,7 +15,20 @@ import {
 import { renderHome } from './pages/home'
 import { renderProducts } from './pages/products'
 import { renderApply } from './pages/apply'
+import { renderLogin } from './pages/login'
 import { renderAbout, renderNotFound, renderRentalGuide } from './pages/content'
+import {
+  clearedSessionCookie,
+  createSession,
+  currentUser,
+  destroySession,
+  enforceRateLimit,
+  hasSessionCookie,
+  issueHandoffToken,
+  sessionCookie,
+  verifyCredentials,
+  type SessionUser,
+} from './auth'
 
 export interface Env {
   RENT: D1Database
@@ -40,24 +53,32 @@ function multiplier(env: Env): number {
   return Number.isFinite(n) && n > 0 ? n : 20
 }
 
-/** 边缘缓存包装：命中直接返回，未命中构建后写回 caches.default。 */
+/**
+ * 边缘缓存包装：命中直接返回，未命中构建后写回 caches.default。
+ * 携带 session cookie 的请求（已登录用户）一律绕过缓存 —— 顶栏会渲染登录态，
+ * 缓存了带登录态的 HTML 会串号。登出访客（绝大多数流量）照常享受边缘缓存。
+ */
 async function cachedHtml(
   c: Context<{ Bindings: Env }>,
   ttl: number,
-  build: () => Promise<string>,
+  build: (user: SessionUser | null) => Promise<string>,
 ): Promise<Response> {
+  const authed = hasSessionCookie(c.req.header('cookie') ?? null)
   const cache = caches.default
   const key = new Request(new URL(c.req.url).toString(), { method: 'GET' })
-  const hit = await cache.match(key)
-  if (hit) return hit
-  const html = await build()
+  if (!authed) {
+    const hit = await cache.match(key)
+    if (hit) return hit
+  }
+  const user = authed ? await currentUser(c) : null
+  const html = await build(user)
   const res = new Response(html, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': `public, max-age=${ttl}`,
+      'cache-control': authed ? 'private, no-store' : `public, max-age=${ttl}`,
     },
   })
-  c.executionCtx.waitUntil(cache.put(key, res.clone()))
+  if (!authed) c.executionCtx.waitUntil(cache.put(key, res.clone()))
   return res
 }
 
@@ -87,7 +108,7 @@ app.get('/robots.txt', (c) =>
 )
 
 app.get('/', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -106,12 +127,13 @@ app.get('/', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/',
+      user,
     })
   }),
 )
 
 app.get('/products', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -128,12 +150,13 @@ app.get('/products', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/products',
+      user,
     })
   }),
 )
 
 app.get('/apply', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact, config] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -154,12 +177,13 @@ app.get('/apply', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/apply',
+      user,
     })
   }),
 )
 
 app.get('/rental-guide', (c) =>
-  cachedHtml(c, CSS_TTL, async () => {
+  cachedHtml(c, CSS_TTL, async (user) => {
     const contact = await getSiteContact(c.env)
     return renderPage({
       title: `租赁说明 — ${contact.name}`,
@@ -168,12 +192,13 @@ app.get('/rental-guide', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/rental-guide',
+      user,
     })
   }),
 )
 
 app.get('/about', (c) =>
-  cachedHtml(c, CSS_TTL, async () => {
+  cachedHtml(c, CSS_TTL, async (user) => {
     const contact = await getSiteContact(c.env)
     return renderPage({
       title: `关于我们 — ${contact.name}`,
@@ -182,9 +207,83 @@ app.get('/about', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/about',
+      user,
     })
   }),
 )
+
+// ---------- 账户 / 单点登录（官网登录后，rent 同步为已登录） ----------
+
+const LOGIN_NOTICES: Record<string, string> = {
+  'logged-out': '你已退出登录。',
+  'session-expired': '登录状态已过期，请重新登录。',
+}
+
+async function renderLoginPage(
+  c: Context<{ Bindings: Env }>,
+  opts: { error?: string; notice?: string; account?: string; status?: number },
+): Promise<Response> {
+  const contact = await getSiteContact(c.env)
+  const html = renderPage({
+    title: `登录 — ${contact.name}`,
+    description: '登录 GeekSlope 账户，查看订单、合同与付款。',
+    body: renderLogin({ appUrl: appUrl(c.env), error: opts.error, notice: opts.notice, account: opts.account }),
+    contact,
+    appUrl: appUrl(c.env),
+    path: '/login',
+    user: null,
+  })
+  return c.html(html, (opts.status ?? 200) as any, { 'cache-control': 'private, no-store' })
+}
+
+app.get('/login', async (c) => {
+  if (await currentUser(c)) return c.redirect('/sso/start')
+  return renderLoginPage(c, { notice: LOGIN_NOTICES[c.req.query('notice') ?? ''] })
+})
+
+app.post('/login', async (c) => {
+  const form = await c.req.parseBody()
+  const account = String(form.account ?? '').trim()
+  const password = String(form.password ?? '')
+  const remember = form.remember === '1' || form.remember === 'on'
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown')
+    .trim()
+    .slice(0, 64)
+
+  const origin = c.req.header('Origin')
+  if (origin && new URL(origin).host !== new URL(c.req.url).host) {
+    return renderLoginPage(c, { error: '请求来源无效，请重试。', status: 403 })
+  }
+  if (!account || !password) return renderLoginPage(c, { error: '请输入账号和密码。', account, status: 400 })
+  if (!(await enforceRateLimit(c.env, 'web-login', ip, 10, 600))) {
+    return renderLoginPage(c, { error: '尝试次数过多，请 10 分钟后再试。', account, status: 429 })
+  }
+
+  const user = await verifyCredentials(c.env, account, password)
+  if (!user) return renderLoginPage(c, { error: '账号或密码错误。', account, status: 401 })
+
+  const { token, maxAge } = await createSession(c.env, user.id, remember)
+  const res = c.redirect('/sso/start')
+  res.headers.set('Set-Cookie', sessionCookie(token, maxAge, new URL(c.req.url).protocol === 'https:'))
+  return res
+})
+
+// 官网已登录 → 签发一次性握手 token → 跳到 rent 的 /sso/consume，在 rent 域也建立会话。
+app.get('/sso/start', async (c) => {
+  const user = await currentUser(c)
+  if (!user) return c.redirect('/login?notice=session-expired')
+  const handoff = await issueHandoffToken(c.env, user.id)
+  return c.redirect(`${appUrl(c.env)}/sso/consume?t=${encodeURIComponent(handoff)}`)
+})
+
+const doLogout = async (c: Context<{ Bindings: Env }>) => {
+  await destroySession(c) // 撤销该用户所有会话：官网 + rent 一起登出
+  const res = c.redirect('/login?notice=logged-out')
+  res.headers.set('Set-Cookie', clearedSessionCookie())
+  return res
+}
+app.get('/logout', doLogout)
+app.post('/logout', doLogout)
 
 app.notFound((c) => {
   return c.html(
@@ -200,6 +299,7 @@ app.notFound((c) => {
       },
       appUrl: appUrl(c.env),
       path: '*',
+      user: null,
     }),
     404,
   )

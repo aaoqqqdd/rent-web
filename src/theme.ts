@@ -47,6 +47,9 @@ p { margin: 0; }
 .nav { display: flex; align-items: center; gap: 30px; }
 .nav a { color: var(--muted-fg); font-size: 14px; transition: color .15s; }
 .nav a:hover { color: var(--fg); }
+.nav-account { display: flex; align-items: center; gap: 14px; }
+.nav-logout { color: var(--muted-fg); font-size: 13px; transition: color .15s; }
+.nav-logout:hover { color: var(--fg); }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -191,7 +194,11 @@ p { margin: 0; }
   background: rgba(255,80,80,.08); border: 1px solid rgba(255,80,80,.35);
   color: #ff9a9a; border-radius: 8px; padding: 12px 14px; font-size: 14px; margin-bottom: 16px;
 }
+.form-alert-ok {
+  background: rgba(0,199,159,.10); border-color: rgba(0,199,159,.40); color: #7ff0d4;
+}
 .form-note { color: var(--muted-fg); font-size: 13px; margin-top: 14px; }
+.auth-wrap { max-width: 440px; }
 @media (max-width: 620px) {
   .row2, .row3 { grid-template-columns: 1fr; }
 }
