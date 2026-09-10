@@ -38,10 +38,14 @@ export function isStrongPassword(password: unknown): boolean {
   return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,}$/.test(String(password ?? ''))
 }
 
-/** 去标签 + 去控制字符 + trim + 截断（对应 rent sanitizePlainText 的实际效果）。 */
+/**
+ * 纯文本字段清洗：直接删除尖括号与控制字符（单遍、幂等），再 trim + 截断。
+ * 这些值只入库、不作 HTML 渲染；删字符而非匹配标签，避免 `<sc<script>ript>`
+ * 一类嵌套残留（CodeQL: incomplete multi-character sanitization）。
+ */
 export function sanitizePlainText(value: unknown, maxLength = 500): string {
   return String(value ?? '')
-    .replace(/<[^>]*>/g, '')
+    .replace(/[<>]/g, '')
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .trim()
     .slice(0, maxLength)
