@@ -1,7 +1,8 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	// 独立的 Worker，与 rent 主应用分开部署。改这里不会影响 rent。
-	"name": "geekslope-web",
+	// 已部署为 https://rent-web.ydnw6zt6vj.workers.dev
+	"name": "rent-web",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-07-10",
 	"observability": {
@@ -32,7 +33,7 @@
 	// 可选覆盖项（用 `wrangler secret put` 或在此加 vars）：
 	//   CONTACT_PHONE / CONTACT_EMAIL —— 覆盖 systemSettings.companyDetails 里的联系方式
 	//
-	// rent 主应用侧需要相应配置（在 ../ 里）：
-	//   PUBLIC_WEB_ORIGIN = 本站的部署 origin（如 https://geekslope-web.pages.dev），用于放行跨站下单请求
-	//   PUBLIC_APP_URL    = rent 自身对外地址，用于拼签署链接（缺省用请求 origin）
+	// rent 主应用侧需要相应配置：
+	//   PUBLIC_WEB_ORIGIN = 本站部署 origin，当前 https://rent-web.ydnw6zt6vj.workers.dev
+	//   PUBLIC_APP_URL    = rent 自身对外地址（可选）
 }
