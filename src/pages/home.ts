@@ -116,7 +116,7 @@ export function renderHome(data: HomeData): string {
   <div class="wrap">
     <h2>准备好了吗？</h2>
     <p>立即浏览我们的产品目录，找到最适合你的设备，开始你的创作之旅。</p>
-    <a class="btn btn-primary btn-lg" href="/apply">开始租赁</a>
+    <a class="btn btn-primary btn-lg" href="/products">开始租赁</a>
   </div>
 </section>`
 }
