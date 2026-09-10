@@ -6,8 +6,8 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 
 ## 特点
 
-- 服务端渲染、无构建步骤，仅依赖 `hono`
-- **产品信息实时从数据库获取**：设备名称、配置、日租价、押金、库存状态，以及公司名 / 电话 / 邮箱 / 配送范围，全部实时读自 rent 的 D1 库（`systemSettings` + `devices`）
+- 服务端渲染、无构建步骤，使用 `hono` 与 `sanitize-html`
+- **展示信息实时从数据库获取**：设备名称、配置、价格、库存、公司资料与公开法务文档，全部实时读自 rent 的 D1 库（`systemSettings` + `devices`）
 - 深色 + 青色主色、网格背景的落地页
 - `/apply` 下单：访客**注册账号 + 提交租赁申请**，订单进入 `pending_approval`，管理员在 rent 后台确认后再安排签约与付款
 - 边缘缓存（`caches.default`）：HTML 60 秒、CSS 1 天
@@ -22,6 +22,7 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 | `/login`（`/register` 302 到此） | 独立注册 / 登录页。注册直接写 `users`，登录跳 `${APP_URL}/login` | 无（表单页） |
 | `/rental-guide` | 租赁流程 + 常见问题 | 无（静态文案） |
 | `/about` | 关于 + 联系方式 | 页面内联系方式来自 `systemSettings.companyDetails` |
+| `/terms` `/service-terms` `/privacy` 等 | 用户协议、服务条款、隐私政策及其他公开法务文档 | 正文、版本和公司变量来自 `systemSettings`，与 rent 同步 |
 | `/healthz` `/favicon.ico` `/robots.txt` | 运维 / 爬虫 | — |
 
 月租为 `日租 × MONTHLY_MULTIPLIER`（默认 20）的**参考价**，真实计费仍在 rent 主应用完成。

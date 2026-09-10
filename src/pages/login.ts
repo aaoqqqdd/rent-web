@@ -79,8 +79,8 @@ export function renderLogin(data: LoginData): string {
         <div class="field" style="display:flex;gap:8px;align-items:flex-start">
           <input type="checkbox" id="reg-agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
           <label for="reg-agree" style="font-weight:400;margin:0">我已阅读并同意
-            <a href="${esc(appUrl)}/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与
-            <a href="${esc(appUrl)}/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
+            <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与
+            <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
         </div>
 
         ${turnstile}

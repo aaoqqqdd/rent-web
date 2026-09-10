@@ -1,6 +1,6 @@
 // 实时数据访问层。营销站只读 rent 的 D1 库（binding: RENT）：
 //   - devices        —— 产品名称 / 配置 / 日租价 / 押金 / 状态
-//   - systemSettings  —— companyDetails（公司名、电话、邮箱、地址）
+//   - systemSettings  —— companyDetails、租赁规则与公开法务文档
 // 所有查询都用 COALESCE / try-catch 兜底，任一字段缺失或表结构变动都不影响页面出图。
 
 import type { Env } from './index'
@@ -29,6 +29,28 @@ export interface SiteContact {
   phone: string
   email: string
   address: string
+  contact: string
+  website: string
+  logo: string
+}
+
+export type LegalDocumentKey =
+  | 'userTerms'
+  | 'rentalTerms'
+  | 'serviceTerms'
+  | 'privacyPolicy'
+  | 'softwareTerms'
+  | 'copyrightNotice'
+  | 'cookiePolicy'
+  | 'complaintsPolicy'
+  | 'acceptableUsePolicy'
+  | 'consumerRights'
+
+export interface LegalDocumentData {
+  content: string
+  metadata: { version: string; lastUpdatedDate: string }
+  companyDetails: Record<string, unknown>
+  bankDetails: Record<string, unknown>
 }
 
 const CATEGORY_LABEL: Record<Product['category'], string> = {
@@ -129,6 +151,9 @@ export async function getSiteContact(env: Env): Promise<SiteContact> {
     phone: '400-888-0000',
     email: 'hello@geekslope.com',
     address: '送货：墨尔本 CBD 及内城区 · 其他郊区到店自取',
+    contact: '',
+    website: '',
+    logo: '',
   }
   try {
     const row = await env.RENT.prepare(
@@ -140,6 +165,9 @@ export async function getSiteContact(env: Env): Promise<SiteContact> {
       if (parsed.phone) fallback.phone = parsed.phone
       if (parsed.email) fallback.email = parsed.email
       if (parsed.address) fallback.address = parsed.address
+      if (parsed.contact) fallback.contact = parsed.contact
+      if (parsed.website) fallback.website = parsed.website
+      if (parsed.logo) fallback.logo = parsed.logo
     }
   } catch {
     /* 表缺失或 JSON 损坏时用 fallback */
@@ -155,27 +183,102 @@ export function monthlyRate(pricePerDay: number, multiplier: number): number {
 
 export interface RentalConfig {
   minimumRentalDays: number
+  bufferDays: number
+  unavailableDates: string[]
+  unavailableTimeSlots: Record<string, string[]>
   pickupLocations: string[]
 }
 
-/** 下单表单需要的规则：最短租期、可选自取点。均来自 systemSettings，缺失时给安全默认值。 */
+/** 下单与说明页需要的租赁规则。均来自 systemSettings，缺失时给安全默认值。 */
 export async function getRentalConfig(env: Env): Promise<RentalConfig> {
-  const cfg: RentalConfig = { minimumRentalDays: 1, pickupLocations: [] }
+  const cfg: RentalConfig = {
+    minimumRentalDays: 1,
+    bufferDays: 0,
+    unavailableDates: [],
+    unavailableTimeSlots: {},
+    pickupLocations: [],
+  }
   try {
     const rows = await env.RENT.prepare(
       `SELECT key, value FROM systemSettings WHERE key IN ('rentalRules', 'companyDetails')`,
     ).all<{ key: string; value: string }>()
     for (const row of rows.results ?? []) {
       const parsed = JSON.parse(row.value || '{}') as Record<string, unknown>
-      if (row.key === 'rentalRules' && Number(parsed.minimumRentalDays) > 0) {
-        cfg.minimumRentalDays = Math.floor(Number(parsed.minimumRentalDays))
+      if (row.key === 'rentalRules') {
+        if (Number(parsed.minimumRentalDays) > 0) {
+          cfg.minimumRentalDays = Math.floor(Number(parsed.minimumRentalDays))
+        }
+        if (Number(parsed.bufferDays) >= 0) {
+          cfg.bufferDays = Math.floor(Number(parsed.bufferDays))
+        }
+        if (Array.isArray(parsed.unavailableDates)) {
+          cfg.unavailableDates = [...new Set(
+            parsed.unavailableDates
+              .map((value) => String(value).trim())
+              .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value)),
+          )]
+        }
+        if (parsed.unavailableTimeSlots && typeof parsed.unavailableTimeSlots === 'object' && !Array.isArray(parsed.unavailableTimeSlots)) {
+          cfg.unavailableTimeSlots = Object.fromEntries(
+            Object.entries(parsed.unavailableTimeSlots)
+              .filter(([date, slots]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Array.isArray(slots))
+              .map(([date, slots]) => [date, (slots as unknown[]).map((slot) => String(slot)).filter(Boolean)]),
+          )
+        }
       }
       if (row.key === 'companyDetails' && Array.isArray(parsed.pickupLocations)) {
-        cfg.pickupLocations = (parsed.pickupLocations as unknown[]).map((s) => String(s)).filter(Boolean)
+        cfg.pickupLocations = [...new Set(
+          parsed.pickupLocations.map((value) => String(value).trim()).filter(Boolean),
+        )]
       }
     }
   } catch {
     /* 用默认值 */
   }
   return cfg
+}
+
+/** 公开法务文档及其模板变量，数据结构与 rent 的公开法务页面保持一致。 */
+export async function getLegalDocument(
+  env: Env,
+  documentKey: LegalDocumentKey,
+  metadataKey: string,
+): Promise<LegalDocumentData> {
+  const data: LegalDocumentData = {
+    content: '',
+    metadata: { version: '1.0', lastUpdatedDate: '' },
+    companyDetails: {},
+    bankDetails: {},
+  }
+  try {
+    const rows = await env.RENT.prepare(
+      `SELECT key, value FROM systemSettings
+       WHERE key IN (?, 'legalMetadata', 'companyDetails', 'bankDetails')`,
+    )
+      .bind(documentKey)
+      .all<{ key: string; value: string }>()
+
+    for (const row of rows.results ?? []) {
+      if (row.key === documentKey) {
+        data.content = String(row.value ?? '').trim()
+        continue
+      }
+      const parsed = JSON.parse(row.value || '{}') as Record<string, unknown>
+      if (row.key === 'companyDetails') data.companyDetails = parsed
+      if (row.key === 'bankDetails') data.bankDetails = parsed
+      if (row.key === 'legalMetadata') {
+        const metadata = parsed[metadataKey]
+        if (metadata && typeof metadata === 'object') {
+          const record = metadata as Record<string, unknown>
+          data.metadata = {
+            version: String(record.version || '1.0'),
+            lastUpdatedDate: String(record.lastUpdatedDate || ''),
+          }
+        }
+      }
+    }
+  } catch {
+    /* 表缺失、JSON 损坏或查询失败时由页面显示中性兜底。 */
+  }
+  return data
 }

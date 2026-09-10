@@ -22,8 +22,8 @@
 	"vars": {
 		// rent 主应用的公开地址。营销站的「立即租赁」表单会 POST 到
 		//   ${APP_URL}/public/rental-request
-		// 并把返回的 /contract/sign 链接重定向给访客。部署后改成真实域名。
-		"APP_URL": "https://rent.example.com",
+		// 订单创建后仍停留在本站显示提交结果，后续签约付款在主应用完成。
+		"APP_URL": "https://rent.ydnw6zt6vj.workers.dev",
 		// 月租展示价 = 日租 × 该系数（取整）。仅用于官网展示，真实计费仍在 rent 内完成。
 		"MONTHLY_MULTIPLIER": "20",
 		// Cloudflare Turnstile 站点公钥（与 rent 主应用同一个 Turnstile 组件）。
