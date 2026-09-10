@@ -153,6 +153,122 @@ export function monthlyRate(pricePerDay: number, multiplier: number): number {
   return Math.round(pricePerDay * multiplier)
 }
 
+// ── 法律 / 合规文档 ──────────────────────────────────────────────────
+// 全部存于 rent 的 systemSettings 表，管理员在 rent 后台维护（迁移 0114 / 0115
+// 植入澳大利亚合规默认文本）。营销站只读渲染：取 HTML → 填充 {company_*} 与版本
+// 占位符 → 轻量清洗后原样输出。文档为空（尚未发布）时返回 null，由路由回落。
+
+export interface LegalDoc {
+  html: string
+  version: string
+  lastUpdated: string
+}
+
+export interface LegalDocQuery {
+  key: string // systemSettings 键，如 'serviceTerms'
+  metaKey: string // legalMetadata 下的键，如 'service'
+  varPrefix: string // 生成 `${prefix}_version` / `${prefix}_last_updated_date`
+}
+
+interface CompanyDetails {
+  name: string
+  abn: string
+  address: string
+  phone: string
+  email: string
+  website: string
+}
+
+function parseJsonObject(v: unknown): Record<string, unknown> {
+  try {
+    const o = JSON.parse(String(v ?? '') || '{}')
+    return o && typeof o === 'object' ? (o as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function escVal(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/** 只取展示所需的公司字段，缺失回落到 GeekSlope 默认值。 */
+function readCompanyDetails(row: { value: string } | undefined): CompanyDetails {
+  const p = parseJsonObject(row?.value)
+  return {
+    name: String(p.name ?? 'GeekSlope'),
+    abn: String(p.abn ?? ''),
+    address: String(p.address ?? ''),
+    phone: String(p.phone ?? ''),
+    email: String(p.email ?? 'hello@geekslope.com'),
+    website: String(p.website ?? ''),
+  }
+}
+
+/** 极简 HTML 清洗：去掉脚本类标签、事件属性与 javascript: 链接。 */
+function scrubHtml(html: string): string {
+  return html
+    .replace(/<\s*(script|iframe|object|embed|style)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    .replace(/<\s*(script|iframe|object|embed|style)\b[^>]*\/?\s*>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/((?:href|src)\s*=\s*)("|')\s*javascript:[^"']*\2/gi, '$1$2#$2')
+}
+
+/**
+ * 读取单个法律文档并完成占位符填充。返回 null 表示管理员尚未发布该文档。
+ */
+export async function getLegalDoc(env: Env, q: LegalDocQuery): Promise<LegalDoc | null> {
+  let rawHtml = ''
+  let company = readCompanyDetails(undefined)
+  let meta = { version: '1.0', lastUpdatedDate: '' }
+  try {
+    const { results } = await env.RENT.prepare(
+      `SELECT key, value FROM systemSettings WHERE key IN (?, 'legalMetadata', 'companyDetails')`,
+    )
+      .bind(q.key)
+      .all<{ key: string; value: string }>()
+    const byKey = new Map((results ?? []).map((r) => [r.key, r]))
+    rawHtml = String(byKey.get(q.key)?.value ?? '').trim()
+    company = readCompanyDetails(byKey.get('companyDetails'))
+    const m = parseJsonObject(byKey.get('legalMetadata')?.value)[q.metaKey]
+    if (m && typeof m === 'object') {
+      const mm = m as Record<string, unknown>
+      meta = {
+        version: String(mm.version ?? '1.0'),
+        lastUpdatedDate: String(mm.lastUpdatedDate ?? ''),
+      }
+    }
+  } catch {
+    return null
+  }
+  if (!rawHtml) return null
+
+  if (env.CONTACT_PHONE) company.phone = env.CONTACT_PHONE
+  if (env.CONTACT_EMAIL) company.email = env.CONTACT_EMAIL
+
+  const vars: Record<string, string> = {
+    company_name: company.name,
+    company_abn: company.abn,
+    company_address: company.address,
+    company_phone: company.phone,
+    company_email: company.email,
+    company_website: company.website,
+    [`${q.varPrefix}_version`]: meta.version,
+    [`${q.varPrefix}_last_updated_date`]: meta.lastUpdatedDate,
+    last_updated_date: meta.lastUpdatedDate,
+  }
+  const filled = Object.entries(vars).reduce(
+    (acc, [k, v]) => acc.replace(new RegExp(`\\$\\{${k}\\}|\\{${k}\\}`, 'g'), escVal(v)),
+    rawHtml,
+  )
+  return { html: scrubHtml(filled), version: meta.version, lastUpdated: meta.lastUpdatedDate }
+}
+
 export interface RentalConfig {
   minimumRentalDays: number
   pickupLocations: string[]

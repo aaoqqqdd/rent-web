@@ -6,6 +6,7 @@ import { Hono, type Context } from 'hono'
 import { STYLES } from './theme'
 import { renderPage, FAVICON_SVG } from './layout'
 import {
+  getLegalDoc,
   getRentalConfig,
   getSiteContact,
   listProducts,
@@ -16,6 +17,7 @@ import { renderHome } from './pages/home'
 import { renderProducts } from './pages/products'
 import { renderApply } from './pages/apply'
 import { renderAbout, renderNotFound, renderRentalGuide } from './pages/content'
+import { renderLegalDoc, renderLegalMissing } from './pages/legal'
 
 export interface Env {
   RENT: D1Database
@@ -180,6 +182,127 @@ app.get('/about', (c) =>
     })
   }),
 )
+
+// 网站相关的法律 / 合规文档。正文实时读 rent 的 systemSettings（见 db.getLegalDoc），
+// 管理员在 rent 后台维护。metaKey 对应 legalMetadata 的键；varPrefix 生成
+// `${prefix}_version` 与 `${prefix}_last_updated_date` 两个模板变量。
+const LEGAL_PAGES: Array<{
+  paths: string[]
+  title: string
+  description: string
+  key: string
+  code: string
+  metaKey: string
+  varPrefix: string
+}> = [
+  {
+    paths: ['/service-terms', '/terms'],
+    title: '服务条款',
+    description: 'GeekSlope 网站与在线租赁服务的使用条款。',
+    key: 'serviceTerms',
+    code: 'LEGAL / SERVICE TERMS',
+    metaKey: 'service',
+    varPrefix: 'service_terms',
+  },
+  {
+    paths: ['/privacy', '/privacy-policy'],
+    title: '隐私政策',
+    description: '我们如何收集、使用、披露与保护您的个人信息。',
+    key: 'privacyPolicy',
+    code: 'LEGAL / PRIVACY',
+    metaKey: 'privacy',
+    varPrefix: 'privacy_policy',
+  },
+  {
+    paths: ['/user-terms'],
+    title: '用户协议',
+    description: '注册与使用 GeekSlope 账户的用户协议。',
+    key: 'userTerms',
+    code: 'LEGAL / USER TERMS',
+    metaKey: 'user',
+    varPrefix: 'user_agreement',
+  },
+  {
+    paths: ['/cookies', '/cookie-policy'],
+    title: 'Cookie 政策',
+    description: 'GeekSlope 网站如何使用 Cookie 及类似技术。',
+    key: 'cookiePolicy',
+    code: 'LEGAL / COOKIE POLICY',
+    metaKey: 'cookie',
+    varPrefix: 'cookie_policy',
+  },
+  {
+    paths: ['/refund-policy', '/copyright'],
+    title: '取消与退款政策',
+    description: '订单取消、押金退还、提前归还与设备故障的处理方式。',
+    key: 'copyrightNotice',
+    code: 'LEGAL / REFUND POLICY',
+    metaKey: 'copyright',
+    varPrefix: 'refund_policy',
+  },
+  {
+    paths: ['/consumer-rights'],
+    title: '澳大利亚消费者法下的权利',
+    description: '您依据《澳大利亚消费者法》享有的不可排除的消费者保障。',
+    key: 'consumerRights',
+    code: 'LEGAL / CONSUMER RIGHTS',
+    metaKey: 'consumer',
+    varPrefix: 'consumer_rights',
+  },
+  {
+    paths: ['/complaints', '/dispute-resolution'],
+    title: '投诉与争议解决政策',
+    description: '投诉的提出方式、处理流程与外部升级渠道。',
+    key: 'complaintsPolicy',
+    code: 'LEGAL / COMPLAINTS',
+    metaKey: 'complaints',
+    varPrefix: 'complaints_policy',
+  },
+  {
+    paths: ['/acceptable-use', '/aup'],
+    title: '可接受使用政策',
+    description: '租赁设备与设备管理软件的禁止用途。',
+    key: 'acceptableUsePolicy',
+    code: 'LEGAL / ACCEPTABLE USE',
+    metaKey: 'aup',
+    varPrefix: 'acceptable_use_policy',
+  },
+  {
+    paths: ['/software-terms'],
+    title: '软件使用协议',
+    description: '随出租设备提供的设备管理软件使用条款。',
+    key: 'softwareTerms',
+    code: 'LEGAL / SOFTWARE',
+    metaKey: 'software',
+    varPrefix: 'software_terms',
+  },
+]
+
+for (const page of LEGAL_PAGES) {
+  app.on('GET', page.paths, (c) =>
+    cachedHtml(c, HTML_TTL, async () => {
+      const [contact, doc] = await Promise.all([
+        getSiteContact(c.env),
+        getLegalDoc(c.env, {
+          key: page.key,
+          metaKey: page.metaKey,
+          varPrefix: page.varPrefix,
+        }),
+      ])
+      const body = doc
+        ? renderLegalDoc({ code: page.code, contentHtml: doc.html })
+        : renderLegalMissing(page.title, appUrl(c.env))
+      return renderPage({
+        title: `${page.title} — ${contact.name}`,
+        description: page.description,
+        body,
+        contact,
+        appUrl: appUrl(c.env),
+        path: page.paths[0],
+      })
+    }),
+  )
+}
 
 app.notFound((c) => {
   return c.html(

@@ -37,6 +37,7 @@ src/pages/home.ts     首页：Hero → 四大保障 → 为你精选（实时�
 src/pages/products.ts 产品目录：按类别分组的全部在售设备（实时）
 src/pages/apply.ts    下单页：设备/租期/取还 + 注册字段，前端 POST 到 rent 的 /public/rental-request
 src/pages/content.ts  租赁说明 / 关于我们 / 404（静态文案）
+src/pages/legal.ts    法律 / 合规文档页外壳（正文实时读 D1，见 db.getLegalDoc）
 ```
 
 ## 数据来源（哪些是实时从 D1 读的）
@@ -50,6 +51,7 @@ src/pages/content.ts  租赁说明 / 关于我们 / 404（静态文案）
 | 是否「现货可租」 | `devices.lifecycle_status ∈ {READY, RESERVED}`，无该列则回退 `status='available'` | — |
 | 公司名 / 电话 / 邮箱 / 配送范围 | `systemSettings` key=`companyDetails`（JSON） | 代码内 GeekSlope 默认值；`CONTACT_PHONE` / `CONTACT_EMAIL` 变量可再覆盖 |
 | 最短租期、可选自取点 | `systemSettings` key=`rentalRules` / `companyDetails.pickupLocations` | 1 天 / 单个占位自取点 |
+| 网站法律文档（服务条款 / 隐私政策 / 用户协议 / Cookie / 退款政策 / 消费者权利 / 投诉 / 可接受使用 / 软件协议） | `systemSettings` key=`serviceTerms` / `privacyPolicy` / `userTerms` / `cookiePolicy` / `copyrightNotice` / `consumerRights` / `complaintsPolicy` / `acceptableUsePolicy` / `softwareTerms`（HTML，含 `{company_*}` 与版本占位符，配合 `legalMetadata`） | 管理员未发布（字段为空）时显示「整理中」占位页 |
 
 展示类查询都在 `try/catch` 里，D1 不可用或表结构变动时页面仍能出图。
 本项目**不直接写库**：写操作（注册 users、建 orders）全部发生在 rent 侧的 `/public/rental-request`。

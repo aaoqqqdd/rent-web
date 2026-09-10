@@ -197,6 +197,19 @@ p { margin: 0; }
 .doc ul { padding-left: 20px; }
 .doc .lead { color: var(--fg); font-size: 17px; margin-top: 16px; }
 
+/* 法律文档正文（HTML 来自 D1，见 src/pages/legal.ts） */
+.legal-doc__body { margin-top: 20px; }
+.legal-doc__body h1 { margin-bottom: 6px; }
+.legal-doc__body h2 { font-size: 20px; margin-top: 36px; }
+.legal-doc__body p, .legal-doc__body li { color: var(--muted-fg); font-size: 15.5px; line-height: 1.75; }
+.legal-doc__body ul { padding-left: 20px; }
+.legal-doc__body a { color: var(--primary); }
+.legal-doc__body strong { color: var(--fg); }
+.legal-doc__body code { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+.legal-doc__body hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+.legal-doc__body table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+.legal-doc__body th, .legal-doc__body td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+
 /* ---------- footer ---------- */
 .site-footer { background: var(--bg); border-top: 1px solid var(--border); }
 .site-footer .wrap { padding: 60px 24px 30px; }
@@ -212,6 +225,9 @@ p { margin: 0; }
 }
 .foot-bottom a { margin-left: 18px; }
 .foot-bottom a:hover { color: var(--primary); }
+.foot-legal { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 16px; max-width: 620px; }
+.foot-legal a { margin-left: 0; color: var(--muted-fg); white-space: nowrap; }
+.foot-legal a:hover { color: var(--primary); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
@@ -223,6 +239,7 @@ p { margin: 0; }
   .nav { display: none; }
   .features .wrap { grid-template-columns: 1fr; }
   .foot-grid { grid-template-columns: 1fr; }
+  .foot-legal { justify-content: flex-start; }
   .hero .wrap { padding: 88px 24px 72px; }
 }
 `
