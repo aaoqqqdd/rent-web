@@ -121,12 +121,11 @@ export function renderApply(data: ApplyData): string {
 
       <div class="form-card">
         <div class="form-card-head"><span>04</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
-        <p class="hint" style="margin-top:0">申请会生成临时账户。Apple Pay 可自动带入账单姓名和邮箱，普通卡片也可以手动填写。</p>
         <div class="row2">
-          <div class="field" id="contact-name-field"><label for="contactName">姓名（Apple Pay 可自动带入）</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name"></div>
+          <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name"></div>
           <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel"></div>
         </div>
-        <div class="field" id="contact-email-field"><label for="contactEmail">邮箱（Apple Pay 可自动带入）</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email"></div>
+        <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email"></div>
         <div class="stripe-setup-box">
           <div class="stripe-setup-head"><div><label>信用卡资料</label><p>仅验证支付方式，不会在提交申请时扣款。</p></div><span>SECURE / STRIPE</span></div>
           <div id="stripe-card-element" class="stripe-card-element"></div>
