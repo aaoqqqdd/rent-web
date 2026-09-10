@@ -43,8 +43,9 @@ p { margin: 0; }
 }
 .site-header .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
 .brand { display: inline-flex; align-items: center; }
-.brand .brand-banner { height: 30px; width: auto; display: block; }
-.site-footer .brand .brand-banner { height: 26px; }
+.brand .brand-banner { height: 36px; width: auto; display: block; }
+.site-footer .brand .brand-banner { height: 30px; }
+@media (max-width: 620px) { .brand .brand-banner { height: 32px; } }
 .nav { display: flex; align-items: center; gap: 30px; }
 .nav a { color: var(--muted-fg); font-size: 14px; transition: color .15s; }
 .nav a:hover { color: var(--fg); }

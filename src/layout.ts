@@ -11,20 +11,20 @@ export function esc(value: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
-// 角标：蓝色 chevron + 白色斜杠（48×48，透明底）。
+// 角标：蓝色 chevron + 白色斜杠（紧凑 44×44 视图框，透明底）。
 const MARK_PATHS = /* html */ `
-  <path d="M27 15 L44 41 L35.5 41 L27 28 L18.5 41 L10 41 Z" fill="#2563EB"/>
-  <path d="M9 41 L17 41 L34 7 L26 7 Z" fill="#FFFFFF"/>`
+  <path d="M24 10 L42 39 L33 39 L24 25 L15 39 L6 39 Z" fill="#2563EB"/>
+  <path d="M5 39 L14 39 L33 4 L24 4 Z" fill="#FFFFFF"/>`
 
 // 横幅：角标 + GeekSlope 字标，作为一个整体缩放。顶栏 / 页脚用。
 const BANNER = /* html */ `
-<svg viewBox="0 0 236 48" fill="none" aria-label="GeekSlope" role="img" class="brand-banner">
+<svg viewBox="0 0 214 44" fill="none" aria-label="GeekSlope" role="img" class="brand-banner">
   ${MARK_PATHS}
-  <text x="60" y="34" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="29" font-weight="700" letter-spacing="0.4" fill="#EAF0F6">GeekSlope</text>
+  <text x="52" y="31" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" letter-spacing="0.3" fill="#F2F5F9">GeekSlope</text>
 </svg>`
 
 // 圆形徽标（favicon / 分享图）。
-const BADGE = /* svg */ `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#0A0A0F"/><g transform="translate(16 16) scale(0.6667)">${MARK_PATHS}</g></svg>`
+const BADGE = /* svg */ `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#0A0A0F"/><g transform="translate(10 10)">${MARK_PATHS}</g></svg>`
 
 export const FAVICON_SVG = BADGE
 const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(BADGE)}`
