@@ -132,6 +132,10 @@ export function renderApply(data: ApplyData): string {
         </div>
         <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email"></div>
         <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
+        <div class="payment-method-options" id="payment-method-options" hidden>
+          <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
+          <label class="choice-line"><input type="radio" name="paymentMethod" value="mixed"> 混合支付（优先扣除余额，再支付剩余金额）</label>
+        </div>
         <div class="stripe-setup-box">
           <div class="stripe-setup-head"><div><label>信用卡资料</label><p>仅验证支付方式，不会在提交申请时扣款。</p></div><span>SECURE / STRIPE</span></div>
           <div id="stripe-card-element" class="stripe-card-element"></div>
@@ -221,6 +225,13 @@ export function renderApply(data: ApplyData): string {
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
   var setupIntentInput = document.getElementById('stripeSetupIntentId');
+  var balanceOption = document.getElementById('payment-method-options');
+  var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
+  var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
+  var mixedPaymentInput = balanceOption.querySelector('input[value="mixed"]');
+  var contactEmail = document.getElementById('contactEmail');
+  var balanceEndpoint = ${scriptJson(`${appUrl}/public/account-balance`)};
+  var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
   var walletMessage = document.getElementById('stripe-wallet-message');
 
@@ -311,6 +322,31 @@ export function renderApply(data: ApplyData): string {
       return { ok: response.ok, json: json };
     });
   }
+  function updatePaymentMethodVisibility() {
+    // 余额、银行卡和钱包可以并存；余额选项只决定最终订单的扣款优先级。
+  }
+  function lookupBalance() {
+    var email = contactEmail.value.trim();
+    balanceOption.hidden = true;
+    balancePaymentInput.checked = false;
+    mixedPaymentInput.checked = false;
+    if (!email) { updatePaymentMethodVisibility(); return; }
+    fetch(balanceEndpoint + '?email=' + encodeURIComponent(email), { headers: { Accept: 'application/json' } })
+      .then(readJsonResponse)
+      .then(function (result) {
+        if (!result.ok || !result.json || !result.json.available || contactEmail.value.trim() !== email) return;
+        balanceOption.hidden = false;
+        document.getElementById('balance-payment-note').textContent = '检测到账户余额，可用于支付本次申请。';
+      })
+      .catch(function () {})
+      .finally(updatePaymentMethodVisibility);
+  }
+  contactEmail.addEventListener('input', function () {
+    window.clearTimeout(balanceLookupTimer);
+    balanceLookupTimer = window.setTimeout(lookupBalance, 450);
+  });
+  paymentMethodInputs.forEach(function (input) { input.addEventListener('change', updatePaymentMethodVisibility); });
+  updatePaymentMethodVisibility();
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' } })
     .then(readJsonResponse)
     .then(function (result) {
@@ -397,7 +433,8 @@ export function renderApply(data: ApplyData): string {
     event.preventDefault(); errBox.hidden = true;
     if (!cartIds.length) { renderCart(); return; }
     if (!form.reportValidity()) return;
-    if (!cardReady || !setupIntentInput.value) {
+    var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
+    if (selectedPaymentMethod !== 'balance' && (!cardReady || !setupIntentInput.value)) {
       errBox.textContent = '请先填写并验证信用卡信息。验证过程不会扣款。'; errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     if (days() < MIN_DAYS) {
