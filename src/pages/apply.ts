@@ -221,7 +221,7 @@ export function renderApply(data: ApplyData): string {
           <label>押金退还方式</label>
           <p class="hint">设备归还并完成验收后，押金会按你选择的方式处理。退回账号余额仅限已存在的正式账户；新注册或临时账户请选原路退回。</p>
           <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
-          <label class="choice-line"><input type="radio" name="refundMethod" value="balance"> 退回账号余额（仅正式账户）</label>
+          <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
         </div>
         <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
         <div class="field" style="display:flex;gap:8px;align-items:flex-start">
@@ -304,6 +304,7 @@ export function renderApply(data: ApplyData): string {
   var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
   var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
   var mixedPaymentInput = balanceOption.querySelector('input[value="mixed"]');
+  var refundBalanceInput = document.getElementById('refund-balance');
   var contactEmail = document.getElementById('contactEmail');
   var balanceEndpoint = ${scriptJson(`${appUrl}/public/account-balance`)};
   var balanceLookupTimer = null;
@@ -400,12 +401,15 @@ export function renderApply(data: ApplyData): string {
     balanceOption.hidden = true;
     balancePaymentInput.checked = false;
     mixedPaymentInput.checked = false;
+    refundBalanceInput.disabled = true;
+    if (document.querySelector('input[name="refundMethod"][value="balance"]:checked')) document.querySelector('input[name="refundMethod"][value="original"]').checked = true;
     if (!email) { updatePaymentMethodVisibility(); return; }
     fetch(balanceEndpoint + '?email=' + encodeURIComponent(email), { headers: { Accept: 'application/json' } })
       .then(readJsonResponse)
       .then(function (result) {
-        if (!result.ok || !result.json || !result.json.available || contactEmail.value.trim() !== email) return;
-        balanceOption.hidden = false;
+        if (!result.ok || !result.json || contactEmail.value.trim() !== email) return;
+        refundBalanceInput.disabled = !result.json.accountEligible;
+        if (result.json.available) balanceOption.hidden = false;
         document.getElementById('balance-payment-note').textContent = '检测到账户余额，可用于支付本次申请。';
       })
       .catch(function () {})
@@ -524,6 +528,7 @@ export function renderApply(data: ApplyData): string {
     document.getElementById('contactEmail').value = typeof savedContactInfo.email === 'string' ? savedContactInfo.email : '';
     saveContactInfo.checked = true;
   }
+  if (contactEmail.value) lookupBalance();
   form.addEventListener('submit', function (event) {
     event.preventDefault(); errBox.hidden = true;
     if (!cartIds.length) { renderCart(); return; }
