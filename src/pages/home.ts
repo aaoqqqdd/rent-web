@@ -6,7 +6,7 @@ import { monthlyRate, type Product, type RentalConfig } from '../db'
 const FEATURES = [
   { t: '交付前检测', d: '基础功能、外观与配件逐项确认，拿到手即可开工', ic: 'M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z' },
   { t: '租期可调整', d: '短租应急或长期项目都可以，到期前还能申请续租', ic: 'M8 2v4M16 2v4M3 10h18M5 6h14v14H5z' },
-  { t: '本地交付', d: '墨尔本 CBD 与内城区可配送，其他区域支持门店自取', ic: 'M3 7h11v8H3zM14 10h4l3 3 3v2h-7zM7 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z' },
+  { t: '本地交付', d: '墨尔本 CBD 与周边地区可配送，其他区域支持门店自取', ic: 'M3 7h11v8H3zM14 10h4l3 3 3v2h-7zM7 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z' },
   { t: '租期内支持', d: '7×12 小时技术支持，符合条件的故障安排换机', ic: 'M12 2a10 10 0 100 20 10 10 0 000-20zM12 8v5M12 16h.01' },
 ]
 
@@ -55,7 +55,7 @@ export function renderHome(data: HomeData): string {
   const pickupSummary = config.pickupLocations.length
     ? `可选自取点：${config.pickupLocations.join('、')}`
     : '自取地点请联系客服确认'
-  const deliverySummary = config.deliveryAreas.length ? config.deliveryAreas.join('、') : '墨尔本 CBD 及周边内城区'
+  const deliverySummary = config.deliveryAreas.length ? config.deliveryAreas.join('、') : '墨尔本 CBD 及周边地区'
   const features = FEATURES.map((feature, index) => index === 2
     ? { ...feature, d: `可配送区域：${deliverySummary}；${pickupSummary}` }
     : feature)
@@ -153,7 +153,7 @@ export function renderHome(data: HomeData): string {
     <div class="section-head"><div><div class="kicker">租之前先知道</div><h2>把预算和交付安排一次看明白</h2></div><p>产品页展示的是实时基础信息，最终金额和档期会在提交申请后确认。</p></div>
     <div class="info-grid three">
       <article class="info-card"><span>费用</span><h3>租金 + 押金</h3><p>租金按日租价乘以实际租期计算；押金在设备归还并验收无误后按规则退回。</p></article>
-      <article class="info-card"><span>交付</span><h3>配送或到店自取</h3><p>墨尔本 CBD 与周边内城区可安排配送，其他郊区可咨询自取地点。配送费会随地址确认。</p></article>
+      <article class="info-card"><span>交付</span><h3>配送或到店自取</h3><p>墨尔本 CBD 与周边地区可安排配送，其他郊区可咨询自取地点。配送费会随地址确认。</p></article>
       <article class="info-card"><span>适合</span><h3>短期项目与临时升级</h3><p>课程作业、剪辑渲染、开发测试、游戏活动或差旅办公，都可以按实际使用时间申请。</p></article>
     </div>
     <div class="home-essentials-note"><strong>当前最短租期：${esc(config.minimumRentalDays)} 天</strong><span>提交申请不会立即扣款，确认档期后才进入合同与付款。</span><a class="text-link" href="/rental-guide">查看完整租赁规则 <span>→</span></a></div>

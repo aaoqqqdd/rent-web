@@ -77,7 +77,7 @@ src/auth.ts           注册写库：PBKDF2 哈希 + INSERT users（与 rent /re
 - **rent 侧的改动**：新增 `src/actions/public/rentalRequest.ts` 与 `POST /public/rental-request` 路由、
   全局中间件里对该路径的 CORS / 来源放行（`PUBLIC_WEB_ORIGIN`）与限流。改这些要在 rent 仓库里跑
   `npx tsc --noEmit` + `npm test`，并重新部署 rent。
-- **业务事实**：送货上门仅限墨尔本 CBD 及周边内城区（Docklands、Southbank、South Yarra、Carlton 等）；
+- **业务事实**：送货上门仅限墨尔本 CBD 及周边周边地区（Docklands、Southbank、South Yarra、Carlton 等）；
   墨尔本其他郊区可到店自取。官网订单先 `pending_approval`，管理员确认后才签合同、才付款。
 - **`APP_URL`** 必须在部署时设成 rent 主应用真实地址，否则 `/apply` 提交无处可去。
 - 所有用户可见的动态字符串都要经 `esc()`（`src/layout.ts`）。

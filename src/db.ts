@@ -150,7 +150,7 @@ export async function getSiteContact(env: Env): Promise<SiteContact> {
     name: 'GeekSlope',
     phone: '400-888-0000',
     email: 'hello@geekslope.com',
-    address: '送货：墨尔本 CBD 及内城区 · 其他郊区到店自取',
+    address: '送货：墨尔本 CBD 及周边地区 · 其他郊区到店自取',
     contact: '',
     website: '',
     logo: '',
@@ -200,7 +200,7 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     unavailableTimeSlots: {},
     pickupLocations: [],
     deliveryAreas: ['墨尔本 CBD', 'Docklands', 'Southbank', 'South Yarra', 'Carlton', 'East Melbourne'],
-    deliveryNote: '送货上门仅限墨尔本 CBD 及周边内城区，运费由客服在审核时确认。',
+    deliveryNote: '送货上门仅限墨尔本 CBD 及周边地区，运费由客服在审核时确认。',
   }
   try {
     const rows = await env.RENT.prepare(

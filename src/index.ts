@@ -300,7 +300,7 @@ app.get('/rental-guide', (c) =>
     ])
     return renderPage({
       title: `租赁说明 — ${contact.name}`,
-      description: '三步完成租赁：选择设备、提交申请、确认配送。含常见问题解答。',
+      description: '了解设备租赁的申请、审核、签约付款、配送自取、押金结算与归还验机流程。',
       body: renderRentalGuide(config),
       contact,
       appUrl: appUrl(c.env),
@@ -318,7 +318,7 @@ app.get('/about', (c) =>
     ])
     return renderPage({
       title: `关于我们 — ${contact.name}`,
-      description: '专业电脑出租平台，为学生和个人用户提供高品质设备租赁服务。',
+      description: `${contact.name} 为墨尔本学习、工作和创作项目提供透明、灵活的电脑租赁与本地支持。`,
       body: renderAbout(contact, config),
       contact,
       appUrl: appUrl(c.env),

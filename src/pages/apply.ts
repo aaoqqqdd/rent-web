@@ -121,11 +121,17 @@ export function renderApply(data: ApplyData): string {
 
       <div class="form-card">
         <div class="form-card-head"><span>04</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
+        <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
+          <div class="stripe-setup-head"><div><label>Apple Pay</label><p>使用 Apple Pay 快速验证支付方式，不会在提交申请时扣款。</p></div><span>APPLE PAY</span></div>
+          <div id="stripe-wallet-element"></div>
+          <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
+        </div>
         <div class="row2">
           <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name"></div>
           <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel"></div>
         </div>
         <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email"></div>
+        <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
         <div class="stripe-setup-box">
           <div class="stripe-setup-head"><div><label>信用卡资料</label><p>仅验证支付方式，不会在提交申请时扣款。</p></div><span>SECURE / STRIPE</span></div>
           <div id="stripe-card-element" class="stripe-card-element"></div>
@@ -214,6 +220,8 @@ export function renderApply(data: ApplyData): string {
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
   var setupIntentInput = document.getElementById('stripeSetupIntentId');
+  var walletBox = document.getElementById('stripe-wallet-box');
+  var walletMessage = document.getElementById('stripe-wallet-message');
 
   function todayStr() {
     var date = new Date();
@@ -224,8 +232,10 @@ export function renderApply(data: ApplyData): string {
     date.setDate(date.getDate() + amount);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
-  startD.min = todayStr();
-  if (!startD.value) startD.value = todayStr();
+  var today = todayStr();
+  startD.min = today;
+  endD.min = today;
+  if (!startD.value) startD.value = today;
   endD.min = addDays(startD.value, Math.max(1, MIN_DAYS));
   if (!endD.value) endD.value = endD.min;
   function days() {
@@ -304,22 +314,41 @@ export function renderApply(data: ApplyData): string {
     .then(function (result) {
       if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error((result.json && result.json.message) || '安全付款组件暂不可用。');
       stripe = window.Stripe(result.json.publishableKey);
-      stripeElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: { theme: 'night', variables: { colorPrimary: '#7c6cff', borderRadius: '8px' } } });
-      var paymentElement = stripeElements.create('payment', { layout: 'tabs' });
-      paymentElement.mount('#stripe-card-element');
-      paymentElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage('填写卡片信息后，点击按钮完成验证。不会扣款。'); });
-      paymentElement.on('change', function (event) { var wallet = event.value && ['apple_pay', 'google_pay'].indexOf(event.value.type) >= 0; document.getElementById('contact-name-field').hidden = wallet; document.getElementById('contact-email-field').hidden = wallet; });
+      var appearance = { theme: 'night', variables: { colorPrimary: '#7c6cff', borderRadius: '8px' } };
+      var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance });
+      var walletElement = walletElements.create('expressCheckout', { paymentMethods: { applePay: 'always', googlePay: 'never', link: 'never', paypal: 'never', amazonPay: 'never', klarna: 'never' } });
+      walletElement.mount('#stripe-wallet-element');
+      walletElement.on('ready', function (event) {
+        if (event.availablePaymentMethods && event.availablePaymentMethods.applePay) walletBox.hidden = false;
+        else walletElement.unmount();
+      });
+      walletElement.on('confirm', function () {
+        walletMessage.textContent = '正在向 Apple Pay 验证支付方式…';
+        stripe.confirmSetup({ elements: walletElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
+          .then(function (result) {
+            if (result.error) throw new Error(result.error.message || 'Apple Pay 验证失败，请重试。');
+            setupIntent = result.setupIntent;
+            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('Apple Pay 验证尚未完成，请重试。');
+            setupIntentInput.value = setupIntent.id;
+            cardReady = true; walletMessage.textContent = 'Apple Pay 已验证。'; walletMessage.style.color = 'var(--secondary)';
+          })
+          .catch(function (error) { walletMessage.textContent = error.message || 'Apple Pay 验证失败，请重试。'; });
+      });
+      stripeElements = stripe.elements({ appearance: appearance });
+      var cardElement = stripeElements.create('card', { hidePostalCode: true });
+      cardElement.mount('#stripe-card-element');
+      cardElement.on('ready', function () { cardConfirm.disabled = false; });
       cardConfirm.addEventListener('click', function () {
         cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
-        stripe.confirmSetup({ elements: stripeElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
+        stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: document.getElementById('contactName').value, email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
           .then(function (result) {
             if (result.error) throw new Error(result.error.message || '卡片验证失败，请检查信息。');
             setupIntent = result.setupIntent;
             if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('卡片验证尚未完成，请重试。');
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证，申请提交时不会扣款。', true);
+            cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证。', true);
           })
-          .catch(function (error) { cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡（不会扣款）'; setCardMessage(error.message || '卡片验证失败，请重试。'); });
+          .catch(function (error) { cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(error.message || '卡片验证失败，请重试。'); });
       });
     })
     .catch(function (error) { setCardMessage(error.message || '安全付款组件暂不可用，请联系客服。'); });
@@ -353,6 +382,15 @@ export function renderApply(data: ApplyData): string {
   var doneBox = document.getElementById('apply-done');
   var doneMsg = document.getElementById('apply-done-msg');
   var credentialBox = document.getElementById('temporary-credentials');
+  var saveContactInfo = document.getElementById('saveContactInfo');
+  var savedContactInfo;
+  try { savedContactInfo = JSON.parse(localStorage.getItem('geekslope-contact-v1') || 'null'); } catch (_) { savedContactInfo = null; }
+  if (savedContactInfo && typeof savedContactInfo === 'object') {
+    document.getElementById('contactName').value = typeof savedContactInfo.name === 'string' ? savedContactInfo.name : '';
+    document.getElementById('contactPhone').value = typeof savedContactInfo.phone === 'string' ? savedContactInfo.phone : '';
+    document.getElementById('contactEmail').value = typeof savedContactInfo.email === 'string' ? savedContactInfo.email : '';
+    saveContactInfo.checked = true;
+  }
   form.addEventListener('submit', function (event) {
     event.preventDefault(); errBox.hidden = true;
     if (!cartIds.length) { renderCart(); return; }
@@ -365,6 +403,9 @@ export function renderApply(data: ApplyData): string {
     }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
+    if (saveContactInfo.checked) {
+      try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ name: payload.contactName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
+    }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
