@@ -323,17 +323,13 @@ p { margin: 0; }
 .notice-card time { display: block; margin-top: 10px; color: var(--muted-fg); font: 11px var(--mono); }
 .notice-card p { display: -webkit-box; overflow: hidden; margin-top: 18px; color: var(--muted-fg); -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .notice-card .text-link { display: inline-block; margin-top: 22px; color: var(--primary); font-size: 13px; }
-.notice-arrow-icon { display: inline-block; width: 15px; height: 15px; vertical-align: -3px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.notice-arrow-back { margin-right: 5px; }
 .notice-detail-wrap { max-width: 820px; }
 .notice-detail { padding: clamp(24px, 5vw, 52px); border: 1px solid var(--border); background: var(--card); }
 .notice-detail-message { white-space: pre-wrap; color: var(--fg); line-height: 1.9; }
 .coupon-callout { display: flex; align-items: center; gap: 18px; margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); }
-.coupon-callout > span { color: var(--muted-fg); font-size: 13px; }
+.coupon-callout span { color: var(--muted-fg); font-size: 13px; }
 .coupon-callout strong { color: var(--secondary); font: 700 20px var(--mono); letter-spacing: .08em; }
-.coupon-callout em { color: var(--fg); font-style: normal; font-size: 14px; font-weight: 600; }
-.coupon-callout-link { margin-left: auto; color: var(--primary); font-size: 13px; font-weight: 600; white-space: nowrap; }
-.coupon-callout-link:hover { color: var(--secondary); }
+.coupon-callout .btn { margin-left: auto; }
 .nav { gap: 6px; }
 .nav a { padding: 8px 12px; border-radius: 8px; color: #aeb5c7; }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--fg); background: rgba(255,255,255,.05); }
@@ -738,7 +734,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .site-announcement-link > span { font-size: 11px; }
   .notice-grid { grid-template-columns: 1fr; }
   .coupon-callout { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
-  .coupon-callout-link { width: 100%; margin-left: 0; }
+  .coupon-callout .btn { width: 100%; margin-left: 0; }
   .features .wrap { grid-template-columns: 1fr; }
   .foot-grid { grid-template-columns: 1fr; }
   .site-footer .wrap { padding-top: 46px; }

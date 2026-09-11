@@ -62,8 +62,11 @@ export interface PublicNotice {
   message: string
   createdAt: string
   couponCode?: string
-  couponDiscount?: string
   expiresAt?: string
+  couponDiscount?: string
+  couponDiscountType?: 'percent' | 'fixed'
+  couponBenefitZh?: string
+  couponBenefitEn?: string
 }
 
 const CATEGORY_LABEL: Record<Product['category'], string> = {
@@ -213,6 +216,12 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       const discountType = String(row.discount_type ?? '') === 'percent' ? '百分比折扣' : '固定金额折扣'
       const discountValue = Number(row.discount_value ?? 0)
       const discount = discountType === '百分比折扣' ? `${discountValue}%` : `AUD$${discountValue.toFixed(2)}`
+      const couponBenefitZh = discountType === '百分比折扣'
+        ? `${Math.max(0, 100 - discountValue)}折优惠`
+        : `立减 ${discount}`
+      const couponBenefitEn = discountType === '百分比折扣'
+        ? `${discountValue}% off rental orders`
+        : `${discount} off rental orders`
       const conditions = [
         row.minimum_order_amount ? `最低消费 AUD$${Number(row.minimum_order_amount).toFixed(2)}` : '',
         row.device_id ? '指定设备适用' : '',
@@ -227,6 +236,9 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         createdAt: String(row.created_at ?? row.starts_at ?? ''),
         couponCode: code,
         couponDiscount: discount,
+        couponDiscountType: String(row.discount_type ?? '') === 'percent' ? 'percent' : 'fixed',
+        couponBenefitZh,
+        couponBenefitEn,
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
       })
     }

@@ -8,13 +8,20 @@ function noticeDate(value: string): string {
     return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Australia/Melbourne', dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
+function noticeMessage(value: string): string {
+    return esc(value)
+        .replace(/&lt;strong&gt;([^<]+)&lt;\/strong&gt;/g, '<strong>$1</strong>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>')
+}
+
 function noticeCard(notice: PublicNotice): string {
     return `<a class="notice-card" href="/announcements/${encodeURIComponent(notice.id)}">
   <span class="notice-card-kind">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</span>
   <h2>${esc(notice.title)}</h2>
   <time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time>
   <p>${esc(notice.message)}</p>
-  <span class="text-link">查看详情 <svg class="notice-arrow-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg></span>
+  <span class="text-link">查看详情 <span aria-hidden="true">→</span></span>
 </a>`
 }
 
@@ -45,10 +52,10 @@ export function renderAnnouncementDetail(notice: PublicNotice | null): string {
 <section class="section">
   <div class="wrap notice-detail-wrap">
     <article class="notice-detail">
-      <div class="notice-detail-message">${esc(notice.message)}</div>
-      ${notice.kind === 'coupon' && notice.couponCode ? `<div class="coupon-callout"><span>结账时输入优惠码</span><strong>${esc(notice.couponCode)}</strong><em>立减 ${esc(notice.couponDiscount || '')}</em><a class="coupon-callout-link" href="/products">去挑选设备 <svg class="notice-arrow-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"></path></svg></a></div>` : ''}
+      <div class="notice-detail-message">${noticeMessage(notice.message)}</div>
+      ${notice.kind === 'coupon' && notice.couponCode ? `<div class="coupon-callout" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}"><span>🎉 新优惠上线！使用优惠码</span><strong>${esc(notice.couponCode)}</strong><em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em><a class="coupon-callout-link" href="/products">去挑选设备 <span aria-hidden="true">→</span></a></div>` : ''}
     </article>
-    <a class="text-link" href="/announcements"><svg class="notice-arrow-icon notice-arrow-back" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6"></path></svg>返回通告列表</a>
+    <a class="text-link" href="/announcements">← 返回通告列表</a>
   </div>
 </section>`
 }

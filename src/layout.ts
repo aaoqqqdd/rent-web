@@ -239,6 +239,17 @@ ${renderSiteFooter(opts.contact)}
     window.setInterval(refreshAnnouncement, 30000);
   }
 
+  var updateCouponLabels = function () {
+    var english = window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en';
+    document.querySelectorAll('[data-coupon-benefit]').forEach(function (node) {
+      var callout = node.closest('[data-coupon-benefit-zh]');
+      if (!callout) return;
+      node.textContent = callout.getAttribute(english ? 'data-coupon-benefit-en' : 'data-coupon-benefit-zh') || '';
+    });
+  };
+  updateCouponLabels();
+  window.addEventListener('geekslope:language-change', updateCouponLabels);
+
   // 动效自托管（原来挂在 gsap CDN 上：一旦那个脚本加载失败——网络、广告拦截、
   // 校园/公司网络限制——全站动效会无声地整体消失。改成原生 CSS 动画 +
   // IntersectionObserver，零外部依赖，永远不会因为第三方资源加载失败而丢失）。
