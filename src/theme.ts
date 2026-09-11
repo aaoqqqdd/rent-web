@@ -658,6 +658,64 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .apply-progress b { width: 14px; }
   .apply-progress span { gap: 4px; font-size: 9px; }
 }
+/* ---------- motion ----------
+   自托管：全部原生 CSS 动画 + IntersectionObserver（见 layout.ts 内联脚本），
+   不挂第三方 CDN。参考稿（airo.ai 分享页）里每个板块进场都有动效；这里对齐
+   同样的手法——分段入场、滚动触发的错落淡入、微交互——但不依赖任何外部脚本
+   加载成功与否，避免网络/广告拦截把全站动效整体拿掉却毫无提示。
+*/
+@keyframes hero-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes console-in { from { opacity: 0; transform: translateY(18px) rotate(3deg); } to { opacity: 1; transform: translateY(0) rotate(1.2deg); } }
+@keyframes console-float { 0%, 100% { transform: translateY(0) rotate(1.2deg); } 50% { transform: translateY(-7px) rotate(1.2deg); } }
+@keyframes reveal-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes glow-drift { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-3%, 2%); } }
+@keyframes bump { 0%, 100% { transform: scale(1); } 45% { transform: scale(.972); } }
+@keyframes badge-pop { 0% { opacity: 0; transform: scale(.4) translateY(6px); } 65% { opacity: 1; transform: scale(1.14) translateY(0); } 100% { transform: scale(1) translateY(0); } }
+@keyframes row-out { to { opacity: 0; transform: translateX(28px) scale(.97); } }
+@keyframes card-in { from { opacity: 0; transform: translateY(22px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.hero::after { animation: glow-drift 15s ease-in-out infinite; }
+.hero-copy > *, .page-hero .wrap > * { opacity: 0; animation: hero-in .7s cubic-bezier(.16,.84,.44,1) forwards; }
+.hero-copy > *:nth-child(1), .page-hero .wrap > *:nth-child(1) { animation-delay: .02s; }
+.hero-copy > *:nth-child(2), .page-hero .wrap > *:nth-child(2) { animation-delay: .1s; }
+.hero-copy > *:nth-child(3), .page-hero .wrap > *:nth-child(3) { animation-delay: .2s; }
+.hero-copy > *:nth-child(4), .page-hero .wrap > *:nth-child(4) { animation-delay: .3s; }
+.hero-copy > *:nth-child(5), .page-hero .wrap > *:nth-child(5) { animation-delay: .38s; }
+.rental-console { animation: console-in .9s cubic-bezier(.16,.84,.44,1) .32s both, console-float 3.2s ease-in-out 1.3s infinite; }
+
+/* 由 layout.ts 的 IntersectionObserver 打上 .reveal，进入视口后加 .is-in 播放 */
+.reveal { opacity: 0; }
+.reveal.is-in { animation: reveal-in .64s cubic-bezier(.16,.84,.44,1) both; }
+.reveal:nth-child(2) { animation-delay: .06s; }
+.reveal:nth-child(3) { animation-delay: .12s; }
+.reveal:nth-child(4) { animation-delay: .18s; }
+.reveal:nth-child(5) { animation-delay: .24s; }
+.reveal:nth-child(6) { animation-delay: .3s; }
+.reveal:nth-child(7) { animation-delay: .36s; }
+.reveal:nth-child(8) { animation-delay: .42s; }
+
+/* 购物车 / 下单流程的微交互 */
+.cart-checkout-item { animation: card-in .5s cubic-bezier(.16,.84,.44,1) both; }
+.cart-checkout-item:nth-child(2) { animation-delay: .05s; }
+.cart-checkout-item:nth-child(3) { animation-delay: .1s; }
+.cart-checkout-item:nth-child(4) { animation-delay: .15s; }
+.cart-checkout-item:nth-child(5) { animation-delay: .2s; }
+.cart-checkout-item:nth-child(6) { animation-delay: .25s; }
+.cart-checkout-item.is-leaving { animation: row-out .22s ease-in forwards; }
+.card.is-bumped { animation: bump .46s cubic-bezier(.34,1.2,.4,1); }
+.cart-count.is-popped { animation: badge-pop .46s cubic-bezier(.34,1.56,.64,1); }
+#apply-done.is-in { animation: card-in .6s cubic-bezier(.16,.84,.44,1); }
+
+/* 按钮 / 卡片微交互（仅真正能悬停的设备上启用，避免触屏误触卡顿） */
+@media (hover: hover) {
+  .btn-primary { position: relative; overflow: hidden; }
+  .btn-primary::after {
+    content: ""; position: absolute; inset: 0; transform: translateX(-120%);
+    background: linear-gradient(115deg, transparent, rgba(255,255,255,.32), transparent);
+  }
+  .btn-primary:hover::after { transform: translateX(120%); transition: transform .6s ease; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

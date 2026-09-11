@@ -179,6 +179,7 @@ export function renderApply(data: ApplyData): string {
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
   var COUPON_ENDPOINT = ${scriptJson(`${appUrl}/api/coupons/rental-cart-preview`)};
   var productMap = new Map(PRODUCTS.map(function (product) { return [product.id, product]; }));
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function readCart() {
     try {
       var ids = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
@@ -277,8 +278,9 @@ export function renderApply(data: ApplyData): string {
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.textContent = '移除'; remove.setAttribute('aria-label', '从购物车移除 ' + product.name);
       remove.addEventListener('click', function () {
         var finish = function () { cartIds = cartIds.filter(function (item) { return item !== id; }); appliedDiscount = 0; saveCart(cartIds); renderCart(); };
-        if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-          window.gsap.to(row, { x: 28, scale: 0.98, autoAlpha: 0, duration: 0.24, ease: 'power2.in', overwrite: 'auto', onComplete: finish });
+        if (!reduceMotion) {
+          row.classList.add('is-leaving');
+          row.addEventListener('animationend', finish, { once: true });
         } else finish();
       });
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
@@ -376,7 +378,7 @@ export function renderApply(data: ApplyData): string {
           saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
           if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-temp-password').textContent = result.json.temporaryPassword || '请进入账号中心登录'; credentialBox.hidden = false; }
           doneBox.hidden = false;
-          if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) window.gsap.fromTo(doneBox, { y: 22, scale: 0.985, autoAlpha: 0 }, { y: 0, scale: 1, autoAlpha: 1, duration: 0.62, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
+          if (!reduceMotion) doneBox.classList.add('is-in');
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
         }
         throw new Error((result.json && result.json.message) || '提交失败，请稍后重试。');

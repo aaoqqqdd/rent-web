@@ -154,7 +154,6 @@ ${header({ appUrl: opts.appUrl, path: opts.path }, opts.contact)}
 ${opts.body}
 </main>
 ${footer(opts.contact)}
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
 <script>
 (() => {
   var toggle = document.querySelector('.menu-toggle');
@@ -174,38 +173,33 @@ ${footer(opts.contact)}
     });
   }
 
-  if (window.gsap) {
-    var motion = window.gsap.matchMedia();
-    motion.add({ reduceMotion: '(prefers-reduced-motion: reduce)' }, function (context) {
-      var reduceMotion = context.conditions.reduceMotion;
-      var introTargets = document.querySelectorAll('.hero-copy, .page-hero .wrap');
-      if (!reduceMotion && introTargets.length) {
-        window.gsap.from(introTargets, { y: 24, autoAlpha: 0, duration: 0.72, stagger: 0.08, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
-      }
+  // 顶栏滚动收缩：纯 DOM 状态切换，不依赖任何库，随时可用。
+  var siteHeader = document.querySelector('.site-header');
+  var onScroll = function () { if (siteHeader) siteHeader.classList.toggle('is-scrolled', window.scrollY > 18); };
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
 
-      var consolePanel = document.querySelector('.rental-console');
-      if (consolePanel && !reduceMotion) {
-        window.gsap.fromTo(consolePanel, { y: 18, rotation: 3, autoAlpha: 0 }, { y: 0, rotation: 1.2, autoAlpha: 1, duration: 0.9, delay: 0.16, ease: 'power3.out', clearProps: 'opacity,visibility' });
-        window.gsap.to(consolePanel, { y: '-=5', duration: 2.8, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: 1.1 });
-      }
-
-      var revealItems = document.querySelectorAll('.feature, .card:not(.cart-checkout-item), .scenario, .step, .info-card, .service-standard-grid article, .faq-list details, .contact-option');
-      if (!reduceMotion && revealItems.length && 'IntersectionObserver' in window) {
+  // 动效自托管（原来挂在 gsap CDN 上：一旦那个脚本加载失败——网络、广告拦截、
+  // 校园/公司网络限制——全站动效会无声地整体消失。改成原生 CSS 动画 +
+  // IntersectionObserver，零外部依赖，永远不会因为第三方资源加载失败而丢失）。
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) {
+    var revealItems = document.querySelectorAll('.feature, .card:not(.cart-checkout-item), .scenario, .step, .info-card, .service-standard-grid article, .faq-list details, .contact-option');
+    if (revealItems.length) {
+      revealItems.forEach(function (item) { item.classList.add('reveal'); });
+      if ('IntersectionObserver' in window) {
         var observer = new IntersectionObserver(function (entries) {
           entries.forEach(function (entry) {
             if (!entry.isIntersecting) return;
             observer.unobserve(entry.target);
-            window.gsap.fromTo(entry.target, { y: 22, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.62, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
+            entry.target.classList.add('is-in');
           });
         }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
         revealItems.forEach(function (item) { observer.observe(item); });
+      } else {
+        revealItems.forEach(function (item) { item.classList.add('is-in'); });
       }
-
-      var onScroll = function () { document.querySelector('.site-header').classList.toggle('is-scrolled', window.scrollY > 18); };
-      onScroll();
-      window.addEventListener('scroll', onScroll, { passive: true });
-      return function () { window.removeEventListener('scroll', onScroll); };
-    });
+    }
   }
 
   var CART_KEY = 'geekslope-cart-v1';
@@ -252,17 +246,16 @@ ${footer(opts.contact)}
     if (!id) return;
     var wasAdded = readCart().indexOf(id) >= 0;
     addToCart(id);
-    if (!wasAdded && window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!wasAdded && !reduceMotion) {
       var card = button.closest('.card');
       var badge = document.querySelector('[data-cart-count]');
-      if (card) window.gsap.fromTo(card, { scale: 0.985 }, { scale: 1, duration: 0.5, ease: 'power3.out', overwrite: 'auto', clearProps: 'transform' });
-      if (badge) window.gsap.fromTo(badge, { scale: 0.45, y: 5, autoAlpha: 0 }, { scale: 1, y: 0, autoAlpha: 1, duration: 0.42, ease: 'back.out(1.8)', overwrite: 'auto', clearProps: 'transform,opacity,visibility' });
+      if (card) { card.classList.remove('is-bumped'); void card.offsetWidth; card.classList.add('is-bumped'); }
+      if (badge) { badge.classList.remove('is-popped'); void badge.offsetWidth; badge.classList.add('is-popped'); }
     }
   });
   renderCart(readCart());
-  if (window.gsap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    window.gsap.from('.cart-checkout-item', { y: 14, autoAlpha: 0, duration: 0.5, stagger: 0.055, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
-  }
+  // .cart-checkout-item 的入场动画（含 nth-child 错落延迟）直接写在 CSS 里，
+  // 每次 renderCart() 重建行列表都会自动重放，无需额外触发。
 })();
 </script>
 </body>
