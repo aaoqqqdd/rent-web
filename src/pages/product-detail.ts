@@ -56,7 +56,11 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <p>选择后加入购物车，之后仍可在购物车中修改。</p>
         <div class="row2">
           <div class="field"><label for="detail-start-date">取货日期</label><input type="date" id="detail-start-date" required></div>
+          <div class="field"><label for="detail-start-period">取货时段</label><select id="detail-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
+        </div>
+        <div class="row2">
           <div class="field"><label for="detail-end-date">归还日期</label><input type="date" id="detail-end-date" required></div>
+          <div class="field"><label for="detail-end-period">归还时段</label><select id="detail-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
       </div>
@@ -113,6 +117,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
 (() => {
   var start = document.getElementById('detail-start-date');
   var end = document.getElementById('detail-end-date');
+  var startPeriod = document.getElementById('detail-start-period');
+  var endPeriod = document.getElementById('detail-end-period');
   var button = document.getElementById('detail-add-cart');
   var minimumDays = ${config.minimumRentalDays};
   var today = new Date();
@@ -123,7 +129,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   start.addEventListener('change', function () { end.min = addDays(start.value, minimumDays); if (end.value < end.min) end.value = end.min; });
   button.addEventListener('click', function () {
     if (!start.value || !end.value || end.value < end.min || !window.GeekSlopeCart) return;
-    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: start.value, endDate: end.value, startPeriod: 'AM', endPeriod: 'AM' });
+    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: start.value, endDate: end.value, startPeriod: startPeriod.value, endPeriod: endPeriod.value });
     location.href = ${JSON.stringify(applyHref)};
   });
 })();

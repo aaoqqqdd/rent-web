@@ -207,6 +207,8 @@ p { margin: 0; }
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,230,255,.15);
 }
+.field input[type="date"] { color-scheme: dark; cursor: pointer; }
+.field input[type="date"]::-webkit-calendar-picker-indicator { opacity: .9; cursor: pointer; filter: invert(72%) sepia(72%) saturate(700%) hue-rotate(145deg); }
 .field textarea { resize: vertical; min-height: 68px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .row3 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }

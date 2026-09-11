@@ -35,7 +35,11 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       <div class="form-card-head"><span>01</span><div><h3>租赁日期</h3><p>购物车中的设备共用这一租期</p></div></div>
       <div class="row2">
         <div class="field"><label for="cart-start-date">取货日期</label><input type="date" id="cart-start-date" required></div>
+        <div class="field"><label for="cart-start-period">取货时段</label><select id="cart-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
+      </div>
+      <div class="row2">
         <div class="field"><label for="cart-end-date">归还日期</label><input type="date" id="cart-end-date" required></div>
+        <div class="field"><label for="cart-end-period">归还时段</label><select id="cart-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
       </div>
       <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。租期可在提交前继续修改。</p>
     </div>
@@ -56,6 +60,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var minimumDays = ${config.minimumRentalDays};
   var startInput = document.getElementById('cart-start-date');
   var endInput = document.getElementById('cart-end-date');
+  var startPeriodInput = document.getElementById('cart-start-period');
+  var endPeriodInput = document.getElementById('cart-end-period');
   function today() {
     var date = new Date();
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
@@ -90,8 +96,13 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     content.hidden = ids.length === 0;
     if (ids.length) {
       var term = state.term || { startDate: today(), endDate: addDays(today(), minimumDays), startPeriod: 'AM', endPeriod: 'AM' };
-      startInput.value = term.startDate || today(); endInput.value = term.endDate || addDays(startInput.value, minimumDays);
-      startInput.min = today(); endInput.min = addDays(startInput.value, minimumDays);
+      startInput.min = today();
+      if (!term.startDate || term.startDate < startInput.min) term.startDate = startInput.min;
+      startInput.value = term.startDate;
+      endInput.min = addDays(startInput.value, Math.max(1, minimumDays));
+      endInput.value = term.endDate && term.endDate >= endInput.min ? term.endDate : endInput.min;
+      startPeriodInput.value = term.startPeriod || 'AM';
+      endPeriodInput.value = term.endPeriod || 'AM';
     }
     items.replaceChildren();
     var deposit = 0;
@@ -113,8 +124,16 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     });
     total.textContent = ids.length ? ids.length + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + (rentalDays * ids.reduce(function (sum, id) { return sum + Number(map.get(id).day || 0); }, 0)).toFixed(2) + ' · 押金 $' + deposit.toFixed(2) : '';
   }
-  startInput.addEventListener('change', function () { endInput.min = addDays(startInput.value, minimumDays); if (endInput.value < endInput.min) endInput.value = endInput.min; write(read().ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: 'AM', endPeriod: 'AM' }); });
-  endInput.addEventListener('change', function () { write(read().ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: 'AM', endPeriod: 'AM' }); });
+  function saveTerm() {
+    var minimumEnd = addDays(startInput.value || today(), Math.max(1, minimumDays));
+    endInput.min = minimumEnd;
+    if (endInput.value < minimumEnd) endInput.value = minimumEnd;
+    write(read().ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: startPeriodInput.value, endPeriod: endPeriodInput.value });
+  }
+  startInput.addEventListener('change', saveTerm);
+  endInput.addEventListener('change', saveTerm);
+  startPeriodInput.addEventListener('change', saveTerm);
+  endPeriodInput.addEventListener('change', saveTerm);
   render();
 })();
 </script>`
@@ -364,8 +383,9 @@ export function renderApply(data: ApplyData): string {
     }
   } catch (_) {}
   if (!startD.value) startD.value = today;
+  if (startD.value < today) startD.value = today;
   endD.min = addDays(startD.value, Math.max(1, MIN_DAYS));
-  if (!endD.value) endD.value = endD.min;
+  if (!endD.value || endD.value < endD.min) endD.value = endD.min;
   function days() {
     if (!startD.value || !endD.value) return 0;
     var start = new Date(startD.value + 'T00:00:00Z'), end = new Date(endD.value + 'T00:00:00Z');
