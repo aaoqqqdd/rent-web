@@ -65,7 +65,7 @@ app.use('*', async (c, next) => {
 })
 
 function appUrl(env: Env): string {
-  return (env.APP_URL || 'https://rent.example.com').replace(/\/$/, '')
+  return (env.APP_URL || 'https://rent.ydnw6zt6vj.workers.dev').replace(/\/$/, '')
 }
 
 function siteUrl(requestUrl: string): string {
@@ -376,13 +376,10 @@ async function renderLoginPage(
   return c.html(html, (opts.status ?? 200) as 200, { 'cache-control': 'private, no-store' })
 }
 
-app.get('/login', async (c) => {
-  if (await currentUser(c)) return c.redirect('/sso/start')
-  return renderLoginPage(c, { notice: LOGIN_NOTICES[c.req.query('notice') ?? ''] })
-})
+app.get('/login', (c) => c.redirect(`${appUrl(c.env)}/login`, 302))
 
 // rent 主应用里 /register 是独立注册页；这里统一收敛到本站的 /login 页注册面板。
-app.get('/register', (c) => c.redirect('/login', 302))
+app.get('/register', (c) => c.redirect(`${appUrl(c.env)}/login`, 302))
 
 const LEGAL_PAGES: Array<{
   paths: string[]

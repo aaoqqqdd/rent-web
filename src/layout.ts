@@ -81,7 +81,7 @@ export function renderPage(opts: PageOptions): string {
 <script type="application/ld+json">${structuredData}</script>
 </head>
 <body>
-${renderSiteHeader({ path: opts.path, user: opts.user }, opts.contact)}
+${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, opts.contact)}
 <main id="main-content">
 ${opts.body}
 </main>
