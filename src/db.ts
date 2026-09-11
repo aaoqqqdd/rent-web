@@ -212,11 +212,17 @@ function readCompanyDetails(row: { value: string } | undefined): CompanyDetails 
 
 /** 极简 HTML 清洗：去掉脚本类标签、事件属性与 javascript: 链接。 */
 function scrubHtml(html: string): string {
-  return html
-    .replace(/<\s*(script|iframe|object|embed|style)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-    .replace(/<\s*(script|iframe|object|embed|style)\b[^>]*\/?\s*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/((?:href|src)\s*=\s*)("|')\s*javascript:[^"']*\2/gi, '$1$2#$2')
+  let current = html
+  let previous: string
+  do {
+    previous = current
+    current = current
+      .replace(/<\s*(script|iframe|object|embed|style)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+      .replace(/<\s*(script|iframe|object|embed|style)\b[^>]*\/?\s*>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/((?:href|src)\s*=\s*)("|')\s*javascript:[^"']*\2/gi, '$1$2#$2')
+  } while (current !== previous)
+  return current
 }
 
 /**
