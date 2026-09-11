@@ -667,6 +667,14 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .detail-visual { min-height: 390px; }
   .delivery-grid, .detail-info-grid, .contact-layout { grid-template-columns: 1fr; gap: 42px; }
   .guide-steps, .story-grid, .faq-layout, .about-hero-grid, .about-contact { grid-template-columns: 1fr; gap: 42px; }
+  .process-heading { margin-bottom: 42px; }
+  .guide-steps { max-width: 680px; margin: 0 auto; gap: 0; }
+  .guide-steps::before { left: 43px; right: auto; top: 43px; bottom: 43px; width: 1px; height: auto; background: linear-gradient(180deg, rgba(89,229,193,.18), rgba(89,229,193,.62), rgba(89,229,193,.18)); }
+  .guide-steps article { display: grid; grid-template-columns: 86px 1fr; column-gap: 22px; min-height: 132px; padding: 0 0 32px; text-align: left; }
+  .guide-steps article:last-child { min-height: 86px; padding-bottom: 0; }
+  .guide-steps article > span { grid-row: 1 / 3; margin: 0; }
+  .guide-steps h3 { margin: 10px 0 7px; }
+  .guide-steps p { max-width: none; margin: 0; }
   .rental-plan-grid, .rental-terms-grid { grid-template-columns: 1fr; }
   .principle-grid { grid-template-columns: repeat(2, 1fr); }
   .cart-page-item, .cart-page-summary { align-items: stretch; flex-direction: column; }
@@ -707,6 +715,10 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .guide-facts { grid-template-columns: 1fr; }
   .guide-facts div { border-right: 0; border-bottom: 1px solid var(--border); }
   .guide-facts div:last-child { border-bottom: 0; }
+  .guide-steps article { grid-template-columns: 70px 1fr; column-gap: 16px; min-height: 122px; }
+  .guide-steps article:last-child { min-height: 70px; }
+  .guide-steps article > span { width: 70px; height: 70px; font-size: 18px; }
+  .guide-steps::before { left: 35px; top: 35px; bottom: 35px; }
   .section-head { display: block; margin-bottom: 28px; }
   .section-head > p { margin-top: 16px; }
   .home-essentials-note { display: block; padding: 16px; }
