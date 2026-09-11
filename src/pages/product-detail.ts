@@ -1,7 +1,7 @@
 // 单台设备详情页。数据直接来自设备表，提供完整配置、费用口径与下单入口。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyDailyRate, type Product, type RentalConfig } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
 
 interface ProductDetailData {
   product: Product
@@ -17,7 +17,7 @@ function specRow(label: string, value: string): string {
 }
 
 export function renderProductDetail({ product, config }: ProductDetailData): string {
-  const weekly = weeklyDailyRate(product.pricePerDay, product.weeklyDiscountPercent)
+  const weekly = weeklyRentalRate(product.pricePerDay, product.weeklyDiscountPercent)
   const monthly = monthlyRentalRate(product.pricePerDay, product.monthlyDiscountPercent)
   const applyHref = `/apply?device=${encodeURIComponent(product.id)}`
   const description = product.description.trim() || '这台设备已经过基础功能检查，适合短期项目、学习、创作或临时替代使用。具体外观与随机配件以交付前确认为准。'
@@ -47,7 +47,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       <p class="detail-description">${esc(description)}</p>
       <div class="detail-price">
         <div><span>按日</span><strong>${product.pricePerDay > 0 ? `$${esc(product.pricePerDay)}` : '询价'}</strong><small>${product.pricePerDay > 0 ? '/ day' : '联系客服'}</small></div>
-        <div><span>周租日均</span><strong>${product.pricePerDay > 0 ? `$${esc(weekly)}` : '—'}</strong><small>${product.weeklyDiscountPercent > 0 ? `折扣 ${esc(product.weeklyDiscountPercent)}%` : '/ day'}</small></div>
+        <div><span>周租</span><strong>${product.pricePerDay > 0 ? `$${esc(weekly)}` : '—'}</strong><small>${product.weeklyDiscountPercent > 0 ? `折扣 ${esc(product.weeklyDiscountPercent)}%` : '/ week'}</small></div>
         <div><span>月租参考</span><strong>${product.pricePerDay > 0 ? `$${esc(monthly)}` : '—'}</strong><small>${product.pricePerDay > 0 ? '/ month' : ''}</small></div>
         <div><span>可退押金</span><strong>${product.depositAmount > 0 ? `$${esc(product.depositAmount)}` : '待确认'}</strong><small>验收后退还</small></div>
       </div>

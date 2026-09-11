@@ -189,6 +189,10 @@ export function weeklyDailyRate(pricePerDay: number, discountPercent: number): n
   return Number((pricePerDay * (1 - Math.min(100, Math.max(0, discountPercent)) / 100)).toFixed(2))
 }
 
+export function weeklyRentalRate(pricePerDay: number, discountPercent: number): number {
+  return Number((weeklyDailyRate(pricePerDay, discountPercent) * 7).toFixed(2))
+}
+
 export function monthlyDailyRate(pricePerDay: number, discountPercent: number): number {
   return Number((pricePerDay * 30 * (1 - Math.min(100, Math.max(0, discountPercent)) / 100) / 30).toFixed(2))
 }

@@ -1,11 +1,11 @@
 // 产品目录。实时读库，按类别分组展示全部在售设备。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyDailyRate, type Product } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, type Product } from '../db'
 
 function card(p: Product): string {
   const daily = p.pricePerDay > 0 ? `$${p.pricePerDay}/day` : '询价'
-  const weekly = p.pricePerDay > 0 ? `$${weeklyDailyRate(p.pricePerDay, p.weeklyDiscountPercent)}/day` : '—'
+  const weekly = p.pricePerDay > 0 ? `$${weeklyRentalRate(p.pricePerDay, p.weeklyDiscountPercent)}/week` : '—'
   const monthly = p.pricePerDay > 0 ? `$${monthlyRentalRate(p.pricePerDay, p.monthlyDiscountPercent)}/month` : '—'
   const chips = p.specs.slice(0, 5).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
@@ -23,7 +23,7 @@ function card(p: Product): string {
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">
       <div><div class="lbl">日租</div><div class="val">${esc(daily)}</div></div>
-      <div><div class="lbl">周租</div><div class="val">${esc(weekly)} <small>日均</small></div></div>
+      <div><div class="lbl">周租</div><div class="val">${esc(weekly)} <small>${p.weeklyDiscountPercent > 0 ? `折后${p.weeklyDiscountPercent}%` : '7 天参考'}</small></div></div>
       <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}

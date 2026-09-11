@@ -1,7 +1,7 @@
 // 首页。结构还原参考稿：Hero → 四大保障 → 为你精选（实时读库）→ 三步流程 → 收尾 CTA。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyDailyRate, type Product, type RentalConfig } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
 
 const FEATURES = [
   { t: '交付前检测', d: '基础功能、外观与配件逐项确认，拿到手即可开工', ic: 'M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z' },
@@ -20,7 +20,7 @@ const CARD_TAGS = ['热门', '推荐', '专业']
 
 function productCard(p: Product, index: number): string {
   const daily = p.pricePerDay > 0 ? `$${p.pricePerDay}/day` : '询价'
-  const weekly = p.pricePerDay > 0 ? `$${weeklyDailyRate(p.pricePerDay, p.weeklyDiscountPercent)}/day` : '—'
+  const weekly = p.pricePerDay > 0 ? `$${weeklyRentalRate(p.pricePerDay, p.weeklyDiscountPercent)}/week` : '—'
   const monthly = p.pricePerDay > 0 ? `$${monthlyRentalRate(p.pricePerDay, p.monthlyDiscountPercent)}/month` : '—'
   const chips = p.specs.slice(0, 4).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
@@ -33,7 +33,7 @@ function productCard(p: Product, index: number): string {
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">
       <div><div class="lbl">日租</div><div class="val">${esc(daily)}</div></div>
-      <div><div class="lbl">周租</div><div class="val">${esc(weekly)} <small>日均</small></div></div>
+      <div><div class="lbl">周租</div><div class="val">${esc(weekly)} <small>${p.weeklyDiscountPercent > 0 ? `折后${p.weeklyDiscountPercent}%` : '7 天参考'}</small></div></div>
       <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}
