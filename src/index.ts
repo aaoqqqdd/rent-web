@@ -21,7 +21,19 @@ import { renderApply, renderCartPage } from './pages/apply'
 import { renderLogin } from './pages/login'
 import { renderAbout, renderContact, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
-import { registerCustomer } from './auth'
+import {
+  clearedSessionCookie,
+  createSession,
+  currentUser,
+  destroySession,
+  enforceRateLimit,
+  hasSessionCookie,
+  issueHandoffToken,
+  sessionCookie,
+  verifyCredentials,
+  type SessionUser,
+  registerCustomer,
+} from './auth'
 
 export interface Env {
   RENT: D1Database
@@ -57,27 +69,35 @@ function xmlEsc(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 }
 
-/** 边缘缓存包装：命中直接返回，未命中构建后写回 caches.default。 */
+/**
+ * 边缘缓存包装：命中直接返回，未命中构建后写回 caches.default。
+ * 携带 session cookie 的请求（已登录用户）一律绕过缓存 —— 顶栏会渲染登录态，
+ * 缓存了带登录态的 HTML 会串号。登出访客（绝大多数流量）照常享受边缘缓存。
+ */
 async function cachedHtml(
   c: Context<{ Bindings: Env }>,
   ttl: number,
-  build: () => Promise<string | { html: string; status: number }>,
+  build: (user: SessionUser | null) => Promise<string | { html: string; status: number }>,
 ): Promise<Response> {
+  const authed = hasSessionCookie(c.req.header('cookie') ?? null)
   const cache = caches.default
   const key = new Request(new URL(c.req.url).toString(), { method: 'GET' })
-  const hit = await cache.match(key)
-  if (hit) return hit
-  const built = await build()
+  if (!authed) {
+    const hit = await cache.match(key)
+    if (hit) return hit
+  }
+  const user = authed ? await currentUser(c) : null
+  const built = await build(user)
   const html = typeof built === 'string' ? built : built.html
   const status = typeof built === 'string' ? 200 : built.status
   const res = new Response(html, {
     status,
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': `public, max-age=${ttl}`,
+      'cache-control': authed ? 'private, no-store' : `public, max-age=${ttl}`,
     },
   })
-  if (status === 200) c.executionCtx.waitUntil(cache.put(key, res.clone()))
+  if (!authed && status === 200) c.executionCtx.waitUntil(cache.put(key, res.clone()))
   return res
 }
 
@@ -114,7 +134,7 @@ app.get('/sitemap.xml', async (c) => {
 })
 
 app.get('/', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact, config] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -143,12 +163,13 @@ app.get('/', (c) =>
         areaServed: { '@type': 'City', name: 'Melbourne' },
         provider: { '@id': `${siteUrl(c.req.url)}/#organization` },
       },
+      user,
     })
   }),
 )
 
 app.get('/products', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -180,12 +201,13 @@ app.get('/products', (c) =>
           })),
         },
       },
+      user,
     })
   }),
 )
 
 app.get('/products/:id', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact, config] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -204,6 +226,7 @@ app.get('/products/:id', (c) =>
         path: c.req.path,
         siteUrl: siteUrl(c.req.url),
         robots: 'noindex, follow',
+        user,
       }),
       }
     }
@@ -242,12 +265,13 @@ app.get('/products/:id', (c) =>
           ],
         },
       ],
+      user,
     })
   }),
 )
 
 app.get('/apply', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact, config] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -263,12 +287,13 @@ app.get('/apply', (c) =>
       path: '/apply',
       siteUrl: siteUrl(c.req.url),
       robots: 'noindex, follow',
+      user,
     })
   }),
 )
 
 app.get('/checkout', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact, config] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
@@ -290,30 +315,47 @@ app.get('/checkout', (c) =>
       path: '/checkout',
       siteUrl: siteUrl(c.req.url),
       robots: 'noindex, follow',
+      user,
     })
   }),
 )
 
-app.get('/login', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
-    const contact = await getSiteContact(c.env)
-    const tab = c.req.query('tab') === 'login' ? 'login' : 'register'
-    return renderPage({
-      title: `注册 / 登录 — ${contact.name}`,
-      description: `注册 ${contact.name} 账号，或用已有邮箱和密码登录，管理你的租赁订单、付款与合同签署。`,
-      body: renderLogin({
-        appUrl: appUrl(c.env),
-        turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
-        tab,
-      }),
-      contact,
+const LOGIN_NOTICES: Record<string, string> = {
+  'logged-out': '你已退出登录。',
+  'session-expired': '登录状态已过期，请重新登录。',
+}
+
+async function renderLoginPage(
+  c: Context<{ Bindings: Env }>,
+  opts: { error?: string; notice?: string; account?: string; status?: number; tab?: 'register' | 'login' },
+): Promise<Response> {
+  const contact = await getSiteContact(c.env)
+  const tab = opts.tab ?? (c.req.query('tab') === 'login' ? 'login' : 'register')
+  const html = renderPage({
+    title: `注册 / 登录 — ${contact.name}`,
+    description: `注册 ${contact.name} 账号，或用已有邮箱和密码登录，管理你的租赁订单、付款与合同签署。`,
+    body: renderLogin({
       appUrl: appUrl(c.env),
-      path: '/login',
-      siteUrl: siteUrl(c.req.url),
-      robots: 'noindex, follow',
-    })
-  }),
-)
+      turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
+      tab,
+      error: opts.error,
+      notice: opts.notice,
+      account: opts.account,
+    }),
+    contact,
+    appUrl: appUrl(c.env),
+    path: '/login',
+    siteUrl: siteUrl(c.req.url),
+    robots: 'noindex, follow',
+    user: null,
+  })
+  return c.html(html, (opts.status ?? 200) as 200, { 'cache-control': 'private, no-store' })
+}
+
+app.get('/login', async (c) => {
+  if (await currentUser(c)) return c.redirect('/sso/start')
+  return renderLoginPage(c, { notice: LOGIN_NOTICES[c.req.query('notice') ?? ''] })
+})
 
 // rent 主应用里 /register 是独立注册页；这里统一收敛到本站的 /login 页注册面板。
 app.get('/register', (c) => c.redirect('/login', 302))
@@ -341,7 +383,7 @@ const LEGAL_PAGES: Array<{
 
 for (const page of LEGAL_PAGES) {
   app.on('GET', page.paths, (c) =>
-    cachedHtml(c, HTML_TTL, async () => {
+    cachedHtml(c, HTML_TTL, async (user) => {
       const [document, contact] = await Promise.all([
         getLegalDocument(c.env, page.documentKey, page.metadataKey),
         getSiteContact(c.env),
@@ -354,6 +396,7 @@ for (const page of LEGAL_PAGES) {
         appUrl: appUrl(c.env),
         path: page.paths[0],
         siteUrl: siteUrl(c.req.url),
+        user,
       })
     }),
   )
@@ -378,7 +421,7 @@ app.post('/register', async (c) => {
 })
 
 app.get('/rental-guide', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [contact, config] = await Promise.all([
       getSiteContact(c.env),
       getRentalConfig(c.env),
@@ -398,12 +441,13 @@ app.get('/rental-guide', (c) =>
         name: '电脑租赁流程、押金与配送说明',
         isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
       },
+      user,
     })
   }),
 )
 
 app.get('/about', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [contact, config] = await Promise.all([
       getSiteContact(c.env),
       getRentalConfig(c.env),
@@ -424,12 +468,13 @@ app.get('/about', (c) =>
         isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
         about: { '@id': `${siteUrl(c.req.url)}/#organization` },
       },
+      user,
     })
   }),
 )
 
 app.get('/contact', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const [contact, config] = await Promise.all([
       getSiteContact(c.env),
       getRentalConfig(c.env),
@@ -449,16 +494,63 @@ app.get('/contact', (c) =>
         name: `联系 ${contact.name}`,
         isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
       },
+      user,
     })
   }),
 )
 
 app.get('/order-lookup', (c) =>
-  cachedHtml(c, HTML_TTL, async () => {
+  cachedHtml(c, HTML_TTL, async (user) => {
     const contact = await getSiteContact(c.env)
-    return renderPage({ title: `订单查询 — ${contact.name}`, description: '使用订单编号和申请邮箱查询电脑租赁申请。', body: renderOrderLookup(appUrl(c.env)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow' })
+    return renderPage({ title: `订单查询 — ${contact.name}`, description: '使用订单编号和申请邮箱查询电脑租赁申请。', body: renderOrderLookup(appUrl(c.env)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow', user })
   }),
 )
+
+// ---------- 账户 / 单点登录（官网登录后，rent 同步为已登录） ----------
+
+app.post('/login', async (c) => {
+  const form = await c.req.parseBody()
+  const account = String(form.account ?? '').trim()
+  const password = String(form.password ?? '')
+  const remember = form.remember === '1' || form.remember === 'on'
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown')
+    .trim()
+    .slice(0, 64)
+
+  const origin = c.req.header('Origin')
+  if (origin && new URL(origin).host !== new URL(c.req.url).host) {
+    return renderLoginPage(c, { error: '请求来源无效，请重试。', status: 403, tab: 'login' })
+  }
+  if (!account || !password) return renderLoginPage(c, { error: '请输入账号和密码。', account, status: 400, tab: 'login' })
+  if (!(await enforceRateLimit(c.env, 'web-login', ip, 10, 600))) {
+    return renderLoginPage(c, { error: '尝试次数过多，请 10 分钟后再试。', account, status: 429, tab: 'login' })
+  }
+
+  const user = await verifyCredentials(c.env, account, password)
+  if (!user) return renderLoginPage(c, { error: '账号或密码错误。', account, status: 401, tab: 'login' })
+
+  const { token, maxAge } = await createSession(c.env, user.id, remember)
+  const res = c.redirect('/sso/start')
+  res.headers.set('Set-Cookie', sessionCookie(token, maxAge, new URL(c.req.url).protocol === 'https:'))
+  return res
+})
+
+// 官网已登录 → 签发一次性握手 token → 跳到 rent 的 /sso/consume，在 rent 域也建立会话。
+app.get('/sso/start', async (c) => {
+  const user = await currentUser(c)
+  if (!user) return c.redirect('/login?notice=session-expired')
+  const handoff = await issueHandoffToken(c.env, user.id)
+  return c.redirect(`${appUrl(c.env)}/sso/consume?t=${encodeURIComponent(handoff)}`)
+})
+
+const doLogout = async (c: Context<{ Bindings: Env }>) => {
+  await destroySession(c) // 撤销该用户所有会话：官网 + rent 一起登出
+  const res = c.redirect('/login?notice=logged-out')
+  res.headers.set('Set-Cookie', clearedSessionCookie())
+  return res
+}
+app.get('/logout', doLogout)
+app.post('/logout', doLogout)
 
 app.notFound(async (c) => {
   const contact = await getSiteContact(c.env)
@@ -472,6 +564,7 @@ app.notFound(async (c) => {
       path: '*',
       siteUrl: siteUrl(c.req.url),
       robots: 'noindex, nofollow',
+      user: null,
     }),
     404,
   )

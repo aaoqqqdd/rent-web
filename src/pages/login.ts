@@ -2,8 +2,8 @@
 //
 // 注册：真表单，前端 JSON POST 到本站 /register，服务端直接写 rent 的 D1 users 表
 //       （见 ../auth.ts），落库结果与 rent /register 等价。
-// 登录：rent 主应用持有会话，跨站无法在本域写 cookie —— 这里把用户带到
-//       ${APP_URL}/login 完成登录。
+// 登录：本站校验共享账号并建立会话，再经 /sso/start → rent /sso/consume
+//       在两个域名建立登录态。
 
 import { esc } from '../layout'
 
@@ -12,18 +12,19 @@ interface LoginData {
   turnstileSiteKey: string
   /** 初始展示的面板：register | login。 */
   tab: 'register' | 'login'
+  error?: string
+  notice?: string
+  account?: string
 }
 
 export function renderLogin(data: LoginData): string {
-  const { appUrl, turnstileSiteKey, tab } = data
-  const loginUrl = `${appUrl}/login`
+  const { appUrl, turnstileSiteKey, tab, error, notice, account } = data
   const forgotUrl = `${appUrl}/forgot-password`
 
   const turnstile = turnstileSiteKey
     ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div>
        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
     : ''
-
   return /* html */ `
 <section class="section">
   <div class="wrap form-wrap auth-wrap">
@@ -93,7 +94,7 @@ export function renderLogin(data: LoginData): string {
         <h3 style="margin-bottom:8px">账号创建成功 ✓</h3>
         <p id="reg-done-msg" style="color:var(--muted-fg);font-size:14px"></p>
         <p style="margin-top:14px;display:flex;gap:12px;flex-wrap:wrap">
-          <a class="btn btn-primary" href="${esc(loginUrl)}">前往登录</a>
+          <a class="btn btn-primary" href="/login?tab=login">立即登录</a>
           <a class="btn btn-ghost" href="/apply">去下单</a>
         </p>
       </div>
@@ -101,16 +102,24 @@ export function renderLogin(data: LoginData): string {
 
     <!-- ============ 登录 ============ -->
     <div class="auth-panel${tab === 'login' ? '' : ' is-hidden'}" data-panel="login">
-      <div class="form-card">
-        <p style="color:var(--muted-fg);font-size:14px;margin-bottom:16px">
-          登录、付款与合同签署都在租赁系统内完成。点击下方按钮，用注册时的邮箱和密码登录。
-        </p>
-        <p style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-          <a class="btn btn-primary btn-lg" href="${esc(loginUrl)}">前往登录 →</a>
-          <a class="btn btn-ghost btn-lg" href="${esc(forgotUrl)}">忘记密码</a>
-        </p>
-        <p class="hint">还没有账号？<a href="#" data-tab-link="register" style="color:var(--primary)">切换到注册</a>。</p>
-      </div>
+      ${notice ? `<div class="form-alert form-alert-ok">${esc(notice)}</div>` : ''}
+      <form method="post" action="/login" class="form-card">
+        ${error ? `<div class="form-alert">${esc(error)}</div>` : ''}
+        <div class="field">
+          <label for="account">邮箱或手机号</label>
+          <input id="account" name="account" autocomplete="username" required maxlength="254" value="${esc(account ?? '')}">
+        </div>
+        <div class="field">
+          <label for="password">密码</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8">
+        </div>
+        <div class="field" style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" id="remember" name="remember" value="1" style="width:auto">
+          <label for="remember" style="font-weight:400;margin:0">记住此设备 30 天</label>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg" style="margin-top:6px;width:100%">登录</button>
+        <p class="form-note"><a href="${esc(forgotUrl)}" style="color:var(--primary)">忘记密码</a> · 还没有账号？<a href="#" data-tab-link="register" style="color:var(--primary)">注册新账号</a></p>
+      </form>
     </div>
   </div>
 </section>

@@ -2,6 +2,7 @@
 
 import type { SiteContact } from './db'
 import { STYLE_VERSION } from './theme'
+import type { SessionUser } from './auth'
 
 export function esc(value: unknown): string {
   return String(value ?? '')
@@ -34,10 +35,17 @@ const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(BADGE)}`
 interface Nav {
   appUrl: string
   path: string
+  user?: SessionUser | null
 }
 
 function header(nav: Nav, contact: SiteContact): string {
   const active = (path: string): string => nav.path === path || nav.path.startsWith(`${path}/`) ? ' aria-current="page"' : ''
+  const cta = nav.user
+    ? /* html */ `<span class="nav-account">
+        <a class="btn btn-primary" href="/sso/start">进入用户中心</a>
+        <a class="nav-logout" href="/logout" title="退出登录（同时退出 rent）">退出</a>
+      </span>`
+    : /* html */ `<a class="btn btn-primary" href="/login">登录 / 注册</a>`
   return /* html */ `
 <a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
 <header class="site-header">
@@ -61,7 +69,7 @@ function header(nav: Nav, contact: SiteContact): string {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20.5 8H6.1M10 20h.01M17 20h.01"></path></svg>
         <span data-i18n="cart">购物车</span><b class="cart-count" data-cart-count hidden>0</b>
       </a>
-      <a class="btn btn-primary header-account" href="${esc(nav.appUrl)}/login" data-i18n="account">账号中心</a>
+      ${cta}
       <div class="language-switcher" role="group" aria-label="Language" data-i18n-attr="aria-label:language"><button type="button" data-language="zh">中</button><button type="button" data-language="en">EN</button></div>
     </div>
   </div>
@@ -127,6 +135,7 @@ export interface PageOptions {
   siteUrl?: string
   robots?: string
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>>
+  user?: SessionUser | null
 }
 
 export function renderPage(opts: PageOptions): string {
@@ -180,7 +189,7 @@ export function renderPage(opts: PageOptions): string {
 <script type="application/ld+json">${structuredData}</script>
 </head>
 <body>
-${header({ appUrl: opts.appUrl, path: opts.path }, opts.contact)}
+${header({ appUrl: opts.appUrl, path: opts.path, user: opts.user }, opts.contact)}
 <main id="main-content">
 ${opts.body}
 </main>
