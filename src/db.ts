@@ -210,13 +210,39 @@ function readCompanyDetails(row: { value: string } | undefined): CompanyDetails 
   }
 }
 
-/** 极简 HTML 清洗：去掉脚本类标签、事件属性与 javascript: 链接。 */
-function scrubHtml(html: string): string {
-  return html
-    .replace(/<\s*(script|iframe|object|embed|style)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-    .replace(/<\s*(script|iframe|object|embed|style)\b[^>]*\/?\s*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/((?:href|src)\s*=\s*)("|')\s*javascript:[^"']*\2/gi, '$1$2#$2')
+// 危险标签整段移除（含内容）。管理员在 rent 后台写的是纯展示用 HTML，不应该
+// 含这些；只是防御式兜底。
+const SCRUBBED_TAGS = ['script', 'iframe', 'object', 'embed', 'style', 'base', 'link', 'meta']
+
+function isJsUrl(value: string | null): boolean {
+  return !!value && /^\s*javascript:/i.test(value)
+}
+
+/**
+ * 用 Workers 原生的 HTMLRewriter（流式 HTML 解析器）清洗管理员在 rent 后台写的
+ * 富文本：移除脚本类标签、on* 事件属性、javascript: 链接。比手写正则更稳妥——
+ * 正则对着嵌套/畸形标签做单趟字符串替换，容易被构造的输入绕过（CodeQL 也是
+ * 因此标记了之前的写法：incomplete multi-character sanitization）；
+ * HTMLRewriter 走的是真正的 HTML 解析器，不存在这类绕过。
+ */
+async function scrubHtml(html: string): Promise<string> {
+  let rewriter = new HTMLRewriter()
+  for (const tag of SCRUBBED_TAGS) {
+    rewriter = rewriter.on(tag, { element: (el) => { el.remove() } })
+  }
+  rewriter = rewriter.on('*', {
+    element(el) {
+      for (const [name] of [...el.attributes]) {
+        if (name.toLowerCase().startsWith('on')) el.removeAttribute(name)
+      }
+      const href = el.getAttribute('href')
+      if (isJsUrl(href)) el.setAttribute('href', '#')
+      const src = el.getAttribute('src')
+      if (isJsUrl(src)) el.setAttribute('src', '#')
+    },
+  })
+  const res = rewriter.transform(new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } }))
+  return await res.text()
 }
 
 /**
@@ -266,7 +292,7 @@ export async function getLegalDoc(env: Env, q: LegalDocQuery): Promise<LegalDoc 
     (acc, [k, v]) => acc.replace(new RegExp(`\\$\\{${k}\\}|\\{${k}\\}`, 'g'), escVal(v)),
     rawHtml,
   )
-  return { html: scrubHtml(filled), version: meta.version, lastUpdated: meta.lastUpdatedDate }
+  return { html: await scrubHtml(filled), version: meta.version, lastUpdated: meta.lastUpdatedDate }
 }
 
 export interface RentalConfig {
