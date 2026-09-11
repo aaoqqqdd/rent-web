@@ -107,18 +107,18 @@ function toProduct(row: Record<string, unknown>): Product {
   }
 }
 
-const DEVICE_COLUMNS =
-  'id, name, brand, model, cpu, ram, storage, gpu, os, pricePerDay, depositAmount, weekly_discount_percent AS weeklyDiscountPercent, monthly_discount_percent AS monthlyDiscountPercent, description, status, lifecycle_status'
-
 /** 全部在售（非退役）设备，按日租价升序。 */
 export async function listProducts(env: Env): Promise<Product[]> {
   try {
-    const { results } = await env.RENT.prepare(
-      `SELECT ${DEVICE_COLUMNS} FROM devices
-       WHERE COALESCE(lifecycle_status, status, '') NOT IN ('RETIRED', 'retired')
-       ORDER BY pricePerDay ASC`,
-    ).all<Record<string, unknown>>()
-    return (results ?? []).map(toProduct)
+    const { results } = await env.RENT.prepare('SELECT * FROM devices').all<Record<string, unknown>>()
+    return (results ?? [])
+      .filter((row) => {
+        const lifecycle = String(row.lifecycle_status ?? row.lifecycleStatus ?? '').toUpperCase()
+        const status = String(row.status ?? '').toLowerCase()
+        return lifecycle !== 'RETIRED' && status !== 'retired'
+      })
+      .map(toProduct)
+      .sort((a, b) => a.pricePerDay - b.pricePerDay)
   } catch {
     return []
   }
