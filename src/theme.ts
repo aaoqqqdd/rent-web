@@ -636,6 +636,16 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .temporary-credentials strong { font-size: 14px; }.temporary-credentials b { color: var(--secondary); font-family: var(--mono); letter-spacing: .04em; }
 .temporary-credentials p { color: var(--muted-fg); font-size: 12px; }
 .lookup-wrap { max-width: 620px; }.lookup-result { margin-top: 18px; }.lookup-result h2 { font-size: 24px; }.lookup-order-info { display: grid; gap: 8px; margin-top: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted-fg); font-size: 13px; }.lookup-order-info strong { color: var(--fg); font-size: 16px; }.lookup-login { margin-top: 18px; }
+.order-lookup-hero .wrap { padding-top: 58px; padding-bottom: 48px; }
+.order-lookup-hero h1 { max-width: 620px; margin-top: 10px; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; }
+.order-lookup-hero p { max-width: 560px; margin-top: 14px; font-size: 14px; line-height: 1.7; }
+.lookup-wrap { max-width: 540px; }
+.lookup-wrap .form-card { padding: 24px; }
+.lookup-wrap .field { margin-bottom: 14px; }
+.lookup-wrap .field label { font-size: 12px; }
+.lookup-wrap .btn { min-height: 42px; padding: 10px 16px; font-size: 13px; }
+.lookup-result h2 { font-size: 20px; }
+.lookup-result .form-intro { margin-bottom: 16px; font-size: 12px; }
 
 /* ---------- footer ---------- */
 .site-footer { background: var(--bg); border-top: 1px solid var(--border); }
@@ -714,6 +724,12 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .section { padding: 68px 0; }
   .page-hero .wrap { padding-top: 70px; padding-bottom: 62px; }
   .page-hero h1 { font-size: clamp(40px, 13vw, 58px); }
+  .order-lookup-hero .wrap { padding-top: 48px; padding-bottom: 38px; }
+  .order-lookup-hero h1 { max-width: 330px; font-size: clamp(30px, 9vw, 40px); line-height: 1.16; }
+  .order-lookup-hero p { max-width: 340px; margin-top: 12px; font-size: 13px; line-height: 1.65; }
+  .lookup-wrap { padding-left: 14px; padding-right: 14px; }
+  .lookup-wrap .form-card { padding: 20px 18px; }
+  .lookup-wrap .btn { width: 100%; }
   .guide-facts { grid-template-columns: 1fr; }
   .guide-facts div { border-right: 0; border-bottom: 1px solid var(--border); }
   .guide-facts div:last-child { border-bottom: 0; }

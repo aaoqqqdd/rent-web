@@ -230,7 +230,7 @@ export function renderNotFound(): string {
 
 export function renderOrderLookup(appUrl: string): string {
   return /* html */ `
-<section class="page-hero compact"><div class="wrap"><div class="kicker">订单查询</div><h1>用订单编号查看申请进度</h1><p>输入订单编号和申请时使用的邮箱。临时账户可重新生成一次临时密码，正式账户请直接登录。</p></div></section>
+<section class="page-hero compact order-lookup-hero"><div class="wrap"><div class="kicker">订单查询</div><h1>用订单编号查看申请进度</h1><p>输入订单编号和申请时使用的邮箱。临时账户可重新生成一次临时密码，正式账户请直接登录。</p></div></section>
 <section class="section"><div class="wrap form-wrap lookup-wrap">
   <form class="form-card" id="order-lookup-form">
     <div class="form-alert" id="lookup-error" hidden></div>
