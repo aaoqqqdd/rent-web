@@ -82,6 +82,14 @@ export function renderPage(opts: PageOptions): string {
 </head>
 <body>
 ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, opts.contact)}
+<aside class="site-announcement" data-site-announcement hidden data-no-translate aria-label="最新通告">
+  <div class="wrap site-announcement-inner">
+    <span class="site-announcement-label">最新消息</span>
+    <a class="site-announcement-link" data-site-announcement-link href="/announcements">
+      <strong data-site-announcement-title></strong><span>查看详情 <span aria-hidden="true">→</span></span>
+    </a>
+  </div>
+</aside>
 <main id="main-content">
 ${opts.body}
 </main>
@@ -206,6 +214,30 @@ ${renderSiteFooter(opts.contact)}
   var onScroll = function () { if (siteHeader) siteHeader.classList.toggle('is-scrolled', window.scrollY > 18); };
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
+
+  var announcement = document.querySelector('[data-site-announcement]');
+  if (announcement) {
+    var refreshAnnouncement = function () {
+      fetch('/api/public-notices?limit=1', { headers: { accept: 'application/json' }, cache: 'no-store' })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (data) {
+          var notice = data && data.notices && data.notices[0];
+          var title = announcement.querySelector('[data-site-announcement-title]');
+          var link = announcement.querySelector('[data-site-announcement-link]');
+          if (!title || !link) return;
+          if (!notice) {
+            announcement.hidden = true;
+            return;
+          }
+          title.textContent = notice.title || '最新通告';
+          link.href = '/announcements/' + encodeURIComponent(notice.id);
+          announcement.hidden = false;
+        })
+        .catch(function () {});
+    };
+    refreshAnnouncement();
+    window.setInterval(refreshAnnouncement, 30000);
+  }
 
   // 动效自托管（原来挂在 gsap CDN 上：一旦那个脚本加载失败——网络、广告拦截、
   // 校园/公司网络限制——全站动效会无声地整体消失。改成原生 CSS 动画 +

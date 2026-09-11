@@ -9,7 +9,9 @@ import {
   getRentalConfig,
   getLegalDocument,
   getSiteContact,
+  getPublicNotice,
   listProducts,
+  listPublicNotices,
   minDailyRate,
   pickFeatured,
 } from './db'
@@ -21,6 +23,7 @@ import { renderApply, renderCartPage } from './pages/apply'
 import { renderLogin } from './pages/login'
 import { renderAbout, renderContact, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
+import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
 import {
   clearedSessionCookie,
   createSession,
@@ -134,6 +137,12 @@ app.get('/styles.css', (c) => {
 
 app.get('/healthz', (c) => c.text('ok'))
 
+app.get('/api/public-notices', async (c) => {
+  const requestedLimit = Number(c.req.query('limit') || 20)
+  const notices = await listPublicNotices(c.env, Number.isFinite(requestedLimit) ? requestedLimit : 20)
+  return c.json({ notices }, 200, { 'cache-control': 'no-store, max-age=0' })
+})
+
 app.get('/favicon.ico', (c) =>
   c.body(FAVICON_SVG, 200, {
     'content-type': 'image/svg+xml',
@@ -148,7 +157,7 @@ app.get('/robots.txt', (c) =>
 app.get('/sitemap.xml', async (c) => {
   const base = siteUrl(c.req.url)
   const products = await listProducts(c.env)
-  const paths = ['/', '/products', '/rental-guide', '/about', '/contact', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
+  const paths = ['/', '/products', '/rental-guide', '/about', '/contact', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
   const productPaths = products.filter((product) => product.id).map((product) => `/products/${encodeURIComponent(product.id)}`)
   const urls = [...paths, ...productPaths].map((path) => `<url><loc>${xmlEsc(base + path)}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
@@ -188,6 +197,49 @@ app.get('/', (c) =>
       },
       user,
     })
+  }),
+)
+
+app.get('/announcements', (c) =>
+  cachedHtml(c, HTML_TTL, async (user) => {
+    const [contact, notices] = await Promise.all([
+      getSiteContact(c.env),
+      listPublicNotices(c.env),
+    ])
+    return renderPage({
+      title: `通告与优惠 — ${contact.name}`,
+      description: '查看网站最新通告和当前有效的租赁优惠码。',
+      body: renderAnnouncements(notices),
+      contact,
+      appUrl: appUrl(c.env),
+      path: '/announcements',
+      siteUrl: siteUrl(c.req.url),
+      user,
+    })
+  }),
+)
+
+app.get('/announcements/:id', (c) =>
+  cachedHtml(c, HTML_TTL, async (user) => {
+    const [contact, notice] = await Promise.all([
+      getSiteContact(c.env),
+      getPublicNotice(c.env, c.req.param('id')),
+    ])
+    const status = notice ? 200 : 404
+    return {
+      status,
+      html: renderPage({
+        title: notice ? `${notice.title} — ${contact.name}` : `通告不存在 — ${contact.name}`,
+        description: notice ? notice.message.slice(0, 160) : '这条通告不存在或已经失效。',
+        body: renderAnnouncementDetail(notice),
+        contact,
+        appUrl: appUrl(c.env),
+        path: `/announcements/${encodeURIComponent(c.req.param('id'))}`,
+        siteUrl: siteUrl(c.req.url),
+        robots: notice ? 'index, follow' : 'noindex, follow',
+        user,
+      }),
+    }
   }),
 )
 

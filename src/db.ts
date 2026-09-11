@@ -55,6 +55,17 @@ export interface LegalDocumentData {
   bankDetails: Record<string, unknown>
 }
 
+export interface PublicNotice {
+  id: string
+  kind: 'announcement' | 'coupon'
+  title: string
+  message: string
+  createdAt: string
+  couponCode?: string
+  couponDiscount?: string
+  expiresAt?: string
+}
+
 const CATEGORY_LABEL: Record<Product['category'], string> = {
   gaming: '游戏笔记本',
   ultrabook: '轻薄商务本',
@@ -72,6 +83,11 @@ function categorize(row: Record<string, unknown>): Product['category'] {
 function num(v: unknown): number {
   const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''))
   return Number.isFinite(n) ? n : 0
+}
+
+function deviceDiscount(row: Record<string, unknown>, snakeName: string, camelName: string): number {
+  // rent 的 0124 migration 使用 snake_case；camelCase 仅作为旧部署兼容。
+  return num(row[snakeName] ?? row[camelName])
 }
 
 function toProduct(row: Record<string, unknown>): Product {
@@ -96,8 +112,8 @@ function toProduct(row: Record<string, unknown>): Product {
     gpu: String(row.gpu ?? ''),
     os: String(row.os ?? ''),
     pricePerDay: num(row.pricePerDay ?? row.price_per_day),
-    weeklyDiscountPercent: num(row.weeklyDiscountPercent ?? row.weekly_discount_percent),
-    monthlyDiscountPercent: num(row.monthlyDiscountPercent ?? row.monthly_discount_percent),
+    weeklyDiscountPercent: deviceDiscount(row, 'weekly_discount_percent', 'weeklyDiscountPercent'),
+    monthlyDiscountPercent: deviceDiscount(row, 'monthly_discount_percent', 'monthlyDiscountPercent'),
     depositAmount: num(row.depositAmount ?? row.deposit_amount),
     description: String(row.description ?? ''),
     available: inStock,
@@ -122,6 +138,110 @@ export async function listProducts(env: Env): Promise<Product[]> {
   } catch {
     return []
   }
+}
+
+/** 公开展示的最新通告与有效优惠码，不包含收件人、使用次数等内部字段。 */
+export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNotice[]> {
+  const notices: PublicNotice[] = []
+  try {
+    const queryLimit = Math.max(1, Math.min(100, limit))
+    let result: { results?: Record<string, unknown>[] }
+    try {
+      result = await env.RENT.prepare(
+        `SELECT MIN(id) AS id, title, message, created_at, MAX(expires_at) AS expires_at
+         FROM notifications
+         WHERE type = 'announcement' AND deleted_at IS NULL
+           AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+         GROUP BY title, message, created_at
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      ).bind(queryLimit).all<Record<string, unknown>>()
+    } catch {
+      // 0125 尚未应用时，回退到没有 expires_at 的旧通知表结构。
+      result = await env.RENT.prepare(
+        `SELECT MIN(id) AS id, title, message, created_at
+         FROM notifications
+         WHERE type = 'announcement' AND deleted_at IS NULL
+         GROUP BY title, message, created_at
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      ).bind(queryLimit).all<Record<string, unknown>>()
+    }
+    for (const row of result.results ?? []) {
+      notices.push({
+        id: `announcement:${String(row.id ?? '')}`,
+        kind: 'announcement',
+        title: String(row.title ?? '最新通告'),
+        message: String(row.message ?? ''),
+        createdAt: String(row.created_at ?? ''),
+        expiresAt: row.expires_at ? String(row.expires_at) : undefined,
+      })
+    }
+  } catch {
+    // 通知表尚未初始化时，优惠码和其他官网内容仍应正常展示。
+  }
+  try {
+    let result: { results?: Record<string, unknown>[] }
+    try {
+      result = await env.RENT.prepare(
+        `SELECT id, code, discount_type, discount_value, starts_at, expires_at,
+                minimum_order_amount, device_id, brand, config_keyword, created_at,
+                max_uses, used_count
+         FROM coupons
+         WHERE active = 1
+           AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+           AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP)
+           AND (max_uses IS NULL OR used_count < max_uses)
+         ORDER BY created_at DESC`,
+      ).all<Record<string, unknown>>()
+    } catch {
+      // 0050 的基础优惠码表没有后续 scope 字段，仍可安全展示基础优惠信息。
+      result = await env.RENT.prepare(
+        `SELECT id, code, discount_type, discount_value, starts_at, expires_at,
+                created_at, max_uses, used_count
+         FROM coupons
+         WHERE active = 1
+           AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP)
+           AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP)
+           AND (max_uses IS NULL OR used_count < max_uses)
+         ORDER BY created_at DESC`,
+      ).all<Record<string, unknown>>()
+    }
+    for (const row of result.results ?? []) {
+      const code = String(row.code ?? '').trim().toUpperCase()
+      if (!code) continue
+      const discountType = String(row.discount_type ?? '') === 'percent' ? '百分比折扣' : '固定金额折扣'
+      const discountValue = Number(row.discount_value ?? 0)
+      const discount = discountType === '百分比折扣' ? `${discountValue}%` : `AUD$${discountValue.toFixed(2)}`
+      const conditions = [
+        row.minimum_order_amount ? `最低消费 AUD$${Number(row.minimum_order_amount).toFixed(2)}` : '',
+        row.device_id ? '指定设备适用' : '',
+        row.brand ? `品牌：${String(row.brand)}` : '',
+        row.config_keyword ? `配置：${String(row.config_keyword)}` : '',
+      ].filter(Boolean)
+      notices.push({
+        id: `coupon:${String(row.id ?? code)}`,
+        kind: 'coupon',
+        title: `优惠码 ${code}`,
+        message: `新优惠码：${code}，${discountType}${discount}。${conditions.length ? `使用条件：${conditions.join('；')}。` : ''}${row.expires_at ? `有效期至 ${String(row.expires_at)}。` : ''}`,
+        createdAt: String(row.created_at ?? row.starts_at ?? ''),
+        couponCode: code,
+        couponDiscount: discount,
+        expiresAt: row.expires_at ? String(row.expires_at) : undefined,
+      })
+    }
+  } catch {
+    // 兼容 coupons 表或较早表结构尚未部署的环境。
+  }
+  return notices
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, Math.max(1, Math.min(100, limit)))
+}
+
+export async function getPublicNotice(env: Env, id: string): Promise<PublicNotice | null> {
+  if (!id.startsWith('announcement:') && !id.startsWith('coupon:')) return null
+  const notices = await listPublicNotices(env, 100)
+  return notices.find((notice) => notice.id === id) ?? null
 }
 
 /** 首页「为你精选」——每个类别取一台代表机型（优先当前可租），最多 3 张。 */
