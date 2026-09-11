@@ -311,6 +311,10 @@ p { margin: 0; }
 .nav { gap: 6px; }
 .nav a { padding: 8px 12px; border-radius: 8px; color: #aeb5c7; }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--fg); background: rgba(255,255,255,.05); }
+html[lang^="en"] .nav { gap: 2px; }
+html[lang^="en"] .nav a { padding-left: 9px; padding-right: 9px; font-size: 12px; white-space: nowrap; }
+html[lang^="en"] .header-account { padding-left: 12px; padding-right: 12px; font-size: 11px; white-space: nowrap; }
+html[lang^="en"] .header-cart { font-size: 12px; }
 .menu-toggle { display: none; width: 40px; height: 40px; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); }
 .menu-toggle span { display: block; width: 18px; height: 1px; margin: 4px auto; background: var(--fg); transition: transform .2s, opacity .2s; }
 .menu-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(5px) rotate(45deg); }

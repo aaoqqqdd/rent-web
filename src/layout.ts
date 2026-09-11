@@ -165,8 +165,15 @@ ${renderSiteFooter(opts.contact)}
     try { localStorage.setItem('geekslope-language', english ? 'en' : 'zh'); } catch (_) {}
     window.dispatchEvent(new CustomEvent('geekslope:language-change', { detail: { language: currentLanguage } }));
   }
-  var savedLanguage = 'zh';
-  try { savedLanguage = localStorage.getItem('geekslope-language') === 'en' ? 'en' : 'zh'; } catch (_) {}
+  var savedLanguage = '';
+  try {
+    var storedLanguage = localStorage.getItem('geekslope-language');
+    if (storedLanguage === 'en' || storedLanguage === 'zh') savedLanguage = storedLanguage;
+  } catch (_) {}
+  if (!savedLanguage) {
+    var browserLanguages = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''];
+    savedLanguage = browserLanguages.some(function (language) { return /^en(?:-|$)/i.test(String(language)); }) ? 'en' : 'zh';
+  }
   document.querySelectorAll('[data-language]').forEach(function (button) { button.addEventListener('click', function () { setLanguage(button.getAttribute('data-language') || 'zh'); }); });
   setLanguage(savedLanguage);
   new MutationObserver(function (mutations) {
