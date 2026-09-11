@@ -513,7 +513,7 @@ export function renderApply(data: ApplyData): string {
         },
       };
       var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance });
-      var walletElement = walletElements.create('expressCheckout', { paymentMethods: { applePay: 'always', googlePay: 'always', link: 'auto', paypal: 'auto', amazonPay: 'never', klarna: 'never' } });
+      var walletElement = walletElements.create('expressCheckout', { paymentMethods: { applePay: 'always', googlePay: 'always', link: 'never', paypal: 'auto', amazonPay: 'never', klarna: 'never' } });
       walletElement.mount('#stripe-wallet-element');
       walletElement.on('ready', function (event) {
         var labels = { applePay: 'Apple Pay', googlePay: 'Google Pay', link: 'Link', paypal: 'PayPal' };
