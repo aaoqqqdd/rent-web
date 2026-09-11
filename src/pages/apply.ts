@@ -130,7 +130,7 @@ export function renderApply(data: ApplyData): string {
           <div class="stripe-setup-head"><div><label>信用卡资料</label><p>仅验证支付方式，不会在提交申请时扣款。</p></div><span>SECURE / STRIPE</span></div>
           <div id="stripe-card-element" class="stripe-card-element"></div>
           <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
-          <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证信用卡（不会扣款）</button>
+          <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证信用卡</button>
           <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
         </div>
         <div class="refund-choice">

@@ -84,7 +84,7 @@ export function renderHome(data: HomeData): string {
         <div><span>起租价格</span><strong>${minRate > 0 ? `$${minRate}` : '询价'}<small>${minRate > 0 ? ' / DAY 起' : ''}</small></strong></div>
         <div><span>申请状态</span><strong>确认档期</strong></div>
       </div>
-      <a href="/products" class="console-link"><span>浏览全部实时库存</span><span>↗</span></a>
+      <a href="/products" class="console-link"><span>浏览全部库存</span><span>↗</span></a>
     </div>
   </div>
 </section>
@@ -106,7 +106,6 @@ export function renderHome(data: HomeData): string {
   <div class="wrap">
     <div class="section-head">
       <div><div class="kicker">当前推荐</div><h2>从用途出发，不从参数焦虑开始</h2></div>
-      <p>每类挑一台代表设备。库存和价格来自租赁系统，最多延迟 60 秒。</p>
     </div>
     <div class="grid">
       ${featured.length
@@ -114,7 +113,7 @@ export function renderHome(data: HomeData): string {
       : '<div class="empty-state"><strong>设备库正在更新</strong><p>暂时没有推荐设备，可稍后刷新或直接联系我们。</p></div>'
     }
     </div>
-    <div class="center-cta"><a class="text-link" href="/products">查看全部设备与实时库存 <span>→</span></a></div>
+    <div class="center-cta"><a class="text-link" href="/products">查看全部设备 <span>→</span></a></div>
   </div>
 </section>
 
