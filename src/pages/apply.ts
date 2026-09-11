@@ -16,7 +16,7 @@ function scriptJson(value: unknown): string {
   return JSON.stringify(value ?? null).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
 }
 
-export function renderCartPage(products: Product[], selectedId = ''): string {
+export function renderCartPage(products: Product[], config: RentalConfig, selectedId = ''): string {
   const cartProducts = products.filter((product) => product.id && product.pricePerDay > 0).map((product) => ({
     id: product.id,
     name: product.name,
@@ -26,11 +26,19 @@ export function renderCartPage(products: Product[], selectedId = ''): string {
     deposit: product.depositAmount,
   }))
   return /* html */ `
-<section class="page-hero compact"><div class="wrap"><div class="kicker">购物车</div><h1>先选好设备，再开始结账</h1><p>在这里确认设备和预计费用，下一步再填写租期、取还方式与联系信息。</p></div></section>
+<section class="page-hero compact"><div class="wrap"><div class="kicker">购物车</div><h1>先选设备，再确认租期</h1><p>设备详情页先选租期；加入购物车后，只需在这里修改租期。</p></div></section>
 <section class="section apply-section"><div class="wrap form-wrap cart-page-wrap">
   <div class="section-head"><div class="kicker">当前选择</div><h2>你的设备清单</h2><p>设备会保存在当前浏览器中，最多同时选择 10 台。</p></div>
   <div class="form-card cart-empty" id="cart-page-empty" hidden><h3>购物车还是空的</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
   <div id="cart-page-content" hidden>
+    <div class="form-card cart-term-card">
+      <div class="form-card-head"><span>01</span><div><h3>租赁日期</h3><p>购物车中的设备共用这一租期</p></div></div>
+      <div class="row2">
+        <div class="field"><label for="cart-start-date">取货日期</label><input type="date" id="cart-start-date" required></div>
+        <div class="field"><label for="cart-end-date">归还日期</label><input type="date" id="cart-end-date" required></div>
+      </div>
+      <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。租期可在提交前继续修改。</p>
+    </div>
     <div class="cart-page-list" id="cart-page-items"></div>
     <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong><p>租金会根据实际日期计算，押金在归还验收后按规则处理。</p></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
   </div>
@@ -45,27 +53,49 @@ export function renderCartPage(products: Product[], selectedId = ''): string {
   var content = document.getElementById('cart-page-content');
   var items = document.getElementById('cart-page-items');
   var total = document.getElementById('cart-page-total');
+  var minimumDays = ${config.minimumRentalDays};
+  var startInput = document.getElementById('cart-start-date');
+  var endInput = document.getElementById('cart-end-date');
+  function today() {
+    var date = new Date();
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
+  function addDays(value, amount) {
+    var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount);
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
   function read() {
     try {
-      var ids = JSON.parse(localStorage.getItem(key) || '[]');
-      return Array.isArray(ids) ? ids.filter(function (id, index) { return map.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
+      var value = JSON.parse(localStorage.getItem(key) || '[]');
+      var ids = Array.isArray(value) ? value : value.items;
+      var term = Array.isArray(value) ? null : value.term;
+      return { ids: Array.isArray(ids) ? ids.filter(function (id, index) { return map.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [], term: term };
     } catch (_) { return []; }
   }
-  function write(ids) {
-    try { localStorage.setItem(key, JSON.stringify(ids)); } catch (_) {}
-    if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids);
+  function write(ids, term) {
+    var state = { items: ids, term: term };
+    try { localStorage.setItem(key, JSON.stringify(state)); } catch (_) {}
+    if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids, term);
     render();
   }
   function render() {
-    var ids = read();
+    var state = read();
+    if (!state.ids) state = { ids: [], term: null };
+    var ids = state.ids;
     if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) {
       ids.push(selectedId);
-      try { localStorage.setItem(key, JSON.stringify(ids)); } catch (_) {}
+      write(ids, state.term);
     }
     empty.hidden = ids.length > 0;
     content.hidden = ids.length === 0;
+    if (ids.length) {
+      var term = state.term || { startDate: today(), endDate: addDays(today(), minimumDays), startPeriod: 'AM', endPeriod: 'AM' };
+      startInput.value = term.startDate || today(); endInput.value = term.endDate || addDays(startInput.value, minimumDays);
+      startInput.min = today(); endInput.min = addDays(startInput.value, minimumDays);
+    }
     items.replaceChildren();
     var deposit = 0;
+    var rentalDays = ids.length && startInput.value && endInput.value ? Math.max(0, Math.ceil((new Date(endInput.value + 'T00:00:00Z') - new Date(startInput.value + 'T00:00:00Z')) / 86400000)) : 0;
     ids.forEach(function (id) {
       var product = map.get(id); deposit += Number(product.deposit || 0);
       var row = document.createElement('article'); row.className = 'cart-page-item';
@@ -78,13 +108,13 @@ export function renderCartPage(products: Product[], selectedId = ''): string {
       var daily = document.createElement('strong'); daily.textContent = '$' + product.day;
       var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
       var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
-      var remove = document.createElement('button'); remove.className = 'cart-remove'; remove.type = 'button'; remove.textContent = '移除';
-      remove.addEventListener('click', function () { write(ids.filter(function (item) { return item !== id; })); });
-      price.append(daily, depositText, remove); row.append(detail, price);
+      price.append(daily, depositText); row.append(detail, price);
       items.appendChild(row);
     });
-    total.textContent = ids.length ? ids.length + ' 台设备 · 押金 $' + deposit.toFixed(2) + ' 起租' : '';
+    total.textContent = ids.length ? ids.length + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + (rentalDays * ids.reduce(function (sum, id) { return sum + Number(map.get(id).day || 0); }, 0)).toFixed(2) + ' · 押金 $' + deposit.toFixed(2) : '';
   }
+  startInput.addEventListener('change', function () { endInput.min = addDays(startInput.value, minimumDays); if (endInput.value < endInput.min) endInput.value = endInput.min; write(read().ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: 'AM', endPeriod: 'AM' }); });
+  endInput.addEventListener('change', function () { write(read().ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: 'AM', endPeriod: 'AM' }); });
   render();
 })();
 </script>`
@@ -165,14 +195,14 @@ export function renderApply(data: ApplyData): string {
       <div class="form-card">
         <div class="form-card-head"><span>02</span><div><h3>租赁日期</h3><p>半天时段也会折算进预计租期</p></div></div>
         <div class="row2">
-          <div class="field"><label for="startDate">取货日期</label><input type="date" id="startDate" name="startDate" lang="en-AU" required></div>
-          <div class="field"><label for="startPeriod">取货时段</label><select id="startPeriod" name="startPeriod"><option value="AM">上午</option><option value="PM">下午</option></select></div>
+          <div class="field"><label for="startDate">取货日期</label><input type="date" id="startDate" name="startDate" lang="en-AU" required disabled></div>
+          <div class="field"><label for="startPeriod">取货时段</label><select id="startPeriod" name="startPeriod" disabled><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="endDate">归还日期</label><input type="date" id="endDate" name="endDate" lang="en-AU" required></div>
-          <div class="field"><label for="endPeriod">归还时段</label><select id="endPeriod" name="endPeriod"><option value="AM">上午</option><option value="PM">下午</option></select></div>
+          <div class="field"><label for="endDate">归还日期</label><input type="date" id="endDate" name="endDate" lang="en-AU" required disabled></div>
+          <div class="field"><label for="endPeriod">归还时段</label><select id="endPeriod" name="endPeriod" disabled><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
-        <p class="hint">最短租期 ${config.minimumRentalDays} 天。所有设备需使用同一租期，具体可用档期以系统校验为准。</p>
+        <p class="hint">最短租期 ${config.minimumRentalDays} 天。租期已在购物车确认；如需修改，请返回购物车。</p>
       </div>
 
       <div class="form-card">
@@ -265,7 +295,8 @@ export function renderApply(data: ApplyData): string {
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function readCart() {
     try {
-      var ids = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+      var value = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+      var ids = Array.isArray(value) ? value : value.items;
       return Array.isArray(ids) ? ids.filter(function (id, index) { return productMap.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
     } catch (_) { return []; }
   }
@@ -323,6 +354,15 @@ export function renderApply(data: ApplyData): string {
   var today = todayStr();
   startD.min = today;
   endD.min = today;
+  try {
+    var savedCart = JSON.parse(localStorage.getItem(CART_KEY) || '{}');
+    var savedTerm = savedCart && !Array.isArray(savedCart) ? savedCart.term : null;
+    if (savedTerm && savedTerm.startDate && savedTerm.endDate) {
+      startD.value = savedTerm.startDate; endD.value = savedTerm.endDate;
+      if (savedTerm.startPeriod) startP.value = savedTerm.startPeriod;
+      if (savedTerm.endPeriod) endP.value = savedTerm.endPeriod;
+    }
+  } catch (_) {}
   if (!startD.value) startD.value = today;
   endD.min = addDays(startD.value, Math.max(1, MIN_DAYS));
   if (!endD.value) endD.value = endD.min;
@@ -565,6 +605,7 @@ export function renderApply(data: ApplyData): string {
       try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ name: payload.contactName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
     }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
+    payload.startDate = startD.value; payload.endDate = endD.value; payload.startPeriod = startP.value; payload.endPeriod = endP.value;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
     submitBtn.disabled = true; submitBtn.textContent = '提交中…';

@@ -57,7 +57,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '库存实时同步': 'Live inventory', '配置待更新': 'Specifications pending', '询价': 'Enquire',
   '日租': 'Daily', '月租': 'Monthly', '月租参考': 'Monthly estimate', '参考': 'estimate',
   '押金': 'Deposit', '可退押金': 'Refundable deposit', '（可退）': ' (refundable)',
-  '详情': 'Details', '查看详情': 'View details', '加入购物车': 'Add to cart', '已加入购物车': 'Added to cart',
+  '详情': 'Details', '查看详情': 'View details', '选择租期': 'Choose term', '加入购物车': 'Add to cart', '已加入购物车': 'Added to cart',
   '配置详情见设备页': 'See the device page for specifications', '移除': 'Remove',
   '设备库正在更新': 'Inventory is being updated', '设备目录更新中': 'Inventory is being updated',
   '暂时没有推荐设备，可稍后刷新或直接联系我们。': 'No featured devices are available right now. Refresh later or contact us.',

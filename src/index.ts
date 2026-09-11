@@ -294,7 +294,7 @@ app.get('/apply', (c) =>
       getSiteContact(c.env),
       getRentalConfig(c.env),
     ])
-    const body = renderCartPage(products, c.req.query('device') || '')
+    const body = renderCartPage(products, config, c.req.query('device') || '')
     return renderPage({
       title: `购物车 — ${contact.name}`,
       description: '确认要租赁的设备，再进入结账页面填写租期与联系信息。',

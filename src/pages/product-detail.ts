@@ -9,6 +9,10 @@ interface ProductDetailData {
   config: RentalConfig
 }
 
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value ?? null).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
+}
+
 function specRow(label: string, value: string): string {
   return value ? `<div class="spec-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>` : ''
 }
@@ -46,8 +50,17 @@ export function renderProductDetail({ product, multiplier, config }: ProductDeta
         <div><span>月租参考</span><strong>${product.pricePerDay > 0 ? `$${esc(monthly)}` : '—'}</strong><small>${product.pricePerDay > 0 ? '/ month' : ''}</small></div>
         <div><span>可退押金</span><strong>${product.depositAmount > 0 ? `$${esc(product.depositAmount)}` : '待确认'}</strong><small>验收后退还</small></div>
       </div>
+      <div class="detail-rental-term">
+        <div class="kicker">先选租期</div>
+        <p>选择后加入购物车，之后仍可在购物车中修改。</p>
+        <div class="row2">
+          <div class="field"><label for="detail-start-date">取货日期</label><input type="date" id="detail-start-date" required></div>
+          <div class="field"><label for="detail-end-date">归还日期</label><input type="date" id="detail-end-date" required></div>
+        </div>
+        <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
+      </div>
       <div class="detail-actions">
-        <a class="btn btn-primary btn-lg" href="${applyHref}">${product.available ? '选择租期并申请' : '提交预约申请'}</a>
+        <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button">加入购物车并查看</button>
         <a class="btn btn-ghost btn-lg" href="/contact?subject=${encodeURIComponent(`咨询 ${product.name}`)}">咨询这台设备</a>
       </div>
       <p class="microcopy">先提交申请，不会立即扣款。我们确认档期后再安排签约与付款。</p>
@@ -95,4 +108,23 @@ export function renderProductDetail({ product, multiplier, config }: ProductDeta
     </div>
   </div>
 </section>`
+  + `<script>
+(() => {
+  var start = document.getElementById('detail-start-date');
+  var end = document.getElementById('detail-end-date');
+  var button = document.getElementById('detail-add-cart');
+  var minimumDays = ${config.minimumRentalDays};
+  var today = new Date();
+  var dateString = function (date) { return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); };
+  var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
+  start.min = dateString(today); start.value = start.min;
+  end.min = addDays(start.value, minimumDays); end.value = end.min;
+  start.addEventListener('change', function () { end.min = addDays(start.value, minimumDays); if (end.value < end.min) end.value = end.min; });
+  button.addEventListener('click', function () {
+    if (!start.value || !end.value || end.value < end.min || !window.GeekSlopeCart) return;
+    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: start.value, endDate: end.value, startPeriod: 'AM', endPeriod: 'AM' });
+    location.href = ${JSON.stringify(applyHref)};
+  });
+})();
+</script>`
 }

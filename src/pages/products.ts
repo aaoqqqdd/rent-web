@@ -27,7 +27,7 @@ function card(p: Product, multiplier: number): string {
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}
     <div class="card-actions">
       <a class="btn btn-ghost" href="${detailHref}">查看详情</a>
-      <button class="btn btn-primary" type="button" data-cart-add data-device-id="${esc(p.id)}" aria-pressed="false">加入购物车</button>
+      <a class="btn btn-primary" href="${detailHref}">选择租期</a>
     </div>
   </article>`
 }

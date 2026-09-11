@@ -35,7 +35,7 @@ function productCard(p: Product, index: number, multiplier: number): string {
       <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>参考</small></div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}
-    <div class="card-actions"><a class="btn btn-ghost" href="${detailHref}">详情</a><button class="btn btn-primary" type="button" data-cart-add data-device-id="${esc(p.id)}" aria-pressed="false">加入购物车</button></div>
+    <div class="card-actions"><a class="btn btn-ghost" href="${detailHref}">详情</a><a class="btn btn-primary" href="${detailHref}">选择租期</a></div>
   </article>`
 }
 

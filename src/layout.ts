@@ -327,19 +327,23 @@ ${footer(opts.contact)}
   }
 
   var CART_KEY = 'geekslope-cart-v1';
-  function readCart() {
+  function cleanIds(ids) {
+    return ids.filter(function (id, index) { return typeof id === 'string' && id && ids.indexOf(id) === index; }).slice(0, 10);
+  }
+  function readCartState() {
     try {
       var value = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-      return Array.isArray(value) ? value.filter(function (id, index) {
-        return typeof id === 'string' && id && value.indexOf(id) === index;
-      }).slice(0, 10) : [];
-    } catch (_) { return []; }
+      if (Array.isArray(value)) return { ids: cleanIds(value), term: null };
+      return { ids: cleanIds(Array.isArray(value.items) ? value.items : []), term: value.term && typeof value.term === 'object' ? value.term : null };
+    } catch (_) { return { ids: [], term: null }; }
   }
-  function writeCart(ids) {
-    var clean = ids.filter(function (id, index) { return typeof id === 'string' && id && ids.indexOf(id) === index; }).slice(0, 10);
-    try { localStorage.setItem(CART_KEY, JSON.stringify(clean)); } catch (_) {}
+  function readCart() { return readCartState().ids; }
+  function writeCart(ids, term) {
+    var clean = cleanIds(ids);
+    var state = { items: clean, term: term === undefined ? readCartState().term : term };
+    try { localStorage.setItem(CART_KEY, JSON.stringify(state)); } catch (_) {}
     renderCart(clean);
-    window.dispatchEvent(new CustomEvent('geekslope:cart-change', { detail: { ids: clean } }));
+    window.dispatchEvent(new CustomEvent('geekslope:cart-change', { detail: { ids: clean, term: state.term } }));
     return clean;
   }
   function renderCart(ids) {
@@ -356,13 +360,15 @@ ${footer(opts.contact)}
       button.setAttribute('aria-pressed', String(added));
     });
   }
-  function addToCart(id) {
-    var ids = readCart();
+  function addToCart(id, term) {
+    var state = readCartState();
+    var ids = state.ids;
     if (ids.indexOf(id) < 0) ids.push(id);
-    return writeCart(ids);
+    return writeCart(ids, term === undefined ? state.term : term);
   }
   function removeFromCart(id) { return writeCart(readCart().filter(function (item) { return item !== id; })); }
-  window.GeekSlopeCart = { read: readCart, write: writeCart, add: addToCart, remove: removeFromCart, clear: function () { return writeCart([]); } };
+  function setCartTerm(term) { return writeCart(readCart(), term); }
+  window.GeekSlopeCart = { read: readCart, readState: readCartState, write: writeCart, add: addToCart, remove: removeFromCart, setTerm: setCartTerm, clear: function () { return writeCart([]); } };
   document.addEventListener('click', function (event) {
     var button = event.target.closest('[data-cart-add]');
     if (!button) return;
