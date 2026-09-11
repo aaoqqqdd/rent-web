@@ -67,6 +67,9 @@ p { margin: 0; }
   will-change: transform, opacity;
 }
 .header-actions { display: flex; align-items: center; gap: 12px; }
+.language-switcher { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; }
+.language-switcher button { padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--muted-fg); font: 600 10px var(--mono); cursor: pointer; }
+.language-switcher button.is-active { background: var(--primary); color: var(--primary-ink); }
 .header-account { padding: 9px 14px; font-size: 12px; }
 
 .btn {

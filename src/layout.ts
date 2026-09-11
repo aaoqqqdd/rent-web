@@ -39,29 +39,30 @@ interface Nav {
 function header(nav: Nav, contact: SiteContact): string {
   const active = (path: string): string => nav.path === path || nav.path.startsWith(`${path}/`) ? ' aria-current="page"' : ''
   return /* html */ `
-<a class="skip-link" href="#main-content">跳到主要内容</a>
+<a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
 <header class="site-header">
   <div class="wrap">
     <div class="header-brand-group">
       <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${banner(contact)}</a>
       <span class="header-location">MELBOURNE · LOCAL RENTAL</span>
     </div>
-    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单">
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单" data-i18n-attr="aria-label:menuOpen">
       <span></span><span></span><span></span>
     </button>
     <nav class="nav" id="site-nav" aria-label="主导航">
-      <a href="/products"${active('/products')}>设备库</a>
-      <a href="/rental-guide"${active('/rental-guide')}>如何租</a>
-      <a href="/about"${active('/about')}>关于我们</a>
-      <a href="/contact"${active('/contact')}>联系</a>
-      <a href="/order-lookup"${active('/order-lookup')}>查订单</a>
+      <a href="/products"${active('/products')} data-i18n="navProducts">设备库</a>
+      <a href="/rental-guide"${active('/rental-guide')} data-i18n="navGuide">如何租</a>
+      <a href="/about"${active('/about')} data-i18n="navAbout">关于我们</a>
+      <a href="/contact"${active('/contact')} data-i18n="navContact">联系</a>
+      <a href="/order-lookup"${active('/order-lookup')} data-i18n="navLookup">查订单</a>
     </nav>
     <div class="header-actions">
       <a class="header-cart" href="/apply" aria-label="购物车，0 件设备"${active('/apply')}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20.5 8H6.1M10 20h.01M17 20h.01"></path></svg>
-        <span>购物车</span><b class="cart-count" data-cart-count hidden>0</b>
+        <span data-i18n="cart">购物车</span><b class="cart-count" data-cart-count hidden>0</b>
       </a>
-      <a class="btn btn-primary header-account" href="${esc(nav.appUrl)}/login">账号中心</a>
+      <a class="btn btn-primary header-account" href="${esc(nav.appUrl)}/login" data-i18n="account">账号中心</a>
+      <div class="language-switcher" role="group" aria-label="Language" data-i18n-attr="aria-label:language"><button type="button" data-language="zh">中</button><button type="button" data-language="en">EN</button></div>
     </div>
   </div>
 </header>`
@@ -75,31 +76,31 @@ function footer(contact: SiteContact): string {
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${banner(contact)}</a>
-        <p>为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。</p>
+        <p data-i18n="footerIntro">为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。</p>
       </div>
       <div class="foot-col">
-        <h4>产品</h4>
-        <a href="/products?category=gaming">游戏笔记本</a>
-        <a href="/products?category=ultrabook">轻薄商务本</a>
-        <a href="/products?category=workstation">台式工作站</a>
-        <a href="/products">全部产品</a>
+        <h4 data-i18n="footerProducts">产品</h4>
+        <a href="/products?category=gaming" data-i18n="gaming">游戏笔记本</a>
+        <a href="/products?category=ultrabook" data-i18n="ultrabook">轻薄商务本</a>
+        <a href="/products?category=workstation" data-i18n="workstation">台式工作站</a>
+        <a href="/products" data-i18n="allProducts">全部产品</a>
       </div>
       <div class="foot-col">
-        <h4>服务</h4>
-        <a href="/rental-guide">租赁说明</a>
-        <a href="/rental-guide#faq">常见问题</a>
-        <a href="/about">关于我们</a>
-        <a href="/contact">联系我们</a>
+        <h4 data-i18n="footerServices">服务</h4>
+        <a href="/rental-guide" data-i18n="rentalGuide">租赁说明</a>
+        <a href="/rental-guide#faq" data-i18n="faq">常见问题</a>
+        <a href="/about" data-i18n="navAbout">关于我们</a>
+        <a href="/contact" data-i18n="contactUs">联系我们</a>
       </div>
       <div class="foot-col foot-legal">
-        <h4>条款</h4>
-        <a href="/terms">用户协议</a>
-        <a href="/service-terms">服务条款</a>
-        <a href="/refund-policy">退款政策</a>
-        <a href="/privacy">隐私政策</a>
+        <h4 data-i18n="terms">条款</h4>
+        <a href="/terms" data-i18n="userTerms">用户协议</a>
+        <a href="/service-terms" data-i18n="serviceTerms">服务条款</a>
+        <a href="/refund-policy" data-i18n="refundPolicy">退款政策</a>
+        <a href="/privacy" data-i18n="privacy">隐私政策</a>
       </div>
       <div class="foot-col">
-        <h4>联系我们</h4>
+        <h4 data-i18n="footerContact">联系我们</h4>
         <a href="tel:${esc(contact.phone.replace(/[^+\d]/g, ''))}">${esc(contact.phone)}</a>
         <a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a>
         <span>${esc(contact.address)}</span>
@@ -108,8 +109,8 @@ function footer(contact: SiteContact): string {
     <div class="foot-bottom">
       <span>© ${year} ${esc(contact.name)}. 保留所有权利。</span>
       <span>
-        <a href="/privacy">隐私政策</a>
-        <a href="/contact">获取帮助</a>
+        <a href="/privacy" data-i18n="privacy">隐私政策</a>
+        <a href="/contact" data-i18n="getHelp">获取帮助</a>
       </span>
     </div>
   </div>
@@ -153,7 +154,7 @@ export function renderPage(opts: PageOptions): string {
     ],
   }).replace(/</g, '\\u003c')
   return /* html */ `<!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-language-root>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -186,6 +187,30 @@ ${opts.body}
 ${footer(opts.contact)}
 <script>
 (() => {
+  var translations = {
+    skip: ['跳到主要内容', 'Skip to main content'], menuOpen: ['打开菜单', 'Open menu'], language: ['语言', 'Language'],
+    navProducts: ['设备库', 'Devices'], navGuide: ['如何租', 'How it works'], navAbout: ['关于我们', 'About us'], navContact: ['联系', 'Contact'], navLookup: ['查订单', 'Order lookup'],
+    cart: ['购物车', 'Cart'], account: ['账号中心', 'Account'], footerIntro: ['为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。', 'Reliable computer rentals for study, work, creative projects and short-term needs. Browse live inventory and apply for the time you need.'],
+    footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'],
+    footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help']
+  };
+  function setLanguage(language) {
+    var english = language === 'en';
+    document.documentElement.lang = english ? 'en-AU' : 'zh-CN';
+    document.querySelectorAll('[data-i18n]').forEach(function (node) {
+      var key = node.getAttribute('data-i18n'); var value = translations[key];
+      if (value) node.textContent = value[english ? 1 : 0];
+    });
+    document.querySelectorAll('[data-i18n-attr]').forEach(function (node) {
+      String(node.getAttribute('data-i18n-attr') || '').split(',').forEach(function (item) { var parts = item.split(':'); var value = translations[parts[1]]; if (value) node.setAttribute(parts[0], value[english ? 1 : 0]); });
+    });
+    document.querySelectorAll('[data-language]').forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-language') === (english ? 'en' : 'zh')); });
+    try { localStorage.setItem('geekslope-language', english ? 'en' : 'zh'); } catch (_) {}
+  }
+  var savedLanguage = 'zh';
+  try { savedLanguage = localStorage.getItem('geekslope-language') === 'en' ? 'en' : 'zh'; } catch (_) {}
+  document.querySelectorAll('[data-language]').forEach(function (button) { button.addEventListener('click', function () { setLanguage(button.getAttribute('data-language') || 'zh'); }); });
+  setLanguage(savedLanguage);
   var toggle = document.querySelector('.menu-toggle');
   var nav = document.getElementById('site-nav');
   if (toggle && nav) {
