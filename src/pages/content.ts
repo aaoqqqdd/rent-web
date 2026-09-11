@@ -17,38 +17,35 @@ export function renderRentalGuide(config: RentalConfig): string {
   return /* html */ `
 <section class="page-hero compact guide-hero">
   <div class="wrap">
-    <div class="kicker">租赁说明</div>
-    <h1>从选设备到归还，每一步都说清楚</h1>
+    <span class="eyebrow">MELBOURNE · 租赁指南</span>
+    <h1>从选设备到归还，<em>每一步都说清楚。</em></h1>
     <p>申请不会立即扣款。我们先确认档期、取还方式和最终费用，再安排合同、付款和交付。</p>
-    <nav class="guide-jump" aria-label="租赁说明快速导航"><a href="#process">申请流程</a><a href="#pricing">费用</a><a href="#delivery">取还</a><a href="#responsibilities">使用与归还</a><a href="#faq">FAQ</a></nav>
+    <div class="guide-facts" aria-label="租赁关键信息"><div><strong>${esc(config.minimumRentalDays)} 天起</strong><span>灵活租期</span></div><div><strong>先申请</strong><span>确认后再付款</span></div><div><strong>本地交付</strong><span>配送或到店自取</span></div></div>
+    <nav class="guide-jump" aria-label="租赁说明快速导航"><a href="#process">租赁流程</a><a href="#pricing">租金说明</a><a href="#terms">租赁条款</a><a href="#faq">常见问题</a></nav>
   </div>
 </section>
 <section class="section" id="process">
   <div class="wrap">
-    <div class="section-head"><div><div class="kicker">完整流程</div><h2>先申请，确认后再付款</h2></div><p>页面上的库存和价格来自实时设备库，但提交申请不等于订单已最终确认。</p></div>
+    <div class="section-head"><div><div class="kicker">租赁流程</div><h2>五步完成租赁</h2></div><p>页面上的库存和价格来自实时设备库，但提交申请不等于订单已最终确认。</p></div>
     <div class="guide-steps">
-      <article><span>01 / 选择</span><h2>在设备库确定具体机型</h2><p>按用途、配置、价格与现货状态筛选。打开详情页核对处理器、显卡、内存、存储和操作系统。</p><a href="/products" class="text-link">浏览设备库 →</a></article>
-      <article><span>02 / 申请</span><h2>填写租期、取还与联系信息</h2><p>可一次申请多台设备，同一购物车共用租期和取还方式。页面会估算租金、优惠和押金。</p></article>
-      <article><span>03 / 验证</span><h2>验证付款方式并提交</h2><p>提交前需通过 Stripe 验证信用卡。这一步只验证付款方式，不会立即收取租金或押金。</p></article>
-      <article><span>04 / 审核</span><h2>我们核对档期与最终费用</h2><p>订单先进入待审核状态。我们会核对库存冲突、配送地址、优惠码、配送费和最终金额。</p></article>
-      <article><span>05 / 签约付款</span><h2>确认后进入租赁系统</h2><p>查看并签署租赁合同，按确认金额完成付款。在此之前，申请不会直接进入交付。</p></article>
-      <article><span>06 / 交付归还</span><h2>按确认的时间取机并验收</h2><p>选择配送或当前开放的自取点。租期结束时携齐设备与配件归还，完成验机和押金结算。</p></article>
+      <article><span>01</span><h3>选择设备</h3><p>按用途、配置、价格与现货状态筛选，核对处理器、显卡、内存、存储和操作系统。</p><a href="/products" class="text-link">浏览设备库 →</a></article>
+      <article><span>02</span><h3>提交申请</h3><p>填写租期、取还方式与联系方式，并验证付款方式；验证过程不会立即扣款。</p></article>
+      <article><span>03</span><h3>审核确认</h3><p>我们会核对设备档期、优惠、配送地址和最终金额，再向你确认租赁详情。</p></article>
+      <article><span>04</span><h3>签约付款</h3><p>审核通过后进入租赁系统，查看并签署电子合同，再按确认金额完成付款。</p></article>
+      <article><span>05</span><h3>取机与归还</h3><p>按确认的时间配送或到店自取；租期结束时携齐设备与配件归还并完成验机。</p></article>
     </div>
   </div>
 </section>
 
 <section class="section alt" id="pricing">
   <div class="wrap">
-    <div class="section-head"><div><div class="kicker">费用怎么组成</div><h2>租金、押金与配送费</h2></div><p>产品卡上的月租价格用于预算参考；实际金额会根据具体日期和审核结果确定。</p></div>
-    <div class="fee-table" role="table" aria-label="租赁费用说明">
-      <div class="fee-row fee-head" role="row"><span>项目</span><span>什么时候产生</span><span>怎么计算</span></div>
-      <div class="fee-row" role="row"><strong>租金</strong><span>合同确认后</span><span>日租价 × 实际租赁天数</span></div>
-      <div class="fee-row" role="row"><strong>押金</strong><span>签约付款时</span><span>设备对应押金；归还验收无误后退回</span></div>
-      <div class="fee-row" role="row"><strong>优惠</strong><span>提交申请时</span><span>按优惠码的适用设备、有效期、使用次数和最低消费校验</span></div>
-      <div class="fee-row" role="row"><strong>配送费</strong><span>选择送货时</span><span>根据地址与时段，在审核时确认</span></div>
-      <div class="fee-row" role="row"><strong>额外费用</strong><span>仅发生异常时</span><span>逾期、缺件或人为损坏按合同与实际情况结算</span></div>
+    <div class="section-head"><div><div class="kicker">租金说明</div><h2>按实际使用时间来租</h2></div><p>从 ${esc(config.minimumRentalDays)} 天起，可覆盖短期任务到长期项目；准确租金以具体日期和审核后的订单为准。</p></div>
+    <div class="rental-plan-grid" aria-label="租期选择说明">
+      <article><span>短期使用</span><h3>按日租赁</h3><strong>${esc(config.minimumRentalDays)} 天起</strong><p>适合临时出差、活动、考试或几天内完成的任务。</p><small>租金按日租价 × 实际租赁天数计算</small></article>
+      <article><span>项目周期</span><h3>按周规划</h3><strong>7 天以上</strong><p>适合课程、开发冲刺、培训或需要连续使用数周的项目。</p><small>下单页按实际日期即时估算</small></article>
+      <article class="featured"><b>长期项目</b><span>预算参考</span><h3>按月比较</h3><strong>30 天以上</strong><p>适合长期办公、创业团队或持续创作；产品页提供月租展示价。</p><small>月租展示价仅供比较，并非最终报价</small></article>
     </div>
-    <div class="process-note"><span>IMPORTANT</span><p>下单页显示的是预计金额。付款前请核对审核后的最终订单和租赁合同；合同内的费用、租期和取还安排是本次租赁的最终依据。</p></div>
+    <div class="process-note"><span>费用构成</span><p>预计金额可能包含租金、设备押金、优惠、配送费和支付手续费。付款前请核对审核后的最终订单与租赁合同。</p></div>
   </div>
 </section>
 
@@ -59,16 +56,18 @@ export function renderRentalGuide(config: RentalConfig): string {
   </div>
 </section>
 
-<section class="section alt" id="responsibilities">
+<section class="section alt" id="terms">
   <div class="wrap">
-    <div class="section-head"><div><div class="kicker">交付到归还</div><h2>设备怎么验收、使用和交回</h2></div><p>出租前和归还后都会检查设备。收到时及时核对，能减少后续对设备状态的争议。</p></div>
-    <div class="service-standard-grid">
-      <article><span>01 / 收到时</span><h3>当面核对</h3><ul><li>确认型号、外观和基本功能</li><li>核对充电器及约定的配件</li><li>发现异常尽快联系并留存记录</li></ul></article>
-      <article><span>02 / 使用中</span><h3>妥善保管</h3><ul><li>仅用于合法用途，不转借、转租或抵押</li><li>不自行拆机、改装或绕过安全措施</li><li>注意防水、防摔和账户安全</li></ul></article>
-      <article><span>03 / 需要变更</span><h3>提前联系</h3><ul><li>续租需先确认后续档期</li><li>提前归还是否调整租金以合同为准</li><li>地址或时间变更需重新确认</li></ul></article>
-      <article><span>04 / 归还前</span><h3>备份并清点</h3><ul><li>备份文件，退出个人账户并清除资料</li><li>携齐设备、充电器和全部配件</li><li>按合同时间和地点完成归还</li></ul></article>
+    <div class="section-head"><div><div class="kicker">租赁条款</div><h2>重要规则，提前说清楚</h2></div><p>以下为便于理解的摘要；每笔租赁最终以审核后的订单、已签合同及网站法律文件为准。</p></div>
+    <div class="rental-terms-grid">
+      <article><span>01</span><h3>押金政策</h3><p>押金按设备显示金额收取。归还验收无损坏、缺件、逾期或其他应付费用后，按规则退回。</p></article>
+      <article><span>02</span><h3>损坏责任</h3><p>正常使用损耗与人为损坏会分别处理；维修、缺件或其他费用以合同和实际检查结果为准。</p></article>
+      <article><span>03</span><h3>续租规则</h3><p>请在租期结束前尽早提出申请。是否能够续租，需要根据后续设备档期再次确认。</p></article>
+      <article><span>04</span><h3>提前归还</h3><p>可以提前联系我们安排归还；已付租金是否调整，按订单状态、已签合同和退款政策处理。</p></article>
+      <article><span>05</span><h3>数据安全</h3><p>归还前请备份文件、退出个人账户并清除本地资料，重要资料不要只保存在租赁设备上。</p></article>
+      <article><span>06</span><h3>禁止行为</h3><p>不得转租、抵押、擅自拆机改装、绕过安全措施，或将设备用于任何违法用途。</p></article>
     </div>
-    <div class="process-note"><span>SUPPORT</span><p>租期内出现故障时，请先停止可能扩大损坏的操作，并联系 7×12 小时技术支持。经确认为设备自身故障且符合租赁条件时，我们会安排排查或免费换机。</p></div>
+    <div class="process-note"><span>技术支持</span><p>租期内出现故障时，请先停止可能扩大损坏的操作并联系我们。经确认是设备自身故障且符合租赁条件时，我们会安排排查或换机。</p></div>
   </div>
 </section>
 
@@ -99,7 +98,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
   const phoneHref = contact.phone.replace(/[^+\d]/g, '')
   return /* html */ `
 <section class="page-hero compact about-hero"><div class="wrap about-hero-grid">
-  <div><div class="kicker">关于 ${esc(contact.name)}</div><h1>好设备应该跟着项目走</h1><p>我们为在墨尔本学习、工作和创作的人提供电脑租赁：需要性能时用得上，项目结束后不必长期闲置。</p></div>
+  <div><span class="eyebrow">MELBOURNE · 关于 ${esc(contact.name)}</span><h1>好设备不该成为，<em>创造力的门槛。</em></h1><strong class="about-brand-subtitle">GeekSlope · 极客坡</strong><p>需要性能时用得上，项目结束后不必长期持有。我们让学习、工作和创作所需的设备更容易获得。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="/rental-guide">了解租赁流程</a></div></div>
   <div class="about-signal" aria-label="墨尔本本地电脑租赁"><div class="signal-grid"></div><span>MEL / LOCAL</span><strong>COMPUTE<br>ON DEMAND</strong><small>实时库存 · 先审核后付款</small></div>
 </div></section>
 
@@ -111,11 +110,11 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
 </div></section>
 
 <section class="section"><div class="wrap story-grid">
-  <div class="story-lead"><span>OUR STORY</span><h2>购买，不是获得算力的唯一方式。</h2></div>
+  <div class="story-lead"><span>品牌故事</span><h2>从一个简单的困惑开始</h2></div>
   <div class="story-copy"><p>一次课程项目、几周的剪辑工作、临时出差，往往都需要一台更合适的电脑，却不一定值得长期持有。${esc(contact.name)} 把设备采购、检查、周转和支持放在后台，让用户按真正需要的时间使用设备。</p><p>我们专注墨尔本本地服务，提供游戏笔记本、轻薄商务本和台式工作站。租期可从 ${esc(config.minimumRentalDays)} 天起，也可覆盖更长项目；每份申请都会在付款前核对档期、价格和交付安排。</p><p>我们想解决的不只是“哪里能租到电脑”，而是让配置、费用、押金、取还和售后都有明确的下一步。</p></div>
 </div></section>
 
-<section class="section alt"><div class="wrap"><div class="section-head"><div><div class="kicker">我们的承诺</div><h2>把租赁做得更透明、更可预期</h2></div><p>不用夸大的数字讲故事，用每个订单都能验证的流程建立信任。</p></div><div class="principle-grid about-values">
+<section class="section alt"><div class="wrap"><div class="section-head"><div><div class="kicker">服务承诺</div><h2>我们对每位用户的承诺</h2></div><p>不用夸大的数字讲故事，用每个订单都能验证的流程建立信任。</p></div><div class="principle-grid about-values">
   <article><span>01</span><h3>信息透明</h3><p>配置、日租价、押金和库存状态直接同步展示。</p></article>
   <article><span>02</span><h3>设备可靠</h3><p>交付前检查基础功能和配件，归还后再次验机。</p></article>
   <article><span>03</span><h3>费用先确认</h3><p>申请阶段不立即扣款，最终费用在签约付款前核对。</p></article>
@@ -129,6 +128,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
   <div class="contact-options">
     <a class="contact-option" href="tel:${esc(phoneHref)}"><span>电话</span><strong>${esc(contact.phone)}</strong><small>适合紧急档期与当天取还咨询</small></a>
     <a class="contact-option" href="mailto:${esc(contact.email)}"><span>邮箱</span><strong>${esc(contact.email)}</strong><small>适合发送配置清单和项目说明</small></a>
+    <div class="contact-option"><span>服务区域</span><strong>Melbourne, VIC</strong><small>CBD 及周边可配送，其他郊区可到店自取</small></div>
     <a class="contact-option" href="/contact"><span>本地取还</span><strong>${esc(contact.address)}</strong><small>${esc(pickupSummary(config))}</small></a>
   </div>
 </div></section>`

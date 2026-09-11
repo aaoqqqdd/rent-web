@@ -389,6 +389,11 @@ export const ENGLISH_PATTERNS: Array<[string, string]> = [
   ['^预计金额：AUD\\$(.+)$', 'Estimated total: AUD$$$1'],
   ['^(\\d+) 台设备 · 押金 \\$(.+) 起租$', '$1 devices · deposit from $$$2'],
   ['^(\\d+) 台设备 · 合计 \\$(.+)/day · 押金 \\$(.+)（可退）$', '$1 devices · $$$2/day total · $$$3 refundable deposit'],
-  ['^(\\d+) 台设备 · (\\d+) 天 · 租金 \\$(.+) \+ 押金 \\$(.+) · 支付手续费 \\$(.+) = 应付 \\$(.+)$', '$1 device(s) · $2 day(s) · rental $$$3 + deposit $$$4 · payment fee $$$5 = total due $$$6'],
-  ['^(\\d+) 台设备 · (\\d+) 天 · 租金 \\$(.+) · 优惠 -\\$(.+) \+ 押金 \\$(.+) · 支付手续费 \\$(.+) = 应付 \\$(.+)$', '$1 device(s) · $2 day(s) · rental $$$3 · discount -$$$4 + deposit $$$5 · payment fee $$$6 = total due $$$7'],
+  ['^(\\d+) 台设备 · (\\d+) 天 · 租金 \\$(.+) \\+ 押金 \\$(.+) · 支付手续费 \\$(.+) = 应付 \\$(.+)$', '$1 device(s) · $2 day(s) · rental $$$3 + deposit $$$4 · payment fee $$$5 = total due $$$6'],
+  ['^(\\d+) 台设备 · (\\d+) 天 · 租金 \\$(.+) · 优惠 -\\$(.+) \\+ 押金 \\$(.+) · 支付手续费 \\$(.+) = 应付 \\$(.+)$', '$1 device(s) · $2 day(s) · rental $$$3 · discount -$$$4 + deposit $$$5 · payment fee $$$6 = total due $$$7'],
+  ['^\\$(.+)/day · 押金 \\$(.+)$', '$$$1/day · deposit $$$2'],
+  ['^使用 (.+) 快速验证支付方式，不会在提交申请时扣款。$', 'Use $1 to verify your payment method quickly. Applying will not charge you.'],
+  ['^租期不能少于 (\\d+) 天，请调整归还日期。$', 'The rental term must be at least $1 day(s). Adjust the return date.'],
+  ['^已优惠 AUD\\$(.+)$', 'Discount applied: AUD$$$1'],
+  ['^支付服务返回了无法识别的响应（HTTP (.+)），请稍后重试或联系客服。$', 'The payment service returned an unreadable response (HTTP $1). Try again later or contact us.'],
 ]
