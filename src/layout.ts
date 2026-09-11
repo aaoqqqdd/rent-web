@@ -241,10 +241,18 @@ ${renderSiteFooter(opts.contact)}
 
   var updateCouponLabels = function () {
     var english = window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en';
+    document.querySelectorAll('[data-coupon-prefix]').forEach(function (node) {
+      var callout = node.closest('[data-coupon-prefix-zh]');
+      if (callout) node.textContent = callout.getAttribute(english ? 'data-coupon-prefix-en' : 'data-coupon-prefix-zh') || '';
+    });
     document.querySelectorAll('[data-coupon-benefit]').forEach(function (node) {
       var callout = node.closest('[data-coupon-benefit-zh]');
       if (!callout) return;
       node.textContent = callout.getAttribute(english ? 'data-coupon-benefit-en' : 'data-coupon-benefit-zh') || '';
+    });
+    document.querySelectorAll('[data-coupon-cta]').forEach(function (node) {
+      var callout = node.closest('[data-coupon-cta-zh]');
+      if (callout) node.textContent = callout.getAttribute(english ? 'data-coupon-cta-en' : 'data-coupon-cta-zh') || '';
     });
   };
   updateCouponLabels();

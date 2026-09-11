@@ -53,7 +53,7 @@ export function renderAnnouncementDetail(notice: PublicNotice | null): string {
   <div class="wrap notice-detail-wrap">
     <article class="notice-detail">
       <div class="notice-detail-message">${noticeMessage(notice.message)}</div>
-      ${notice.kind === 'coupon' && notice.couponCode ? `<div class="coupon-callout" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}"><span>🎉 新优惠上线！使用优惠码</span><strong>${esc(notice.couponCode)}</strong><em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em><a class="coupon-callout-link" href="/products">去挑选设备 <span aria-hidden="true">→</span></a></div>` : ''}
+      ${notice.kind === 'coupon' && notice.couponCode ? `<div class="coupon-callout" data-coupon-prefix-zh="🎉 新优惠上线！使用优惠码" data-coupon-prefix-en="🎉 New offer live! Enter promo code" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}" data-coupon-cta-zh="去挑选设备" data-coupon-cta-en="Browse devices"><span data-coupon-prefix>🎉 新优惠上线！使用优惠码</span><strong>${esc(notice.couponCode)}</strong><em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em><a class="coupon-callout-link" href="/products"><span data-coupon-cta>去挑选设备</span> <span aria-hidden="true">→</span></a></div>` : ''}
     </article>
     <a class="text-link" href="/announcements">← 返回通告列表</a>
   </div>
