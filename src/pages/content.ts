@@ -20,6 +20,7 @@ export function renderRentalGuide(config: RentalConfig): string {
     <div class="kicker">租赁说明</div>
     <h1>从选设备到归还，每一步都说清楚</h1>
     <p>申请不会立即扣款。我们先确认档期、取还方式和最终费用，再安排合同、付款和交付。</p>
+    <div class="guide-facts" aria-label="租赁关键信息"><div><strong>${esc(config.minimumRentalDays)} 天起</strong><span>最短租期</span></div><div><strong>先申请</strong><span>确认后再付款</span></div><div><strong>本地交付</strong><span>配送或到店自取</span></div></div>
     <nav class="guide-jump" aria-label="租赁说明快速导航"><a href="#process">申请流程</a><a href="#pricing">费用</a><a href="#delivery">取还</a><a href="#responsibilities">使用与归还</a><a href="#faq">FAQ</a></nav>
   </div>
 </section>
@@ -99,8 +100,8 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
   const phoneHref = contact.phone.replace(/[^+\d]/g, '')
   return /* html */ `
 <section class="page-hero compact about-hero"><div class="wrap about-hero-grid">
-  <div><div class="kicker">关于 ${esc(contact.name)}</div><h1>好设备应该跟着项目走</h1><p>我们为在墨尔本学习、工作和创作的人提供电脑租赁：需要性能时用得上，项目结束后不必长期闲置。</p></div>
-  <div class="about-signal" aria-label="墨尔本本地电脑租赁"><div class="signal-grid"></div><span>MEL / LOCAL</span><strong>COMPUTE<br>ON DEMAND</strong><small>实时库存 · 先审核后付款</small></div>
+  <div><div class="kicker">关于 ${esc(contact.name)}</div><h1>好设备应该跟着项目走</h1><p>我们为在墨尔本学习、工作和创作的人提供电脑租赁：需要性能时用得上，项目结束后不必长期闲置。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="/rental-guide">了解租赁流程</a></div></div>
+  <div class="about-signal" aria-label="墨尔本本地电脑租赁"><div class="signal-grid"></div><span>MEL / LOCAL</span><strong>COMPUTE<br>ON DEMAND</strong><small>实时库存 · 先审核后付款</small><b>AVAILABLE FOR YOUR NEXT PROJECT</b></div>
 </div></section>
 
 <section class="about-stats"><div class="wrap">
