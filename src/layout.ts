@@ -76,8 +76,23 @@ function header(nav: Nav, contact: SiteContact): string {
 </header>`
 }
 
+// 网站相关的法律 / 合规链接，全部由本站从 D1 渲染（见 src/pages/legal.ts、
+// index.ts 的 LEGAL_PAGES）。文案与 rent 后台维护的文档标题保持一致。
+const LEGAL_LINKS: Array<[string, string]> = [
+  ['/service-terms', '服务条款'],
+  ['/privacy', '隐私政策'],
+  ['/user-terms', '用户协议'],
+  ['/cookies', 'Cookie 政策'],
+  ['/refund-policy', '取消与退款政策'],
+  ['/consumer-rights', '消费者权利'],
+  ['/complaints', '投诉与争议'],
+  ['/acceptable-use', '可接受使用'],
+  ['/software-terms', '软件协议'],
+]
+
 function footer(contact: SiteContact): string {
   const year = new Date().getFullYear()
+  const legalNav = LEGAL_LINKS.map(([href, text]) => `<a href="${href}">${text}</a>`).join('')
   return /* html */ `
 <footer class="site-footer">
   <div class="wrap">
@@ -100,7 +115,7 @@ function footer(contact: SiteContact): string {
         <a href="/about" data-i18n="navAbout">关于我们</a>
         <a href="/contact" data-i18n="contactUs">联系我们</a>
       </div>
-      <div class="foot-col foot-legal">
+      <div class="foot-col foot-legal-column">
         <h4 data-i18n="terms">条款</h4>
         <a href="/terms" data-i18n="userTerms">用户协议</a>
         <a href="/service-terms" data-i18n="serviceTerms">服务条款</a>
@@ -116,10 +131,7 @@ function footer(contact: SiteContact): string {
     </div>
     <div class="foot-bottom">
       <span>© ${year} ${esc(contact.name)}. 保留所有权利。</span>
-      <span>
-        <a href="/privacy" data-i18n="privacy">隐私政策</a>
-        <a href="/contact" data-i18n="getHelp">获取帮助</a>
-      </span>
+      <nav class="foot-legal" aria-label="网站法律信息">${legalNav}</nav>
     </div>
   </div>
 </footer>`

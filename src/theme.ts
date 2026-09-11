@@ -625,6 +625,9 @@ a.contact-option:hover { border-color: var(--border-bright); }
 }
 .foot-bottom a { margin-left: 18px; }
 .foot-bottom a:hover { color: var(--primary); }
+.foot-legal { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 16px; max-width: 680px; }
+.foot-legal a { margin-left: 0; color: var(--muted-fg); white-space: nowrap; }
+.foot-legal a:hover { color: var(--primary); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
@@ -661,6 +664,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .foot-bottom { display: block; margin-top: 32px; line-height: 1.8; }
   .foot-bottom > span:last-child { display: block; margin-top: 8px; }
   .foot-bottom a { margin: 0 16px 0 0; }
+  .foot-legal { justify-content: flex-start; margin-top: 10px; }
   .wrap { padding-left: 18px; padding-right: 18px; }
   .hero .wrap { padding: 78px 18px 64px; }
   .hero h1 { font-size: clamp(40px, 13vw, 58px); }
