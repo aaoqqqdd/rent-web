@@ -319,6 +319,7 @@ export const ENGLISH_PATTERNS: Array<[string, string]> = [
   ['^围绕本地配送和自取建立流程。(.+)。$', 'Our process is built around local delivery and pickup. $1.'],
   ['^可配送区域包括 (.+)；可选自取点：(.+)。$', 'Delivery areas include $1; pickup locations: $2.'],
   ['^可配送区域：(.+)；可选自取点：(.+)$', 'Delivery areas: $1; pickup locations: $2'],
+  ['^可配送区域：(.+)；自取地点请联系客服确认$', 'Delivery areas: $1; contact us to confirm a pickup location'],
   ['^送货上门仅限墨尔本 CBD 及周边地区，运费由客服在审核时确认。 可配送区域：(.+)。 其他郊区请选到店自取。$', 'Delivery is limited to Melbourne CBD and nearby areas; fees are confirmed during review. Delivery areas: $1. Choose store pickup for other suburbs.'],
   ['^送货上门仅限墨尔本 CBD 及周边地区，运费由客服在审核时确认。 当前可配送区域包括：(.+)。$', 'Delivery is limited to Melbourne CBD and nearby areas; fees are confirmed during review. Current delivery areas: $1.'],
   ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，最低 \\$(.+)/day 起；提交申请后再确认档期、签约与付款。$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, from $$$1/day; availability, signing and payment follow application.'],

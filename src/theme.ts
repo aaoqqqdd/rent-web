@@ -307,8 +307,10 @@ p { margin: 0; }
 .site-header.is-scrolled { background: rgba(8,10,16,.96); border-color: var(--border-bright); box-shadow: 0 12px 30px rgba(0,0,0,.18); }
 .site-header.is-scrolled .wrap { height: 64px; }
 .nav { gap: 6px; }
-.nav a { padding: 8px 12px; border-radius: 8px; color: #aeb5c7; }
+.nav a { padding: 8px 12px; border-radius: 8px; color: #aeb5c7; white-space: nowrap; }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--fg); background: rgba(255,255,255,.05); }
+.header-actions { flex: none; }
+.header-actions .btn, .nav-account, .nav-logout { white-space: nowrap; }
 .menu-toggle { display: none; width: 40px; height: 40px; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--card); }
 .menu-toggle span { display: block; width: 18px; height: 1px; margin: 4px auto; background: var(--fg); transition: transform .2s, opacity .2s; }
 .menu-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(5px) rotate(45deg); }
