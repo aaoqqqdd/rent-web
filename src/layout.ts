@@ -3,6 +3,7 @@
 import type { SiteContact } from './db'
 import { STYLE_VERSION } from './theme'
 import type { SessionUser } from './auth'
+import { ENGLISH_COPY, ENGLISH_PATTERNS } from './i18n'
 
 export function esc(value: unknown): string {
   return String(value ?? '')
@@ -81,7 +82,6 @@ function header(nav: Nav, contact: SiteContact): string {
 
 function footer(contact: SiteContact): string {
   const year = new Date().getFullYear()
-  const legalNav = LEGAL_LINKS.map(([href, text]) => `<a href="${href}">${text}</a>`).join('')
   return /* html */ `
 <footer class="site-footer">
   <div class="wrap">
@@ -163,6 +163,8 @@ export function renderPage(opts: PageOptions): string {
       ...pageSchemas,
     ],
   }).replace(/</g, '\\u003c')
+  const englishCopy = JSON.stringify(ENGLISH_COPY).replace(/</g, '\\u003c')
+  const englishPatterns = JSON.stringify(ENGLISH_PATTERNS).replace(/</g, '\\u003c')
   return /* html */ `<!doctype html>
 <html lang="zh-CN" data-language-root>
 <head>
@@ -197,6 +199,55 @@ ${opts.body}
 ${footer(opts.contact)}
 <script>
 (() => {
+  var englishCopy = ${englishCopy};
+  var englishPatterns = ${englishPatterns}.map(function (entry) { return [new RegExp(entry[0]), entry[1]]; });
+  var originalText = new WeakMap();
+  var originalAttributes = new WeakMap();
+  var originalTitle = document.title;
+  var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+  var currentLanguage = 'zh';
+  function englishFor(value) {
+    if (englishCopy[value]) return englishCopy[value];
+    for (var i = 0; i < englishPatterns.length; i += 1) {
+      if (englishPatterns[i][0].test(value)) return value.replace(englishPatterns[i][0], englishPatterns[i][1]);
+    }
+    return value;
+  }
+  function translateTextNode(node) {
+    if (!node || !node.parentElement || node.parentElement.closest('script,style,[data-no-translate]')) return;
+    var current = node.nodeValue || '';
+    if (/\\p{Script=Han}/u.test(current)) originalText.set(node, current);
+    var source = originalText.get(node) || current;
+    var trimmed = source.trim();
+    if (!trimmed) return;
+    var translated = currentLanguage === 'en' ? englishFor(trimmed) : trimmed;
+    var next = source.slice(0, source.indexOf(trimmed)) + translated + source.slice(source.indexOf(trimmed) + trimmed.length);
+    if (node.nodeValue !== next) node.nodeValue = next;
+  }
+  function translateElement(element) {
+    if (!element || element.closest('script,style,[data-no-translate]')) return;
+    var saved = originalAttributes.get(element) || {};
+    ['placeholder', 'aria-label', 'title'].forEach(function (attribute) {
+      var current = element.getAttribute(attribute);
+      if (current && /\\p{Script=Han}/u.test(current)) saved[attribute] = current;
+      var source = saved[attribute];
+      if (source) {
+        var next = currentLanguage === 'en' ? englishFor(source) : source;
+        if (element.getAttribute(attribute) !== next) element.setAttribute(attribute, next);
+      }
+    });
+    originalAttributes.set(element, saved);
+  }
+  function translateTree(root) {
+    if (root.nodeType === Node.TEXT_NODE) { translateTextNode(root); return; }
+    if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE) return;
+    if (root.nodeType === Node.ELEMENT_NODE) translateElement(root);
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    var node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeType === Node.TEXT_NODE) translateTextNode(node); else translateElement(node);
+    }
+  }
   var translations = {
     skip: ['跳到主要内容', 'Skip to main content'], menuOpen: ['打开菜单', 'Open menu'], language: ['语言', 'Language'],
     navProducts: ['设备库', 'Devices'], navGuide: ['如何租', 'How it works'], navAbout: ['关于我们', 'About us'], navContact: ['联系', 'Contact'], navLookup: ['查订单', 'Order lookup'],
@@ -206,6 +257,7 @@ ${footer(opts.contact)}
   };
   function setLanguage(language) {
     var english = language === 'en';
+    currentLanguage = english ? 'en' : 'zh';
     document.documentElement.lang = english ? 'en-AU' : 'zh-CN';
     document.querySelectorAll('[data-i18n]').forEach(function (node) {
       var key = node.getAttribute('data-i18n'); var value = translations[key];
@@ -215,19 +267,32 @@ ${footer(opts.contact)}
       String(node.getAttribute('data-i18n-attr') || '').split(',').forEach(function (item) { var parts = item.split(':'); var value = translations[parts[1]]; if (value) node.setAttribute(parts[0], value[english ? 1 : 0]); });
     });
     document.querySelectorAll('[data-language]').forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-language') === (english ? 'en' : 'zh')); });
+    translateTree(document.body);
+    document.title = english ? englishFor(originalTitle) : originalTitle;
+    var descriptionMeta = document.querySelector('meta[name="description"]');
+    if (descriptionMeta) descriptionMeta.setAttribute('content', english ? englishFor(originalDescription) : originalDescription);
     try { localStorage.setItem('geekslope-language', english ? 'en' : 'zh'); } catch (_) {}
+    window.dispatchEvent(new CustomEvent('geekslope:language-change', { detail: { language: currentLanguage } }));
   }
   var savedLanguage = 'zh';
   try { savedLanguage = localStorage.getItem('geekslope-language') === 'en' ? 'en' : 'zh'; } catch (_) {}
   document.querySelectorAll('[data-language]').forEach(function (button) { button.addEventListener('click', function () { setLanguage(button.getAttribute('data-language') || 'zh'); }); });
   setLanguage(savedLanguage);
+  new MutationObserver(function (mutations) {
+    if (currentLanguage !== 'en') return;
+    mutations.forEach(function (mutation) {
+      if (mutation.type === 'characterData') translateTextNode(mutation.target);
+      mutation.addedNodes.forEach(translateTree);
+    });
+  }).observe(document.body, { childList: true, characterData: true, subtree: true });
+  window.GeekSlopeI18n = { language: function () { return currentLanguage; }, t: function (value) { return currentLanguage === 'en' ? englishFor(value) : value; }, apply: translateTree };
   var toggle = document.querySelector('.menu-toggle');
   var nav = document.getElementById('site-nav');
   if (toggle && nav) {
     toggle.addEventListener('click', function () {
       var open = toggle.getAttribute('aria-expanded') === 'true';
       toggle.setAttribute('aria-expanded', String(!open));
-      toggle.setAttribute('aria-label', open ? '打开菜单' : '关闭菜单');
+      toggle.setAttribute('aria-label', window.GeekSlopeI18n.t(open ? '打开菜单' : '关闭菜单'));
       nav.classList.toggle('is-open', !open);
     });
     nav.addEventListener('click', function (event) {
@@ -289,11 +354,11 @@ ${footer(opts.contact)}
       badge.hidden = ids.length === 0;
     });
     var cartLink = document.querySelector('.header-cart');
-    if (cartLink) cartLink.setAttribute('aria-label', '购物车，' + ids.length + ' 件设备');
+    if (cartLink) cartLink.setAttribute('aria-label', window.GeekSlopeI18n.t('购物车，' + ids.length + ' 件设备'));
     document.querySelectorAll('[data-cart-add]').forEach(function (button) {
       var added = ids.indexOf(button.getAttribute('data-device-id') || '') >= 0;
       button.classList.toggle('is-added', added);
-      button.textContent = added ? '已加入购物车' : '加入购物车';
+      button.textContent = window.GeekSlopeI18n.t(added ? '已加入购物车' : '加入购物车');
       button.setAttribute('aria-pressed', String(added));
     });
   }

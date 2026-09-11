@@ -17,8 +17,8 @@ export function renderRentalGuide(config: RentalConfig): string {
   return /* html */ `
 <section class="page-hero compact guide-hero">
   <div class="wrap">
-    <div class="kicker">租赁说明</div>
-    <h1>从选设备到归还，每一步都说清楚</h1>
+    <span class="eyebrow">MELBOURNE · 租赁指南</span>
+    <h1>从选设备到归还，<em>每一步都说清楚。</em></h1>
     <p>申请不会立即扣款。我们先确认档期、取还方式和最终费用，再安排合同、付款和交付。</p>
     <div class="guide-facts" aria-label="租赁关键信息"><div><strong>${esc(config.minimumRentalDays)} 天起</strong><span>灵活租期</span></div><div><strong>先申请</strong><span>确认后再付款</span></div><div><strong>本地交付</strong><span>配送或到店自取</span></div></div>
     <nav class="guide-jump" aria-label="租赁说明快速导航"><a href="#process">租赁流程</a><a href="#pricing">租金说明</a><a href="#terms">租赁条款</a><a href="#faq">常见问题</a></nav>
@@ -98,7 +98,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
   const phoneHref = contact.phone.replace(/[^+\d]/g, '')
   return /* html */ `
 <section class="page-hero compact about-hero"><div class="wrap about-hero-grid">
-  <div><div class="kicker">关于我们</div><h1>${esc(contact.name)}</h1><strong class="about-brand-subtitle">GeekSlope · 极客坡</strong><p>我们相信，好设备不应该成为创造力的门槛。需要性能时用得上，项目结束后不必长期持有。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="/rental-guide">了解租赁流程</a></div></div>
+  <div><span class="eyebrow">MELBOURNE · 关于 ${esc(contact.name)}</span><h1>好设备不该成为，<em>创造力的门槛。</em></h1><strong class="about-brand-subtitle">GeekSlope · 极客坡</strong><p>需要性能时用得上，项目结束后不必长期持有。我们让学习、工作和创作所需的设备更容易获得。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="/rental-guide">了解租赁流程</a></div></div>
   <div class="about-signal" aria-label="墨尔本本地电脑租赁"><div class="signal-grid"></div><span>MEL / LOCAL</span><strong>COMPUTE<br>ON DEMAND</strong><small>实时库存 · 先审核后付款</small><b>AVAILABLE FOR YOUR NEXT PROJECT</b></div>
 </div></section>
 
