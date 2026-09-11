@@ -150,7 +150,7 @@ export function renderContact(contact: SiteContact, config: RentalConfig, appUrl
     <div class="kicker">邮件咨询</div><h2>整理一封询价邮件</h2><p class="form-intro">填写后会打开你的邮件应用；内容不会在本网站保存或发送。</p>
     <div class="row2"><div class="field"><label for="inquiry-name">怎么称呼你</label><input id="inquiry-name" name="name" autocomplete="name" required></div><div class="field"><label for="inquiry-phone">联系电话（选填）</label><input id="inquiry-phone" name="phone" autocomplete="tel"></div></div>
     <div class="field"><label for="inquiry-subject">想咨询什么</label><select id="inquiry-subject" name="subject">${initialSubject ? `<option selected>${esc(initialSubject)}</option>` : ''}<option>帮我推荐设备</option><option>查询设备档期</option><option>确认配送范围</option><option>续租或已有订单</option><option>其他问题</option></select></div>
-    <div class="row2"><div class="field"><label for="inquiry-start">预计开始日期</label><input type="date" id="inquiry-start" name="start"></div><div class="field"><label for="inquiry-end">预计结束日期</label><input type="date" id="inquiry-end" name="end"></div></div>
+    <div class="row2"><div class="field"><label for="inquiry-start">预计开始日期</label><input type="date" id="inquiry-start" name="start" lang="en-AU"></div><div class="field"><label for="inquiry-end">预计结束日期</label><input type="date" id="inquiry-end" name="end" lang="en-AU"></div></div>
     <div class="field"><label for="inquiry-message">用途、软件或其他要求</label><textarea id="inquiry-message" name="message" placeholder="例如：在 Carlton 使用 7 天，需要运行 Premiere Pro，希望 32GB 内存…" required></textarea></div>
     <button class="btn btn-primary btn-lg" type="submit">在邮件应用中继续</button>
   </form>
@@ -163,6 +163,10 @@ export function renderContact(contact: SiteContact, config: RentalConfig, appUrl
   var inquiryEnd = document.getElementById('inquiry-end');
   var now = new Date();
   var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  function formatDate(value) {
+    var parts = String(value || '').split('-');
+    return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : (value || '待定');
+  }
   inquiryStart.min = today;
   inquiryEnd.min = today;
   function validateInquiryDates() {
@@ -179,7 +183,7 @@ export function renderContact(contact: SiteContact, config: RentalConfig, appUrl
     if (!form.reportValidity()) return;
     var data = new FormData(form);
     var subject = data.get('subject');
-    var body = ['姓名：' + data.get('name'), '联系电话：' + (data.get('phone') || '未填写'), '预计租期：' + (data.get('start') || '待定') + ' 至 ' + (data.get('end') || '待定'), '', String(data.get('message'))].join('\\n');
+    var body = ['姓名：' + data.get('name'), '联系电话：' + (data.get('phone') || '未填写'), '预计租期：' + formatDate(data.get('start')) + ' 至 ' + formatDate(data.get('end')), '', String(data.get('message'))].join('\\n');
     location.href = 'mailto:${esc(contact.email)}?subject=' + encodeURIComponent('[${esc(contact.name)} 咨询] ' + subject) + '&body=' + encodeURIComponent(body);
   });
 })();
@@ -220,6 +224,10 @@ export function renderOrderLookup(appUrl: string): string {
   var error = document.getElementById('lookup-error');
   var result = document.getElementById('lookup-result');
   var submit = document.getElementById('lookup-submit');
+  function formatLookupDate(value) {
+    var parts = String(value || '').split('-');
+    return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : (value || '');
+  }
   form.addEventListener('submit', function (event) {
     event.preventDefault(); error.hidden = true; submit.disabled = true; submit.textContent = '查询中…';
     var data = new FormData(form);
@@ -233,7 +241,7 @@ export function renderOrderLookup(appUrl: string): string {
         document.getElementById('lookup-credentials').hidden = false;
         document.getElementById('lookup-result-order').textContent = order.orderNo;
         document.getElementById('lookup-result-password').textContent = response.json.temporaryPassword;
-        var info = document.getElementById('lookup-order-info'); info.hidden = false; info.replaceChildren(); [order.deviceName, order.startDate + ' 至 ' + order.endDate, '状态：' + order.status, '预计金额：AUD$' + Number(order.totalAmount || 0).toFixed(2)].forEach(function (text, index) { var node = document.createElement(index === 0 ? 'strong' : 'span'); node.textContent = text || ''; info.appendChild(node); });
+        var info = document.getElementById('lookup-order-info'); info.hidden = false; info.replaceChildren(); [order.deviceName, formatLookupDate(order.startDate) + ' 至 ' + formatLookupDate(order.endDate), '状态：' + order.status, '预计金额：AUD$' + Number(order.totalAmount || 0).toFixed(2)].forEach(function (text, index) { var node = document.createElement(index === 0 ? 'strong' : 'span'); node.textContent = text || ''; info.appendChild(node); });
       })
       .catch(function (reason) { error.textContent = reason.message || '查询失败，请稍后重试。'; error.hidden = false; })
       .finally(function () { submit.disabled = false; submit.textContent = '查询订单'; });

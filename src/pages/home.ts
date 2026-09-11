@@ -74,7 +74,7 @@ export function renderHome(data: HomeData): string {
       <div class="hero-notes"><span>✓ 提交不扣款</span><span>✓ 押金可退</span><span>✓ 本地技术支持</span></div>
     </div>
     <div class="rental-console" aria-label="实时租赁概览">
-      <div class="console-head"><span><i></i> RENTAL DESK / LIVE</span><span>${new Date().toLocaleDateString('en-AU', { month: 'short', day: '2-digit' }).toUpperCase()}</span></div>
+      <div class="console-head"><span><i></i> RENTAL DESK / LIVE</span><span>${new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span></div>
       <div class="console-device">
         <div class="console-art" aria-hidden="true"><div class="console-screen"><span>READY<br>TO BUILD</span></div><div class="console-base"></div></div>
         <div class="console-device-copy"><small>NEXT AVAILABLE</small><strong>${esc(heroDevice?.name || '设备目录更新中')}</strong><span>${esc(heroDevice?.specs.slice(0, 2).join(' · ') || '查看设备库获取实时配置')}</span></div>

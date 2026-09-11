@@ -165,11 +165,11 @@ export function renderApply(data: ApplyData): string {
       <div class="form-card">
         <div class="form-card-head"><span>02</span><div><h3>租赁日期</h3><p>半天时段也会折算进预计租期</p></div></div>
         <div class="row2">
-          <div class="field"><label for="startDate">取货日期</label><input type="date" id="startDate" name="startDate" required></div>
+          <div class="field"><label for="startDate">取货日期</label><input type="date" id="startDate" name="startDate" lang="en-AU" required></div>
           <div class="field"><label for="startPeriod">取货时段</label><select id="startPeriod" name="startPeriod"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="endDate">归还日期</label><input type="date" id="endDate" name="endDate" required></div>
+          <div class="field"><label for="endDate">归还日期</label><input type="date" id="endDate" name="endDate" lang="en-AU" required></div>
           <div class="field"><label for="endPeriod">归还时段</label><select id="endPeriod" name="endPeriod"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <p class="hint">最短租期 ${config.minimumRentalDays} 天。所有设备需使用同一租期，具体可用档期以系统校验为准。</p>
