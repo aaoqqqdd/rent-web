@@ -234,7 +234,7 @@ export function renderOrderLookup(appUrl: string): string {
 <section class="section"><div class="wrap form-wrap lookup-wrap">
   <form class="form-card" id="order-lookup-form">
     <div class="form-alert" id="lookup-error" hidden></div>
-    <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="例如 OD-20260911-ABC123" autocomplete="off" required></div>
+    <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="例如 ORD-20260101-ABC123" autocomplete="off" required></div>
     <div class="field"><label for="lookup-email">申请邮箱</label><input id="lookup-email" name="email" type="email" autocomplete="email" required></div>
     <button class="btn btn-primary btn-lg" type="submit" id="lookup-submit">查询订单</button>
   </form>
