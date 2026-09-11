@@ -108,7 +108,7 @@ export function renderProductDetail({ product, multiplier, config }: ProductDeta
     </div>
   </div>
 </section>`
-  + `<script>
+    + `<script>
 (() => {
   var start = document.getElementById('detail-start-date');
   var end = document.getElementById('detail-end-date');

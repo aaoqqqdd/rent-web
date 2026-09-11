@@ -235,16 +235,16 @@ app.get('/products/:id', (c) =>
       return {
         status: 404,
         html: renderPage({
-        title: `设备未找到 — ${contact.name}`,
-        description: '这台设备不存在或已经下架。',
-        body: renderNotFound(),
-        contact,
-        appUrl: appUrl(c.env),
-        path: c.req.path,
-        siteUrl: siteUrl(c.req.url),
-        robots: 'noindex, follow',
-        user,
-      }),
+          title: `设备未找到 — ${contact.name}`,
+          description: '这台设备不存在或已经下架。',
+          body: renderNotFound(),
+          contact,
+          appUrl: appUrl(c.env),
+          path: c.req.path,
+          siteUrl: siteUrl(c.req.url),
+          robots: 'noindex, follow',
+          user,
+        }),
       }
     }
     return renderPage({
@@ -264,14 +264,16 @@ app.get('/products/:id', (c) =>
           category: product.categoryLabel,
           ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
           ...(product.model ? { model: product.model } : {}),
-          ...(product.pricePerDay > 0 ? { offers: {
-            '@type': 'Offer', url: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}`,
-            priceCurrency: 'AUD', price: product.pricePerDay,
-            availability: product.available ? 'https://schema.org/InStock' : 'https://schema.org/PreOrder',
-            businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
-            priceSpecification: { '@type': 'UnitPriceSpecification', price: product.pricePerDay, priceCurrency: 'AUD', unitText: 'DAY' },
-            seller: { '@id': `${siteUrl(c.req.url)}/#organization` },
-          } } : {}),
+          ...(product.pricePerDay > 0 ? {
+            offers: {
+              '@type': 'Offer', url: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}`,
+              priceCurrency: 'AUD', price: product.pricePerDay,
+              availability: product.available ? 'https://schema.org/InStock' : 'https://schema.org/PreOrder',
+              businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
+              priceSpecification: { '@type': 'UnitPriceSpecification', price: product.pricePerDay, priceCurrency: 'AUD', unitText: 'DAY' },
+              seller: { '@id': `${siteUrl(c.req.url)}/#organization` },
+            }
+          } : {}),
         },
         {
           '@type': 'BreadcrumbList',
