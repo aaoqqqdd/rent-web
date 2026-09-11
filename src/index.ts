@@ -3,7 +3,7 @@
 // 只读复用 rent 的 D1 库（binding: RENT）来实时展示产品价格 / 配置 / 联系方式。
 
 import { Hono, type Context } from 'hono'
-import { STYLES } from './theme'
+import { STYLES, STYLE_VERSION } from './theme'
 import { renderPage, FAVICON_SVG } from './layout'
 import {
   getRentalConfig,
@@ -81,10 +81,18 @@ async function cachedHtml(
 ): Promise<Response> {
   const authed = hasSessionCookie(c.req.header('cookie') ?? null)
   const cache = caches.default
-  const key = new Request(new URL(c.req.url).toString(), { method: 'GET' })
+  // 样式指纹同时作为 HTML 缓存命名空间。改版部署后立即使用新缓存，
+  // 避免 caches.default 在 TTL 内继续返回上一版本的导航和页面结构。
+  const cacheUrl = new URL(c.req.url)
+  cacheUrl.searchParams.set('__site_v', STYLE_VERSION)
+  const key = new Request(cacheUrl.toString(), { method: 'GET' })
   if (!authed) {
     const hit = await cache.match(key)
-    if (hit) return hit
+    if (hit) {
+      const headers = new Headers(hit.headers)
+      headers.set('cache-control', 'no-cache, must-revalidate')
+      return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers })
+    }
   }
   const user = authed ? await currentUser(c) : null
   const built = await build(user)
@@ -94,10 +102,19 @@ async function cachedHtml(
     status,
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'cache-control': authed ? 'private, no-store' : `public, max-age=${ttl}`,
+      'cache-control': authed ? 'private, no-store' : 'no-cache, must-revalidate',
     },
   })
-  if (!authed && status === 200) c.executionCtx.waitUntil(cache.put(key, res.clone()))
+  if (!authed && status === 200) {
+    const cachedRes = new Response(html, {
+      status,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': `public, max-age=${ttl}`,
+      },
+    })
+    c.executionCtx.waitUntil(cache.put(key, cachedRes))
+  }
   return res
 }
 

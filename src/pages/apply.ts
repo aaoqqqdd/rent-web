@@ -196,7 +196,7 @@ export function renderApply(data: ApplyData): string {
       <div class="form-card">
         <div class="form-card-head"><span>04</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
         <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
-          <div class="stripe-setup-head"><div><label>Apple Pay</label><p>使用 Apple Pay 快速验证支付方式，不会在提交申请时扣款。</p></div><span>APPLE PAY</span></div>
+          <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证，不会在提交申请时扣款。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
           <div id="stripe-wallet-element"></div>
           <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
         </div>
@@ -208,7 +208,6 @@ export function renderApply(data: ApplyData): string {
         <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
         <div class="payment-method-options" id="payment-method-options" hidden>
           <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
-          <label class="choice-line"><input type="radio" name="paymentMethod" value="mixed"> 混合支付（优先扣除余额，再支付剩余金额）</label>
         </div>
         <div class="stripe-setup-box">
           <div class="stripe-setup-head"><div><label>信用卡资料</label><p>仅验证支付方式，不会在提交申请时扣款。</p></div><span>SECURE / STRIPE</span></div>
@@ -297,19 +296,20 @@ export function renderApply(data: ApplyData): string {
   var setupIntent = null;
   var cardReady = false;
     var stripeFeeRate = 0.025;
+    var accountBalance = null;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
   var setupIntentInput = document.getElementById('stripeSetupIntentId');
   var balanceOption = document.getElementById('payment-method-options');
   var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
-  var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
-  var mixedPaymentInput = balanceOption.querySelector('input[value="mixed"]');
+            var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
   var refundBalanceInput = document.getElementById('refund-balance');
   var contactEmail = document.getElementById('contactEmail');
   var balanceEndpoint = ${scriptJson(`${appUrl}/public/account-balance`)};
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
   var walletMessage = document.getElementById('stripe-wallet-message');
+  var stripeSetupBox = document.querySelector('.stripe-setup-box');
 
   function todayStr() {
     var date = new Date();
@@ -360,6 +360,13 @@ export function renderApply(data: ApplyData): string {
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(total * stripeFeeRate * 100) / 100;
     var payableTotal = total + paymentFee;
+    if (accountBalance !== null) {
+      balancePaymentInput.disabled = accountBalance < total;
+      if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
+         document.getElementById('balance-payment-note').textContent = accountBalance >= total
+           ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
+           : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，本次余额不足，系统会先抵扣余额，剩余金额再通过信用卡支付。';
+    }
     summary.textContent = rentalDays
       ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' · 支付手续费 $' + paymentFee.toFixed(2) + ' = 应付 $' + payableTotal.toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
       : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2) + '（可退）';
@@ -394,13 +401,14 @@ export function renderApply(data: ApplyData): string {
     });
   }
   function updatePaymentMethodVisibility() {
-    // 余额、银行卡和钱包可以并存；余额选项只决定最终订单的扣款优先级。
+    var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
+    stripeSetupBox.hidden = useBalance;
+    walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
   }
   function lookupBalance() {
     var email = contactEmail.value.trim();
     balanceOption.hidden = true;
     balancePaymentInput.checked = false;
-    mixedPaymentInput.checked = false;
     refundBalanceInput.disabled = true;
     if (document.querySelector('input[name="refundMethod"][value="balance"]:checked')) document.querySelector('input[name="refundMethod"][value="original"]').checked = true;
     if (!email) { updatePaymentMethodVisibility(); return; }
@@ -409,8 +417,12 @@ export function renderApply(data: ApplyData): string {
       .then(function (result) {
         if (!result.ok || !result.json || contactEmail.value.trim() !== email) return;
         refundBalanceInput.disabled = !result.json.accountEligible;
-        if (result.json.available) balanceOption.hidden = false;
-        document.getElementById('balance-payment-note').textContent = '检测到账户余额，可用于支付本次申请。';
+        if (result.json.accountEligible) {
+          balanceOption.hidden = false;
+          var balance = Number(result.json.balance || 0);
+          accountBalance = balance;
+          refreshSummary();
+        }
       })
       .catch(function () {})
       .finally(updatePaymentMethodVisibility);
@@ -441,11 +453,17 @@ export function renderApply(data: ApplyData): string {
         },
       };
       var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance });
-      var walletElement = walletElements.create('expressCheckout', { paymentMethods: { applePay: 'auto', googlePay: 'auto', link: 'auto', paypal: 'auto', amazonPay: 'auto', klarna: 'auto' } });
+      var walletElement = walletElements.create('expressCheckout', { paymentMethods: { applePay: 'always', googlePay: 'always', link: 'always', paypal: 'auto', amazonPay: 'never', klarna: 'never' } });
       walletElement.mount('#stripe-wallet-element');
       walletElement.on('ready', function (event) {
-        if (event.availablePaymentMethods && Object.keys(event.availablePaymentMethods).some(function (method) { return ['applePay', 'googlePay', 'link', 'paypal'].indexOf(method) >= 0 && event.availablePaymentMethods[method]; })) walletBox.hidden = false;
-        else walletElement.unmount();
+        var labels = { applePay: 'Apple Pay', googlePay: 'Google Pay', link: 'Link', paypal: 'PayPal' };
+        var available = event.availablePaymentMethods ? Object.keys(labels).filter(function (method) { return event.availablePaymentMethods[method]; }).map(function (method) { return labels[method]; }) : [];
+        if (!available.length) { walletElement.unmount(); return; }
+        document.getElementById('stripe-wallet-title').textContent = available.length === 1 ? available[0] : '快捷支付';
+        document.getElementById('stripe-wallet-description').textContent = '使用 ' + available.join('、') + ' 快速验证支付方式，不会在提交申请时扣款。';
+        document.getElementById('stripe-wallet-badge').textContent = available.join(' / ').toUpperCase();
+        walletBox.setAttribute('data-available', 'true');
+        updatePaymentMethodVisibility();
       });
       walletElement.on('confirm', function () {
         walletMessage.textContent = '正在验证快捷支付方式…';
@@ -462,6 +480,7 @@ export function renderApply(data: ApplyData): string {
       stripeElements = stripe.elements({ appearance: appearance });
       var cardElement = stripeElements.create('card', {
         hidePostalCode: true,
+        disableLink: true,
         style: {
           base: {
             color: '#f3f4f8',

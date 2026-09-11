@@ -2,7 +2,6 @@
 
 import type { SiteContact } from './db'
 import { STYLE_VERSION } from './theme'
-import type { SessionUser } from './auth'
 import { ENGLISH_COPY, ENGLISH_PATTERNS } from './i18n'
 
 export function esc(value: unknown): string {
@@ -36,17 +35,10 @@ const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(BADGE)}`
 interface Nav {
   appUrl: string
   path: string
-  user?: SessionUser | null
 }
 
 function header(nav: Nav, contact: SiteContact): string {
   const active = (path: string): string => nav.path === path || nav.path.startsWith(`${path}/`) ? ' aria-current="page"' : ''
-  const cta = nav.user
-    ? /* html */ `<span class="nav-account">
-        <a class="btn btn-primary" href="/sso/start">进入用户中心</a>
-        <a class="nav-logout" href="/logout" title="退出登录（同时退出 rent）">退出</a>
-      </span>`
-    : /* html */ `<a class="btn btn-primary" href="/login">登录 / 注册</a>`
   return /* html */ `
 <a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
 <header class="site-header">
@@ -70,15 +62,12 @@ function header(nav: Nav, contact: SiteContact): string {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20.5 8H6.1M10 20h.01M17 20h.01"></path></svg>
         <span data-i18n="cart">购物车</span><b class="cart-count" data-cart-count hidden>0</b>
       </a>
-      ${cta}
+      <a class="btn btn-primary header-account" href="${esc(nav.appUrl)}/login" data-i18n="account">账号中心</a>
       <div class="language-switcher" role="group" aria-label="Language" data-i18n-attr="aria-label:language"><button type="button" data-language="zh">中</button><button type="button" data-language="en">EN</button></div>
     </div>
   </div>
 </header>`
 }
-
-// 网站相关的法律 / 合规链接，全部由本站从 D1 渲染（见 src/pages/legal.ts、
-// index.ts 的 LEGAL_PAGES）。文案与 rent 后台维护的文档标题保持一致。
 
 function footer(contact: SiteContact): string {
   const year = new Date().getFullYear()
@@ -104,13 +93,12 @@ function footer(contact: SiteContact): string {
         <a href="/about" data-i18n="navAbout">关于我们</a>
         <a href="/contact" data-i18n="contactUs">联系我们</a>
       </div>
-      <div class="foot-col foot-legal-column">
+      <div class="foot-col foot-legal">
         <h4 data-i18n="terms">条款</h4>
         <a href="/terms" data-i18n="userTerms">用户协议</a>
         <a href="/service-terms" data-i18n="serviceTerms">服务条款</a>
         <a href="/refund-policy" data-i18n="refundPolicy">退款政策</a>
         <a href="/privacy" data-i18n="privacy">隐私政策</a>
-        <a href="/cookies" data-i18n="cookies">Cookie 政策</a>
       </div>
       <div class="foot-col">
         <h4 data-i18n="footerContact">联系我们</h4>
@@ -121,6 +109,10 @@ function footer(contact: SiteContact): string {
     </div>
     <div class="foot-bottom">
       <span>© ${year} ${esc(contact.name)}. 保留所有权利。</span>
+      <span>
+        <a href="/privacy" data-i18n="privacy">隐私政策</a>
+        <a href="/contact" data-i18n="getHelp">获取帮助</a>
+      </span>
     </div>
   </div>
 </footer>`
@@ -136,7 +128,7 @@ export interface PageOptions {
   siteUrl?: string
   robots?: string
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>>
-  user?: SessionUser | null
+  user?: unknown
 }
 
 export function renderPage(opts: PageOptions): string {
@@ -192,7 +184,7 @@ export function renderPage(opts: PageOptions): string {
 <script type="application/ld+json">${structuredData}</script>
 </head>
 <body>
-${header({ appUrl: opts.appUrl, path: opts.path, user: opts.user }, opts.contact)}
+${header({ appUrl: opts.appUrl, path: opts.path }, opts.contact)}
 <main id="main-content">
 ${opts.body}
 </main>
@@ -207,11 +199,16 @@ ${footer(opts.contact)}
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
   function englishFor(value) {
-    if (englishCopy[value]) return englishCopy[value];
-    for (var i = 0; i < englishPatterns.length; i += 1) {
-      if (englishPatterns[i][0].test(value)) return value.replace(englishPatterns[i][0], englishPatterns[i][1]);
+    var lookup = String(value || '').replace(/\\s+/g, ' ').trim();
+    var translated = englishCopy[lookup] || '';
+    for (var i = 0; !translated && i < englishPatterns.length; i += 1) {
+      if (englishPatterns[i][0].test(lookup)) translated = lookup.replace(englishPatterns[i][0], englishPatterns[i][1]);
     }
-    return value;
+    if (!translated) return value;
+    return translated
+      .replaceAll('墨尔本 CBD 及周边地区', 'Melbourne CBD and nearby areas')
+      .replaceAll('墨尔本 CBD', 'Melbourne CBD')
+      .replaceAll('墨尔本', 'Melbourne');
   }
   function translateTextNode(node) {
     if (!node || !node.parentElement || node.parentElement.closest('script,style,[data-no-translate]')) return;
@@ -231,10 +228,7 @@ ${footer(opts.contact)}
       var current = element.getAttribute(attribute);
       if (current && /\\p{Script=Han}/u.test(current)) saved[attribute] = current;
       var source = saved[attribute];
-      if (source) {
-        var next = currentLanguage === 'en' ? englishFor(source) : source;
-        if (element.getAttribute(attribute) !== next) element.setAttribute(attribute, next);
-      }
+      if (source) element.setAttribute(attribute, currentLanguage === 'en' ? englishFor(source) : source);
     });
     originalAttributes.set(element, saved);
   }
