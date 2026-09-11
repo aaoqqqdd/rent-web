@@ -1,7 +1,7 @@
 // 首页。结构还原参考稿：Hero → 四大保障 → 为你精选（实时读库）→ 三步流程 → 收尾 CTA。
 
 import { esc } from '../layout'
-import { monthlyRate, type Product, type RentalConfig } from '../db'
+import { monthlyRentalRate, weeklyDailyRate, type Product, type RentalConfig } from '../db'
 
 const FEATURES = [
   { t: '交付前检测', d: '基础功能、外观与配件逐项确认，拿到手即可开工', ic: 'M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z' },
@@ -18,9 +18,10 @@ const STEPS = [
 
 const CARD_TAGS = ['热门', '推荐', '专业']
 
-function productCard(p: Product, index: number, multiplier: number): string {
+function productCard(p: Product, index: number): string {
   const daily = p.pricePerDay > 0 ? `$${p.pricePerDay}/day` : '询价'
-  const monthly = p.pricePerDay > 0 ? `$${monthlyRate(p.pricePerDay, multiplier)}/month` : '—'
+  const weekly = p.pricePerDay > 0 ? `$${weeklyDailyRate(p.pricePerDay, p.weeklyDiscountPercent)}/day` : '—'
+  const monthly = p.pricePerDay > 0 ? `$${monthlyRentalRate(p.pricePerDay, p.monthlyDiscountPercent)}/month` : '—'
   const chips = p.specs.slice(0, 4).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
   return /* html */ `
@@ -32,7 +33,8 @@ function productCard(p: Product, index: number, multiplier: number): string {
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">
       <div><div class="lbl">日租</div><div class="val">${esc(daily)}</div></div>
-      <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>参考</small></div></div>
+      <div><div class="lbl">周租</div><div class="val">${esc(weekly)} <small>日均</small></div></div>
+      <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}
     <div class="card-actions"><a class="btn btn-ghost" href="${detailHref}">详情</a><a class="btn btn-primary" href="${detailHref}">选择租期</a></div>
@@ -43,12 +45,11 @@ interface HomeData {
   featured: Product[]
   products: Product[]
   minRate: number
-  multiplier: number
   config: RentalConfig
 }
 
 export function renderHome(data: HomeData): string {
-  const { featured, products, minRate, multiplier, config } = data
+  const { featured, products, minRate, config } = data
   const fromLine = minRate > 0 ? `最低 $${minRate}/day 起` : '灵活租期，按需计费'
   const heroDevice = products.length ? products[Math.floor(Math.random() * products.length)] : featured[0]
   const availableCount = products.filter((p) => p.available).length
@@ -109,7 +110,7 @@ export function renderHome(data: HomeData): string {
     </div>
     <div class="grid">
       ${featured.length
-      ? featured.map((p, i) => productCard(p, i, multiplier)).join('')
+      ? featured.map((p, i) => productCard(p, i)).join('')
       : '<div class="empty-state"><strong>设备库正在更新</strong><p>暂时没有推荐设备，可稍后刷新或直接联系我们。</p></div>'
     }
     </div>

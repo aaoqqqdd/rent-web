@@ -16,6 +16,8 @@ export interface Product {
   gpu: string
   os: string
   pricePerDay: number
+  weeklyDiscountPercent: number
+  monthlyDiscountPercent: number
   depositAmount: number
   description: string
   available: boolean
@@ -94,6 +96,8 @@ function toProduct(row: Record<string, unknown>): Product {
     gpu: String(row.gpu ?? ''),
     os: String(row.os ?? ''),
     pricePerDay: num(row.pricePerDay ?? row.price_per_day),
+    weeklyDiscountPercent: num(row.weeklyDiscountPercent ?? row.weekly_discount_percent),
+    monthlyDiscountPercent: num(row.monthlyDiscountPercent ?? row.monthly_discount_percent),
     depositAmount: num(row.depositAmount ?? row.deposit_amount),
     description: String(row.description ?? ''),
     available: inStock,
@@ -104,7 +108,7 @@ function toProduct(row: Record<string, unknown>): Product {
 }
 
 const DEVICE_COLUMNS =
-  'id, name, brand, model, cpu, ram, storage, gpu, os, pricePerDay, depositAmount, description, status, lifecycle_status'
+  'id, name, brand, model, cpu, ram, storage, gpu, os, pricePerDay, depositAmount, weekly_discount_percent AS weeklyDiscountPercent, monthly_discount_percent AS monthlyDiscountPercent, description, status, lifecycle_status'
 
 /** 全部在售（非退役）设备，按日租价升序。 */
 export async function listProducts(env: Env): Promise<Product[]> {
@@ -140,7 +144,11 @@ export function pickFeatured(products: Product[]): Product[] {
 
 /** 「最低 $X/day」——用于标题与 hero 文案。无数据时返回 0。 */
 export function minDailyRate(products: Product[]): number {
-  const rates = products.map((p) => p.pricePerDay).filter((n) => n > 0)
+  const rates = products.flatMap((p) => [
+    p.pricePerDay,
+    weeklyDailyRate(p.pricePerDay, p.weeklyDiscountPercent),
+    monthlyDailyRate(p.pricePerDay, p.monthlyDiscountPercent),
+  ]).filter((n) => n > 0)
   return rates.length ? Math.min(...rates) : 0
 }
 
@@ -177,8 +185,16 @@ export async function getSiteContact(env: Env): Promise<SiteContact> {
   return fallback
 }
 
-export function monthlyRate(pricePerDay: number, multiplier: number): number {
-  return Math.round(pricePerDay * multiplier)
+export function weeklyDailyRate(pricePerDay: number, discountPercent: number): number {
+  return Number((pricePerDay * (1 - Math.min(100, Math.max(0, discountPercent)) / 100)).toFixed(2))
+}
+
+export function monthlyDailyRate(pricePerDay: number, discountPercent: number): number {
+  return Number((pricePerDay * 30 * (1 - Math.min(100, Math.max(0, discountPercent)) / 100) / 30).toFixed(2))
+}
+
+export function monthlyRentalRate(pricePerDay: number, discountPercent: number): number {
+  return Math.round(pricePerDay * 30 * (1 - Math.min(100, Math.max(0, discountPercent)) / 100))
 }
 
 export interface RentalConfig {

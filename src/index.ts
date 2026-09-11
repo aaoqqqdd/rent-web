@@ -38,7 +38,6 @@ import {
 export interface Env {
   RENT: D1Database
   APP_URL?: string
-  MONTHLY_MULTIPLIER?: string
   CONTACT_PHONE?: string
   CONTACT_EMAIL?: string
   TURNSTILE_SITE_KEY?: string
@@ -49,16 +48,24 @@ export interface Env {
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
 const CSS_TTL = 86400
+const HTML_CACHE_VERSION = '20260911-nav-about-v2'
 
 const app = new Hono<{ Bindings: Env }>()
 
+// 旧发布链接曾用 release 参数绕过浏览器缓存。现在缓存已按部署版本隔离，
+// 收到这类历史链接时直接回到干净 URL，避免参数继续留在地址栏。
+app.use('*', async (c, next) => {
+  const url = new URL(c.req.url)
+  if (c.req.method === 'GET' && url.searchParams.has('release')) {
+    url.searchParams.delete('release')
+    const query = url.searchParams.toString()
+    return c.redirect(`${url.pathname}${query ? `?${query}` : ''}`, 302)
+  }
+  await next()
+})
+
 function appUrl(env: Env): string {
   return (env.APP_URL || 'https://rent.example.com').replace(/\/$/, '')
-}
-
-function multiplier(env: Env): number {
-  const n = parseFloat(env.MONTHLY_MULTIPLIER || '')
-  return Number.isFinite(n) && n > 0 ? n : 20
 }
 
 function siteUrl(requestUrl: string): string {
@@ -84,7 +91,7 @@ async function cachedHtml(
   // 样式指纹同时作为 HTML 缓存命名空间。改版部署后立即使用新缓存，
   // 避免 caches.default 在 TTL 内继续返回上一版本的导航和页面结构。
   const cacheUrl = new URL(c.req.url)
-  cacheUrl.searchParams.set('__site_v', STYLE_VERSION)
+  cacheUrl.searchParams.set('__site_v', `${HTML_CACHE_VERSION}-${STYLE_VERSION}`)
   const key = new Request(cacheUrl.toString(), { method: 'GET' })
   if (!authed) {
     const hit = await cache.match(key)
@@ -161,7 +168,6 @@ app.get('/', (c) =>
       featured: pickFeatured(products),
       products,
       minRate: minDailyRate(products),
-      multiplier: multiplier(c.env),
       config,
     })
     return renderPage({
@@ -193,7 +199,6 @@ app.get('/products', (c) =>
     ])
     const body = renderProducts({
       products,
-      multiplier: multiplier(c.env),
     })
     return renderPage({
       title: `墨尔本电脑租赁设备库 — ${contact.name}`,
@@ -250,7 +255,7 @@ app.get('/products/:id', (c) =>
     return renderPage({
       title: `${product.name} 电脑租赁价格与配置 — ${contact.name}`,
       description: `在墨尔本租赁 ${product.name}${product.model ? ` ${product.model}` : ''}。查看 CPU、显卡、内存、存储、日租价、押金、库存和取还说明。`,
-      body: renderProductDetail({ product, multiplier: multiplier(c.env), config }),
+      body: renderProductDetail({ product, config }),
       contact,
       appUrl: appUrl(c.env),
       path: `/products/${encodeURIComponent(product.id)}`,

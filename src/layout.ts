@@ -3,120 +3,17 @@
 import type { SiteContact } from './db'
 import { STYLE_VERSION } from './theme'
 import { ENGLISH_COPY, ENGLISH_PATTERNS } from './i18n'
+import type { SessionUser } from './auth'
+import { esc } from './escape'
+import { renderSiteHeader } from './components/site-header'
+import { renderSiteFooter } from './components/site-footer'
+import { FAVICON_SVG } from './components/brand'
 
-export function esc(value: unknown): string {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
+export { FAVICON_SVG }
 
-const MARK_PATHS = /* html */ `
-  <path d="M27 15 L44 41 L35.5 41 L27 28 L18.5 41 L10 41 Z" fill="#7C6CFF"/>
-  <path d="M9 41 L17 41 L34 7 L26 7 Z" fill="#FFFFFF"/>`
+export { esc }
 
-function banner(contact: SiteContact): string {
-  const logo = /^https?:\/\//i.test(contact.logo) ? contact.logo : ''
-  if (logo) return `<img src="${esc(logo)}" alt="${esc(contact.name)}" class="brand-banner">`
-  return /* html */ `
-<svg viewBox="0 0 236 48" fill="none" aria-label="${esc(contact.name)}" role="img" class="brand-banner">
-  ${MARK_PATHS}
-  <text x="60" y="34" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="29" font-weight="700" letter-spacing="0.4" fill="#EAF0F6">${esc(contact.name)}</text>
-</svg>`
-}
-
-const BADGE = /* svg */ `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#0A0A0F"/><g transform="translate(16 16) scale(0.6667)">${MARK_PATHS}</g></svg>`
-
-export const FAVICON_SVG = BADGE
-const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(BADGE)}`
-
-interface Nav {
-  appUrl: string
-  path: string
-}
-
-function header(nav: Nav, contact: SiteContact): string {
-  const active = (path: string): string => nav.path === path || nav.path.startsWith(`${path}/`) ? ' aria-current="page"' : ''
-  return /* html */ `
-<a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
-<header class="site-header">
-  <div class="wrap">
-    <div class="header-brand-group">
-      <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${banner(contact)}</a>
-      <span class="header-location">MELBOURNE · LOCAL RENTAL</span>
-    </div>
-    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开菜单" data-i18n-attr="aria-label:menuOpen">
-      <span></span><span></span><span></span>
-    </button>
-    <nav class="nav" id="site-nav" aria-label="主导航">
-      <a href="/products"${active('/products')} data-i18n="navProducts">设备库</a>
-      <a href="/rental-guide"${active('/rental-guide')} data-i18n="navGuide">如何租</a>
-      <a href="/about"${active('/about')} data-i18n="navAbout">关于我们</a>
-      <a href="/contact"${active('/contact')} data-i18n="navContact">联系</a>
-      <a href="/order-lookup"${active('/order-lookup')} data-i18n="navLookup">查订单</a>
-    </nav>
-    <div class="header-actions">
-      <a class="header-cart" href="/apply" aria-label="购物车，0 件设备"${active('/apply')}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.6L20.5 8H6.1M10 20h.01M17 20h.01"></path></svg>
-        <span data-i18n="cart">购物车</span><b class="cart-count" data-cart-count hidden>0</b>
-      </a>
-      <a class="btn btn-primary header-account" href="${esc(nav.appUrl)}/login" data-i18n="account">账号中心</a>
-      <div class="language-switcher" role="group" aria-label="Language" data-i18n-attr="aria-label:language"><button type="button" data-language="zh">中</button><button type="button" data-language="en">EN</button></div>
-    </div>
-  </div>
-</header>`
-}
-
-function footer(contact: SiteContact): string {
-  const year = new Date().getFullYear()
-  return /* html */ `
-<footer class="site-footer">
-  <div class="wrap">
-    <div class="foot-grid">
-      <div class="foot-brand">
-        <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${banner(contact)}</a>
-        <p data-i18n="footerIntro">为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。</p>
-      </div>
-      <div class="foot-col">
-        <h4 data-i18n="footerProducts">产品</h4>
-        <a href="/products?category=gaming" data-i18n="gaming">游戏笔记本</a>
-        <a href="/products?category=ultrabook" data-i18n="ultrabook">轻薄商务本</a>
-        <a href="/products?category=workstation" data-i18n="workstation">台式工作站</a>
-        <a href="/products" data-i18n="allProducts">全部产品</a>
-      </div>
-      <div class="foot-col">
-        <h4 data-i18n="footerServices">服务</h4>
-        <a href="/rental-guide" data-i18n="rentalGuide">租赁说明</a>
-        <a href="/rental-guide#faq" data-i18n="faq">常见问题</a>
-        <a href="/about" data-i18n="navAbout">关于我们</a>
-        <a href="/contact" data-i18n="contactUs">联系我们</a>
-      </div>
-      <div class="foot-col foot-legal">
-        <h4 data-i18n="terms">条款</h4>
-        <a href="/terms" data-i18n="userTerms">用户协议</a>
-        <a href="/service-terms" data-i18n="serviceTerms">服务条款</a>
-        <a href="/refund-policy" data-i18n="refundPolicy">退款政策</a>
-        <a href="/privacy" data-i18n="privacy">隐私政策</a>
-      </div>
-      <div class="foot-col">
-        <h4 data-i18n="footerContact">联系我们</h4>
-        <a href="tel:${esc(contact.phone.replace(/[^+\d]/g, ''))}">${esc(contact.phone)}</a>
-        <a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a>
-        <span>${esc(contact.address)}</span>
-      </div>
-    </div>
-    <div class="foot-bottom">
-      <span>© ${year} ${esc(contact.name)}. 保留所有权利。</span>
-      <span>
-        <a href="/privacy" data-i18n="privacy">隐私政策</a>
-        <a href="/contact" data-i18n="getHelp">获取帮助</a>
-      </span>
-    </div>
-  </div>
-</footer>`
-}
+const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
 
 export interface PageOptions {
   title: string
@@ -128,7 +25,7 @@ export interface PageOptions {
   siteUrl?: string
   robots?: string
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>>
-  user?: unknown
+  user?: SessionUser | null
 }
 
 export function renderPage(opts: PageOptions): string {
@@ -184,11 +81,11 @@ export function renderPage(opts: PageOptions): string {
 <script type="application/ld+json">${structuredData}</script>
 </head>
 <body>
-${header({ appUrl: opts.appUrl, path: opts.path }, opts.contact)}
+${renderSiteHeader({ path: opts.path, user: opts.user }, opts.contact)}
 <main id="main-content">
 ${opts.body}
 </main>
-${footer(opts.contact)}
+${renderSiteFooter(opts.contact)}
 <script>
 (() => {
   var englishCopy = ${englishCopy};
@@ -244,7 +141,7 @@ ${footer(opts.contact)}
   }
   var translations = {
     skip: ['跳到主要内容', 'Skip to main content'], menuOpen: ['打开菜单', 'Open menu'], language: ['语言', 'Language'],
-    navProducts: ['设备库', 'Devices'], navGuide: ['如何租', 'How it works'], navAbout: ['关于我们', 'About us'], navContact: ['联系', 'Contact'], navLookup: ['查订单', 'Order lookup'],
+    navProducts: ['产品目录', 'Products'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系', 'Contact'], navLookup: ['查订单', 'Order lookup'],
     cart: ['购物车', 'Cart'], account: ['账号中心', 'Account'], footerIntro: ['为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。', 'Reliable computer rentals for study, work, creative projects and short-term needs. Browse live inventory and apply for the time you need.'],
     footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'],
     footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help']

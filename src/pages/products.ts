@@ -1,11 +1,12 @@
 // 产品目录。实时读库，按类别分组展示全部在售设备。
 
 import { esc } from '../layout'
-import { monthlyRate, type Product } from '../db'
+import { monthlyRentalRate, weeklyDailyRate, type Product } from '../db'
 
-function card(p: Product, multiplier: number): string {
+function card(p: Product): string {
   const daily = p.pricePerDay > 0 ? `$${p.pricePerDay}/day` : '询价'
-  const monthly = p.pricePerDay > 0 ? `$${monthlyRate(p.pricePerDay, multiplier)}/month` : '—'
+  const weekly = p.pricePerDay > 0 ? `$${weeklyDailyRate(p.pricePerDay, p.weeklyDiscountPercent)}/day` : '—'
+  const monthly = p.pricePerDay > 0 ? `$${monthlyRentalRate(p.pricePerDay, p.monthlyDiscountPercent)}/month` : '—'
   const chips = p.specs.slice(0, 5).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
   const searchText = [p.name, p.brand, p.model, p.categoryLabel, p.cpu, p.gpu, p.ram, p.storage, p.os, p.description].join(' ').toLowerCase()
@@ -22,7 +23,8 @@ function card(p: Product, multiplier: number): string {
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">
       <div><div class="lbl">日租</div><div class="val">${esc(daily)}</div></div>
-      <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>参考</small></div></div>
+      <div><div class="lbl">周租</div><div class="val">${esc(weekly)} <small>日均</small></div></div>
+      <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}
     <div class="card-actions">
@@ -40,14 +42,13 @@ const GROUP_ORDER: Array<[Product['category'], string]> = [
 
 interface ProductsData {
   products: Product[]
-  multiplier: number
 }
 
 export function renderProducts(data: ProductsData): string {
-  const { products, multiplier } = data
+  const { products } = data
   const categoryCounts = new Map(GROUP_ORDER.map(([category]) => [category, products.filter((p) => p.category === category).length]))
   const cards = products.length
-    ? products.map((p) => card(p, multiplier)).join('')
+    ? products.map((p) => card(p)).join('')
     : '<div class="empty-state"><strong>设备库正在更新</strong><p>暂时没有可展示的设备，请稍后再来或直接联系我们。</p><a class="btn btn-ghost" href="/contact">联系顾问</a></div>'
 
   return /* html */ `

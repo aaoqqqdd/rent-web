@@ -171,7 +171,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   // Guide, about and contact
   '从选设备到归还，每一步都说清楚': 'Every step, from choosing a device to returning it',
   '申请不会立即扣款。我们先确认档期、取还方式和最终费用，再安排合同、付款和交付。': 'Applications are not charged immediately. We first confirm availability, handover and final costs, then arrange the contract, payment and delivery.',
-  '最短租期': 'Minimum term', '先申请': 'Apply first', '确认后再付款': 'Pay after confirmation',
+  '最短租期': 'Minimum term', '先申请': 'Apply first', '后付款': 'Pay after confirmation',
   '申请流程': 'Application process', '取还': 'Handover', '使用与归还': 'Use and return', '完整流程': 'Full process',
   '灵活租期': 'Flexible terms', '租金说明': 'Rental pricing', '租赁条款': 'Rental terms', '五步完成租赁': 'Rent in five steps',
   '选择设备': 'Choose devices', '审核确认': 'Review and confirmation', '签约付款': 'Sign and pay', '取机与归还': 'Collection and return',
@@ -180,7 +180,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '7 天以上': '7 days or more', '30 天以上': '30 days or more', '费用构成': 'Cost breakdown',
   '重要规则，提前说清楚': 'Important rules, explained upfront', '押金政策': 'Deposit policy', '损坏责任': 'Damage responsibility',
   '续租规则': 'Extension rules', '提前归还': 'Early return', '数据安全': 'Data security', '禁止行为': 'Prohibited use', '技术支持': 'Technical support',
-  '先申请，确认后再付款': 'Apply first, pay after confirmation', '在设备库确定具体机型': 'Choose a specific model from the catalogue',
+  '先申请，后付款': 'Apply first, pay after confirmation', '在设备库确定具体机型': 'Choose a specific model from the catalogue',
   '填写租期、取还与联系信息': 'Enter dates, handover and contact details', '验证付款方式并提交': 'Verify payment method and submit',
   '我们核对档期与最终费用': 'We confirm availability and final costs', '确认后进入租赁系统': 'Continue in the rental system after confirmation',
   '按确认的时间取机并验收': 'Collect and inspect at the confirmed time', '费用怎么组成': 'How costs are made up',

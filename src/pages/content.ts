@@ -20,19 +20,19 @@ export function renderRentalGuide(config: RentalConfig): string {
     <span class="eyebrow">MELBOURNE · 租赁指南</span>
     <h1>从选设备到归还，<em>每一步都说清楚。</em></h1>
     <p>申请不会立即扣款。我们先确认档期、取还方式和最终费用，再安排合同、付款和交付。</p>
-    <div class="guide-facts" aria-label="租赁关键信息"><div><strong>${esc(config.minimumRentalDays)} 天起</strong><span>灵活租期</span></div><div><strong>先申请</strong><span>确认后再付款</span></div><div><strong>本地交付</strong><span>配送或到店自取</span></div></div>
+    <div class="guide-facts" aria-label="租赁关键信息"><div><strong>${esc(config.minimumRentalDays)} 天起</strong><span>灵活租期</span></div><div><strong>先申请</strong><span>后付款</span></div><div><strong>本地交付</strong><span>配送或到店自取</span></div></div>
     <nav class="guide-jump" aria-label="租赁说明快速导航"><a href="#process">租赁流程</a><a href="#pricing">租金说明</a><a href="#terms">租赁条款</a><a href="#faq">常见问题</a></nav>
   </div>
 </section>
 <section class="section" id="process">
   <div class="wrap">
-    <div class="section-head"><div><div class="kicker">租赁流程</div><h2>五步完成租赁</h2></div><p>页面上的库存和价格来自实时设备库，但提交申请不等于订单已最终确认。</p></div>
+    <div class="process-heading"><h2>租赁流程</h2><p>提交申请后，我们会先确认设备档期与最终费用，再安排合同、付款和交付。</p></div>
     <div class="guide-steps">
-      <article><span>01</span><h3>选择设备</h3><p>按用途、配置、价格与现货状态筛选，核对处理器、显卡、内存、存储和操作系统。</p><a href="/products" class="text-link">浏览设备库 →</a></article>
+      <article><span>01</span><h3>选择设备</h3><p>浏览产品目录，按用途、配置、价格与现货状态选择适合你的设备。</p></article>
       <article><span>02</span><h3>提交申请</h3><p>填写租期、取还方式与联系方式，并验证付款方式；验证过程不会立即扣款。</p></article>
-      <article><span>03</span><h3>审核确认</h3><p>我们会核对设备档期、优惠、配送地址和最终金额，再向你确认租赁详情。</p></article>
-      <article><span>04</span><h3>签约付款</h3><p>审核通过后进入租赁系统，查看并签署电子合同，再按确认金额完成付款。</p></article>
-      <article><span>05</span><h3>取机与归还</h3><p>按确认的时间配送或到店自取；租期结束时携齐设备与配件归还并完成验机。</p></article>
+      <article><span>03</span><h3>签约付款</h3><p>审核通过后查看并签署电子合同，再按确认后的订单金额完成付款。</p></article>
+      <article><span>04</span><h3>配送或自取</h3><p>按确认时间安排墨尔本本地配送，或前往约定地点自取并完成验机。</p></article>
+      <article><span>05</span><h3>到期归还</h3><p>租期结束前联系我们安排归还；设备与配件验收完成后处理押金。</p></article>
     </div>
   </div>
 </section>
@@ -52,7 +52,34 @@ export function renderRentalGuide(config: RentalConfig): string {
 <section class="section" id="delivery">
   <div class="wrap delivery-grid">
     <div><div class="kicker">取还范围</div><h2>墨尔本本地交付</h2><p>${esc(config.deliveryNote)} 当前可配送区域包括：${esc(deliveryAreas)}。</p><p>具体配送时段、费用和地址是否可服务，会在订单审核时确认。其他墨尔本郊区请选择到店自取。</p><p>当前可选自取 / 归还地点：</p>${pickupLocations}</div>
-    <div class="map-card" aria-label="配送范围示意"><span class="map-ring ring-1"></span><span class="map-ring ring-2"></span><span class="map-pin">MEL</span><div><strong>INNER MELBOURNE</strong><small>DELIVERY ZONE · CONFIRM ON REVIEW</small></div></div>
+    <div class="map-card" aria-label="澳大利亚地图，墨尔本本地配送范围">
+      <svg class="australia-map" viewBox="0 0 560 360" role="img" aria-labelledby="australia-map-title australia-map-desc">
+        <title id="australia-map-title">澳大利亚与墨尔本位置</title>
+        <desc id="australia-map-desc">澳大利亚轮廓地图，东南部标出维多利亚州和墨尔本本地配送点。</desc>
+        <defs>
+          <linearGradient id="au-fill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#242941"/><stop offset="1" stop-color="#171b2c"/></linearGradient>
+          <filter id="mel-glow" x="-200%" y="-200%" width="400%" height="400%"><feGaussianBlur stdDeviation="7"/></filter>
+        </defs>
+        <path class="map-grid-line" d="M38 90H522M38 150H522M38 210H522M38 270H522M110 32V302M200 32V302M290 32V302M380 32V302M470 32V302"/>
+        <g class="australia-states">
+          <path class="map-state" d="M75.6 170.3L75.3 166.8L77.5 172.4L80.2 171.4L76.7 162L78.5 168.5L80.1 166.1L82 171L83.5 169.6L83.8 165.6L75.6 151.7L81.2 127.9L83.1 127.3L82.4 133.5L84.5 133.9L87.4 127.6L107.7 115.2L113.1 117.6L129.2 109.9L133.6 111L146.9 106.7L160 92.5L158.1 84.5L164.4 80.1L165.2 76.3L171.3 87.5L171.4 82.4L174.5 84L174.9 80.7L170.6 78.8L171.1 74.3L179.1 77.7L178.9 75.9L184.2 76.3L179 75.8L182.3 71L180 72.6L178.9 70L181.9 65.6L188.6 69.8L183.2 65L185.4 63L189.2 64.7L186.6 60L190.3 59.1L190.6 56L190.8 59.9L192.3 58L193.2 60.1L194.2 53.1L196.5 56.1L199.4 53.3L199.7 56.1L202.7 51.4L215 60.6L212.9 68.1L214.1 65L216.1 68L216.6 61.4L222.3 62.1L222.3 220.1L206.5 225.5L193.6 225.8L177.5 232.6L170.9 241.3L138.1 241.1L119.1 252.3L104.6 251.4L90.9 244.2L90.7 237.4L94.1 238.5L96.9 235.5L97.1 225.5L99.8 222L97.5 223.5L91.2 209L89.5 195.9L74.7 166.8Z"/>
+          <path class="map-state" d="M236.5 41.9L238.6 41.7L237.5 38.6L240.8 41L239.4 38.9L243.9 35.4L251.1 37.9L256.4 35.8L255.1 30.2L248.2 28.6L250.4 26.8L252.1 29.6L253.6 26.7L261.7 32.5L268.5 32.6L270.9 36.1L276.3 34.6L280.7 37.8L287.2 34.6L284.8 36.9L288.5 35.6L289.5 39.1L293.4 33.9L294.2 37.6L297.3 38.3L292.4 42.3L294.4 44.5L292.5 46.8L291.2 44.8L287.3 47L286.9 51.1L288.9 50.6L282.5 62L306.9 77.8L306.9 166.6L222.3 166.6L222.3 62.1L223.8 65.1L224.4 61.7L228.7 64.6L227 61.3L230.8 61.1L225.7 57Z"/>
+          <path class="map-state" d="M341.3 63.3L339.5 52.6L343.5 40.6L340.6 40.3L344.6 35.4L345.7 25.2L349.5 22.7L352.5 33.6L356.2 34.7L354.6 38.2L359 43L361.2 57.6L368.1 55.4L376 62.8L376.5 77L381.7 81.1L384.8 99.8L408.1 112.5L409.6 115.3L407.1 115.7L412.4 120.2L415.9 131.7L420.1 135.3L420.1 130.2L425.3 134.3L425 132L427.7 144.3L436.3 148L443.6 159.2L447.1 160L447.9 166.3L449.7 166L448.4 180.4L451.8 182.1L452.9 187.1L442.8 187.9L438.1 190.3L438.6 194L432.8 196.5L422.4 190.5L415 190.8L409.9 194.8L335.1 194.8L335.1 166.6L306.9 166.6L306.9 77.8L316.6 81.2L325.7 88.8L331.3 87.7L337.9 77.3Z"/>
+          <path class="map-state" d="M311.6 249.8L307.6 243.1L304.6 252.3L295.8 253.5L297.6 250.2L301.7 250.4L301.7 243.1L306.7 237.7L304.5 226.9L304.9 232.4L287.4 246.8L288.1 251.1L279.9 247L283.5 247.6L281.1 241.7L275.9 234.1L270.9 233L271.8 228.4L267.9 228.1L266.1 224L252.4 223.3L242.5 218L222.3 220.1L222.3 166.6L335.1 166.6L334.8 280L329.4 278.7L324.2 273.1L324.3 266.7L319.8 259.6L314.1 256.1L307.8 257.1Z"/>
+          <path class="map-state" d="M430.4 240.2L427.5 251.9L421.3 257.8L419.5 274.8L401.9 268.2L400.1 260.6L391 261.7L377.7 258.8L370.6 261.9L357.6 253L357.2 249.3L351.9 247L349.7 249.1L346 243.3L335.1 242.2L335.1 194.8L409.9 194.8L415 190.8L422.4 190.5L432.8 196.5L438.6 194L438.1 190.3L442.8 187.9L453.1 187L453.6 193.4L443.6 227.2L434.8 232.1L433 237.4L429.8 236.7L432.2 237.9Z"/>
+          <path class="map-state victoria-shape" d="M373.9 283.1L369.4 282.3L373.8 280.8L371.7 278L366.7 280.4L369.6 281.9L358.7 287.5L348 282.7L338.6 283.1L334.8 280L334.7 241.7L346 243.3L349.7 249.1L351.9 247L357.2 249.3L357.6 253L368.1 260.5L398.1 260L400.9 261.1L401.9 268.2L419.5 274.8L398.9 279L390.4 285.4L384.1 286L386.6 286.9L386.1 290.1L376.2 284.5L377.3 281.6Z"/>
+          <path class="map-state tasmania-shape" d="M370.4 308.2L370.1 304.3L375.1 304.9L385.7 309.9L389.3 308.4L392.6 311.8L389.5 308.1L403 306.2L404.1 319.1L402.4 317L399.8 325L396.1 324.7L395.4 326.9L392.6 324.3L394.7 326.9L393.1 329.1L391.8 327L390.3 332.4L382.4 331.8L381.3 330L384.3 329.5L377.3 326.4L374.2 318.9L378.5 321.2L374.8 319.1Z"/>
+        </g>
+        <circle class="mel-glow" cx="372.3" cy="277.7" r="18"/>
+        <circle class="mel-pulse" cx="372.3" cy="277.7" r="10"/>
+        <circle class="mel-dot" cx="372.3" cy="277.7" r="4"/>
+        <path class="mel-leader" d="M381 274L432 246"/>
+        <text class="mel-label" x="438" y="244">MELBOURNE</text>
+        <text class="vic-label" x="345" y="263">VIC</text>
+      </svg>
+      <div class="map-caption"><strong>INNER MELBOURNE</strong><small>DELIVERY ZONE · CONFIRM ON REVIEW</small></div>
+      <span class="map-country">AUSTRALIA · VIC</span>
+    </div>
   </div>
 </section>
 
@@ -98,14 +125,14 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
   const phoneHref = contact.phone.replace(/[^+\d]/g, '')
   return /* html */ `
 <section class="page-hero compact about-hero"><div class="wrap about-hero-grid">
-  <div><span class="eyebrow">MELBOURNE · 关于 ${esc(contact.name)}</span><h1>好设备不该成为，<em>创造力的门槛。</em></h1><strong class="about-brand-subtitle">GeekSlope · 极客坡</strong><p>需要性能时用得上，项目结束后不必长期持有。我们让学习、工作和创作所需的设备更容易获得。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="/rental-guide">了解租赁流程</a></div></div>
+  <div><span class="eyebrow">MELBOURNE · 关于 ${esc(contact.name)}</span><h1>好设备不该成为，<em>创造力的门槛。</em></h1><strong class="about-brand-subtitle">GeekSlope</strong><p>需要性能时用得上，项目结束后不必长期持有。我们让学习、工作和创作所需的设备更容易获得。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="/rental-guide">了解租赁流程</a></div></div>
   <div class="about-signal" aria-label="墨尔本本地电脑租赁"><div class="signal-grid"></div><span>MEL / LOCAL</span><strong>COMPUTE<br>ON DEMAND</strong><small>实时库存 · 先审核后付款</small></div>
 </div></section>
 
 <section class="about-stats"><div class="wrap">
-  <div><strong>3</strong><span>类核心设备</span></div>
   <div><strong>${esc(config.minimumRentalDays)}</strong><span>天起租</span></div>
   <div><strong>2</strong><span>种取还方式</span></div>
+  <div><strong>3</strong><span>类核心设备</span></div>
   <div><strong>7×12</strong><span>小时技术支持</span></div>
 </div></section>
 
