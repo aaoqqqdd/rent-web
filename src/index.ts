@@ -17,7 +17,7 @@ import type { LegalDocumentKey } from './db'
 import { renderHome } from './pages/home'
 import { renderProducts } from './pages/products'
 import { renderProductDetail } from './pages/product-detail'
-import { renderApply } from './pages/apply'
+import { renderApply, renderCartPage } from './pages/apply'
 import { renderLogin } from './pages/login'
 import { renderAbout, renderContact, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
@@ -53,24 +53,31 @@ function siteUrl(requestUrl: string): string {
   return new URL(requestUrl).origin
 }
 
+function xmlEsc(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+}
+
 /** 边缘缓存包装：命中直接返回，未命中构建后写回 caches.default。 */
 async function cachedHtml(
   c: Context<{ Bindings: Env }>,
   ttl: number,
-  build: () => Promise<string>,
+  build: () => Promise<string | { html: string; status: number }>,
 ): Promise<Response> {
   const cache = caches.default
   const key = new Request(new URL(c.req.url).toString(), { method: 'GET' })
   const hit = await cache.match(key)
   if (hit) return hit
-  const html = await build()
+  const built = await build()
+  const html = typeof built === 'string' ? built : built.html
+  const status = typeof built === 'string' ? 200 : built.status
   const res = new Response(html, {
+    status,
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': `public, max-age=${ttl}`,
     },
   })
-  c.executionCtx.waitUntil(cache.put(key, res.clone()))
+  if (status === 200) c.executionCtx.waitUntil(cache.put(key, res.clone()))
   return res
 }
 
@@ -94,13 +101,15 @@ app.get('/robots.txt', (c) =>
   c.text(`User-agent: *\nAllow: /\nSitemap: ${siteUrl(c.req.url)}/sitemap.xml\n`),
 )
 
-app.get('/sitemap.xml', (c) => {
+app.get('/sitemap.xml', async (c) => {
   const base = siteUrl(c.req.url)
-  const paths = ['/', '/products', '/rental-guide', '/about', '/contact', '/order-lookup', '/login', '/service-terms', '/privacy']
-  const urls = paths.map((path) => `<url><loc>${base}${path}</loc></url>`).join('')
+  const products = await listProducts(c.env)
+  const paths = ['/', '/products', '/rental-guide', '/about', '/contact', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
+  const productPaths = products.filter((product) => product.id).map((product) => `/products/${encodeURIComponent(product.id)}`)
+  const urls = [...paths, ...productPaths].map((path) => `<url><loc>${xmlEsc(base + path)}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
     'content-type': 'application/xml; charset=utf-8',
-    'cache-control': `public, max-age=${CSS_TTL}`,
+    'cache-control': 'public, max-age=3600',
   })
 })
 
@@ -119,13 +128,21 @@ app.get('/', (c) =>
       config,
     })
     return renderPage({
-      title: `${contact.name} — 电脑租赁 | 学生与个人用户的高品质设备`,
-      description: `${contact.name} 为学生和个人用户提供高品质电脑租赁服务。灵活租期，快速配送，专业售后。`,
+      title: `${contact.name}｜墨尔本电脑租赁、游戏本与工作站短租`,
+      description: `${contact.name} 提供墨尔本游戏本、商务本和工作站租赁。实时查看配置、日租价与库存，支持本地配送或自取，确认档期后再签约付款。`,
       body,
       contact,
       appUrl: appUrl(c.env),
       path: '/',
       siteUrl: siteUrl(c.req.url),
+      structuredData: {
+        '@type': 'Service',
+        '@id': `${siteUrl(c.req.url)}/#computer-rental`,
+        name: '墨尔本电脑租赁服务',
+        serviceType: '电脑、游戏本与工作站租赁',
+        areaServed: { '@type': 'City', name: 'Melbourne' },
+        provider: { '@id': `${siteUrl(c.req.url)}/#organization` },
+      },
     })
   }),
 )
@@ -141,13 +158,28 @@ app.get('/products', (c) =>
       multiplier: multiplier(c.env),
     })
     return renderPage({
-      title: `产品目录 — ${contact.name}`,
-      description: '游戏笔记本、轻薄商务本、台式工作站，按日或按月租用，价格实时同步。',
+      title: `墨尔本电脑租赁设备库 — ${contact.name}`,
+      description: '搜索墨尔本可租的游戏笔记本、轻薄商务本和台式工作站，比较 CPU、显卡、内存、日租价、押金与实时库存。',
       body,
       contact,
       appUrl: appUrl(c.env),
       path: '/products',
       siteUrl: siteUrl(c.req.url),
+      structuredData: {
+        '@type': 'CollectionPage',
+        '@id': `${siteUrl(c.req.url)}/products#webpage`,
+        url: `${siteUrl(c.req.url)}/products`,
+        name: '墨尔本电脑租赁设备库',
+        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
+        mainEntity: {
+          '@type': 'ItemList',
+          numberOfItems: products.length,
+          itemListElement: products.filter((product) => product.id).map((product, index) => ({
+            '@type': 'ListItem', position: index + 1, name: product.name,
+            url: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}`,
+          })),
+        },
+      },
     })
   }),
 )
@@ -161,24 +193,55 @@ app.get('/products/:id', (c) =>
     ])
     const product = products.find((item) => item.id === c.req.param('id'))
     if (!product) {
-      return renderPage({
+      return {
+        status: 404,
+        html: renderPage({
         title: `设备未找到 — ${contact.name}`,
         description: '这台设备不存在或已经下架。',
         body: renderNotFound(),
         contact,
         appUrl: appUrl(c.env),
-        path: '*',
+        path: c.req.path,
         siteUrl: siteUrl(c.req.url),
-      })
+        robots: 'noindex, follow',
+      }),
+      }
     }
     return renderPage({
-      title: `${product.name} 租赁 — ${contact.name}`,
-      description: `${product.name}${product.model ? ` ${product.model}` : ''} 的配置、日租价、押金与实时库存状态。`,
+      title: `${product.name} 电脑租赁价格与配置 — ${contact.name}`,
+      description: `在墨尔本租赁 ${product.name}${product.model ? ` ${product.model}` : ''}。查看 CPU、显卡、内存、存储、日租价、押金、库存和取还说明。`,
       body: renderProductDetail({ product, multiplier: multiplier(c.env), config }),
       contact,
       appUrl: appUrl(c.env),
-      path: `/products/${product.id}`,
+      path: `/products/${encodeURIComponent(product.id)}`,
       siteUrl: siteUrl(c.req.url),
+      structuredData: [
+        {
+          '@type': 'Product',
+          '@id': `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}#product`,
+          name: product.name,
+          description: product.description || `${product.name} 电脑租赁`,
+          category: product.categoryLabel,
+          ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
+          ...(product.model ? { model: product.model } : {}),
+          ...(product.pricePerDay > 0 ? { offers: {
+            '@type': 'Offer', url: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}`,
+            priceCurrency: 'AUD', price: product.pricePerDay,
+            availability: product.available ? 'https://schema.org/InStock' : 'https://schema.org/PreOrder',
+            businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
+            priceSpecification: { '@type': 'UnitPriceSpecification', price: product.pricePerDay, priceCurrency: 'AUD', unitText: 'DAY' },
+            seller: { '@id': `${siteUrl(c.req.url)}/#organization` },
+          } } : {}),
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: '首页', item: `${siteUrl(c.req.url)}/` },
+            { '@type': 'ListItem', position: 2, name: '设备库', item: `${siteUrl(c.req.url)}/products` },
+            { '@type': 'ListItem', position: 3, name: product.name, item: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}` },
+          ],
+        },
+      ],
     })
   }),
 )
@@ -190,22 +253,43 @@ app.get('/apply', (c) =>
       getSiteContact(c.env),
       getRentalConfig(c.env),
     ])
-    const selectedId = c.req.query('device') || ''
-    const body = renderApply({
-      products,
-      selectedId,
-      config,
-      appUrl: appUrl(c.env),
-      turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
-    })
+    const body = renderCartPage(products, c.req.query('device') || '')
     return renderPage({
-      title: `立即租赁 — ${contact.name}`,
-      description: '填写租期与取还方式，在线生成并签署租赁合同。',
+      title: `购物车 — ${contact.name}`,
+      description: '确认要租赁的设备，再进入结账页面填写租期与联系信息。',
       body,
       contact,
       appUrl: appUrl(c.env),
       path: '/apply',
       siteUrl: siteUrl(c.req.url),
+      robots: 'noindex, follow',
+    })
+  }),
+)
+
+app.get('/checkout', (c) =>
+  cachedHtml(c, HTML_TTL, async () => {
+    const [products, contact, config] = await Promise.all([
+      listProducts(c.env),
+      getSiteContact(c.env),
+      getRentalConfig(c.env),
+    ])
+    const body = renderApply({
+      products,
+      selectedId: c.req.query('device') || '',
+      config,
+      appUrl: appUrl(c.env),
+      turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
+    })
+    return renderPage({
+      title: `结账 — ${contact.name}`,
+      description: '填写租期、取还方式与联系信息，提交设备租赁申请。',
+      body,
+      contact,
+      appUrl: appUrl(c.env),
+      path: '/checkout',
+      siteUrl: siteUrl(c.req.url),
+      robots: 'noindex, follow',
     })
   }),
 )
@@ -226,6 +310,7 @@ app.get('/login', (c) =>
       appUrl: appUrl(c.env),
       path: '/login',
       siteUrl: siteUrl(c.req.url),
+      robots: 'noindex, follow',
     })
   }),
 )
@@ -267,7 +352,7 @@ for (const page of LEGAL_PAGES) {
         body: renderLegalDocument({ ...page, document, contact }),
         contact,
         appUrl: appUrl(c.env),
-        path: c.req.path,
+        path: page.paths[0],
         siteUrl: siteUrl(c.req.url),
       })
     }),
@@ -299,13 +384,20 @@ app.get('/rental-guide', (c) =>
       getRentalConfig(c.env),
     ])
     return renderPage({
-      title: `租赁说明 — ${contact.name}`,
+      title: `电脑租赁流程、押金与配送说明 — ${contact.name}`,
       description: '了解设备租赁的申请、审核、签约付款、配送自取、押金结算与归还验机流程。',
       body: renderRentalGuide(config),
       contact,
       appUrl: appUrl(c.env),
       path: '/rental-guide',
       siteUrl: siteUrl(c.req.url),
+      structuredData: {
+        '@type': 'WebPage',
+        '@id': `${siteUrl(c.req.url)}/rental-guide#webpage`,
+        url: `${siteUrl(c.req.url)}/rental-guide`,
+        name: '电脑租赁流程、押金与配送说明',
+        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
+      },
     })
   }),
 )
@@ -317,13 +409,21 @@ app.get('/about', (c) =>
       getRentalConfig(c.env),
     ])
     return renderPage({
-      title: `关于我们 — ${contact.name}`,
+      title: `关于 ${contact.name}｜墨尔本电脑租赁与本地支持`,
       description: `${contact.name} 为墨尔本学习、工作和创作项目提供透明、灵活的电脑租赁与本地支持。`,
       body: renderAbout(contact, config),
       contact,
       appUrl: appUrl(c.env),
       path: '/about',
       siteUrl: siteUrl(c.req.url),
+      structuredData: {
+        '@type': 'AboutPage',
+        '@id': `${siteUrl(c.req.url)}/about#webpage`,
+        url: `${siteUrl(c.req.url)}/about`,
+        name: `关于 ${contact.name}`,
+        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
+        about: { '@id': `${siteUrl(c.req.url)}/#organization` },
+      },
     })
   }),
 )
@@ -335,13 +435,20 @@ app.get('/contact', (c) =>
       getRentalConfig(c.env),
     ])
     return renderPage({
-      title: `联系我们 — ${contact.name}`,
+      title: `联系 ${contact.name}｜墨尔本电脑租赁咨询`,
       description: '咨询设备配置、租期、墨尔本配送范围或已有租赁申请。',
       body: renderContact(contact, config, appUrl(c.env), c.req.query('subject') || ''),
       contact,
       appUrl: appUrl(c.env),
       path: '/contact',
       siteUrl: siteUrl(c.req.url),
+      structuredData: {
+        '@type': 'ContactPage',
+        '@id': `${siteUrl(c.req.url)}/contact#webpage`,
+        url: `${siteUrl(c.req.url)}/contact`,
+        name: `联系 ${contact.name}`,
+        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
+      },
     })
   }),
 )
@@ -349,7 +456,7 @@ app.get('/contact', (c) =>
 app.get('/order-lookup', (c) =>
   cachedHtml(c, HTML_TTL, async () => {
     const contact = await getSiteContact(c.env)
-    return renderPage({ title: `订单查询 — ${contact.name}`, description: '使用订单编号和申请邮箱查询电脑租赁申请。', body: renderOrderLookup(appUrl(c.env)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url) })
+    return renderPage({ title: `订单查询 — ${contact.name}`, description: '使用订单编号和申请邮箱查询电脑租赁申请。', body: renderOrderLookup(appUrl(c.env)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow' })
   }),
 )
 
@@ -364,6 +471,7 @@ app.notFound(async (c) => {
       appUrl: appUrl(c.env),
       path: '*',
       siteUrl: siteUrl(c.req.url),
+      robots: 'noindex, nofollow',
     }),
     404,
   )

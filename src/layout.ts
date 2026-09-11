@@ -124,11 +124,34 @@ export interface PageOptions {
   appUrl: string
   path: string
   siteUrl?: string
+  robots?: string
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>
 }
 
 export function renderPage(opts: PageOptions): string {
   const siteUrl = (opts.siteUrl || opts.appUrl).replace(/\/$/, '')
   const canonicalPath = opts.path === '*' ? '/' : opts.path
+  const canonicalUrl = siteUrl + canonicalPath
+  const organization: Record<string, unknown> = {
+    '@type': 'Organization',
+    '@id': `${siteUrl}/#organization`,
+    name: opts.contact.name,
+    url: siteUrl,
+    email: opts.contact.email,
+    telephone: opts.contact.phone,
+  }
+  if (/^https?:\/\//i.test(opts.contact.logo)) organization.logo = opts.contact.logo
+  const pageSchemas = Array.isArray(opts.structuredData)
+    ? opts.structuredData
+    : opts.structuredData ? [opts.structuredData] : []
+  const structuredData = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      organization,
+      { '@type': 'WebSite', '@id': `${siteUrl}/#website`, url: siteUrl, name: opts.contact.name, inLanguage: 'zh-CN', publisher: { '@id': `${siteUrl}/#organization` } },
+      ...pageSchemas,
+    ],
+  }).replace(/</g, '\\u003c')
   return /* html */ `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -136,17 +159,24 @@ export function renderPage(opts: PageOptions): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(opts.title)}</title>
 <meta name="description" content="${esc(opts.description)}">
+<meta name="robots" content="${esc(opts.robots || 'index, follow, max-image-preview:large')}">
 <meta property="og:title" content="${esc(opts.title)}">
 <meta property="og:description" content="${esc(opts.description)}">
 <meta property="og:type" content="website">
-<meta property="og:url" content="${esc(siteUrl + canonicalPath)}">
+<meta property="og:url" content="${esc(canonicalUrl)}">
+<meta property="og:site_name" content="${esc(opts.contact.name)}">
+<meta property="og:locale" content="zh_CN">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${esc(opts.title)}">
+<meta name="twitter:description" content="${esc(opts.description)}">
 <meta name="theme-color" content="#080A10">
-<link rel="canonical" href="${esc(siteUrl + canonicalPath)}">
+<link rel="canonical" href="${esc(canonicalUrl)}">
 <link rel="icon" href="${FAVICON_DATA_URI}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="/styles.css?v=${STYLE_VERSION}">
+<script type="application/ld+json">${structuredData}</script>
 </head>
 <body>
 ${header({ appUrl: opts.appUrl, path: opts.path }, opts.contact)}

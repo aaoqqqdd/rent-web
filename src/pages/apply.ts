@@ -16,6 +16,80 @@ function scriptJson(value: unknown): string {
   return JSON.stringify(value ?? null).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
 }
 
+export function renderCartPage(products: Product[], selectedId = ''): string {
+  const cartProducts = products.filter((product) => product.id && product.pricePerDay > 0).map((product) => ({
+    id: product.id,
+    name: product.name,
+    model: product.model,
+    categoryLabel: product.categoryLabel,
+    day: product.pricePerDay,
+    deposit: product.depositAmount,
+  }))
+  return /* html */ `
+<section class="page-hero compact"><div class="wrap"><div class="kicker">购物车</div><h1>先选好设备，再开始结账</h1><p>在这里确认设备和预计费用，下一步再填写租期、取还方式与联系信息。</p></div></section>
+<section class="section apply-section"><div class="wrap form-wrap cart-page-wrap">
+  <div class="section-head"><div class="kicker">当前选择</div><h2>你的设备清单</h2><p>设备会保存在当前浏览器中，最多同时选择 10 台。</p></div>
+  <div class="form-card cart-empty" id="cart-page-empty" hidden><h3>购物车还是空的</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
+  <div id="cart-page-content" hidden>
+    <div class="cart-page-list" id="cart-page-items"></div>
+    <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong><p>租金会根据实际日期计算，押金在归还验收后按规则处理。</p></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
+  </div>
+</div></section>
+<script>
+(() => {
+  var products = ${scriptJson(cartProducts)};
+  var selectedId = ${scriptJson(selectedId)};
+  var map = new Map(products.map(function (product) { return [product.id, product]; }));
+  var key = 'geekslope-cart-v1';
+  var empty = document.getElementById('cart-page-empty');
+  var content = document.getElementById('cart-page-content');
+  var items = document.getElementById('cart-page-items');
+  var total = document.getElementById('cart-page-total');
+  function read() {
+    try {
+      var ids = JSON.parse(localStorage.getItem(key) || '[]');
+      return Array.isArray(ids) ? ids.filter(function (id, index) { return map.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
+    } catch (_) { return []; }
+  }
+  function write(ids) {
+    try { localStorage.setItem(key, JSON.stringify(ids)); } catch (_) {}
+    if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids);
+    render();
+  }
+  function render() {
+    var ids = read();
+    if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) {
+      ids.push(selectedId);
+      try { localStorage.setItem(key, JSON.stringify(ids)); } catch (_) {}
+    }
+    empty.hidden = ids.length > 0;
+    content.hidden = ids.length === 0;
+    items.replaceChildren();
+    var deposit = 0;
+    ids.forEach(function (id) {
+      var product = map.get(id); deposit += Number(product.deposit || 0);
+      var row = document.createElement('article'); row.className = 'cart-page-item';
+      var detail = document.createElement('div');
+      var category = document.createElement('span'); category.textContent = product.categoryLabel;
+      var name = document.createElement('h3'); name.textContent = product.name;
+      var model = document.createElement('p'); model.textContent = product.model || '配置详情见设备页';
+      detail.append(category, name, model);
+      var price = document.createElement('div'); price.className = 'cart-page-price';
+      var daily = document.createElement('strong'); daily.textContent = '$' + product.day;
+      var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
+      var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
+      var remove = document.createElement('button'); remove.className = 'cart-remove'; remove.type = 'button'; remove.textContent = '移除';
+      remove.addEventListener('click', function () { write(ids.filter(function (item) { return item !== id; })); });
+      price.append(daily, depositText, remove); row.append(detail, price);
+      items.appendChild(row);
+    });
+    total.textContent = ids.length ? ids.length + ' 台设备 · 押金 $' + deposit.toFixed(2) + ' 起租' : '';
+  }
+  render();
+})();
+</script>`
+}
+
 export function renderApply(data: ApplyData): string {
   const { products, selectedId, config, appUrl, turnstileSiteKey } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
@@ -71,12 +145,12 @@ export function renderApply(data: ApplyData): string {
       <div class="form-alert" id="form-error" hidden></div>
 
       <div class="form-card">
-        <div class="form-card-head"><span>01</span><div><h3>设备与费用</h3><p>配置和当前价格来自实时设备库</p></div></div>
+        <div class="form-card-head"><span>01</span><div><h3>订单摘要</h3><p>设备已从购物车带入，需修改时返回购物车</p></div></div>
         <div class="field">
-          <label>购物车设备</label>
+          <label>已选择设备</label>
           <div class="cart-checkout-list" id="cart-items"></div>
         </div>
-        <p class="hint"><a href="/products" style="color:var(--primary)">继续选择设备</a> · 每台库存设备只能加入一次，单次最多 10 台。</p>
+        <p class="hint"><a href="/apply" style="color:var(--primary)">返回购物车修改设备</a> · 每台库存设备只能加入一次，单次最多 10 台。</p>
         <div class="form-summary" id="summary"></div>
         <div class="coupon-row">
           <div class="field">
@@ -222,6 +296,7 @@ export function renderApply(data: ApplyData): string {
   var stripeElements = null;
   var setupIntent = null;
   var cardReady = false;
+    var stripeFeeRate = 0.025;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
   var setupIntentInput = document.getElementById('stripeSetupIntentId');
@@ -281,8 +356,11 @@ export function renderApply(data: ApplyData): string {
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
     var rentTotal = rentalDays ? dailyTotal * rentalDays : 0;
     var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
+    var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
+    var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(total * stripeFeeRate * 100) / 100;
+    var payableTotal = total + paymentFee;
     summary.textContent = rentalDays
-      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' = 预计 $' + total.toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
+      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' · 支付手续费 $' + paymentFee.toFixed(2) + ' = 应付 $' + payableTotal.toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
       : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2) + '（可退）';
     validateAvailability();
   }
@@ -296,15 +374,7 @@ export function renderApply(data: ApplyData): string {
       var detail = document.createElement('div');
       var name = document.createElement('strong'); name.textContent = product.name;
       var meta = document.createElement('span'); meta.textContent = (product.model ? product.model + ' · ' : '') + '$' + product.day + '/day · 押金 $' + product.deposit;
-      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.textContent = '移除'; remove.setAttribute('aria-label', '从购物车移除 ' + product.name);
-      remove.addEventListener('click', function () {
-        var finish = function () { cartIds = cartIds.filter(function (item) { return item !== id; }); appliedDiscount = 0; saveCart(cartIds); renderCart(); };
-        if (!reduceMotion) {
-          row.classList.add('is-leaving');
-          row.addEventListener('animationend', finish, { once: true });
-        } else finish();
-      });
-      detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
+      detail.append(name, meta); row.append(detail); itemsBox.append(row);
     });
     submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
     refreshSummary();
@@ -345,35 +415,60 @@ export function renderApply(data: ApplyData): string {
     window.clearTimeout(balanceLookupTimer);
     balanceLookupTimer = window.setTimeout(lookupBalance, 450);
   });
-  paymentMethodInputs.forEach(function (input) { input.addEventListener('change', updatePaymentMethodVisibility); });
+  paymentMethodInputs.forEach(function (input) { input.addEventListener('change', function () { updatePaymentMethodVisibility(); refreshSummary(); }); });
   updatePaymentMethodVisibility();
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' } })
     .then(readJsonResponse)
     .then(function (result) {
       if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error((result.json && result.json.message) || '安全付款组件暂不可用。');
+      if (Number.isFinite(Number(result.json.feeRate))) stripeFeeRate = Math.min(1, Math.max(0, Number(result.json.feeRate)));
+      refreshSummary();
       stripe = window.Stripe(result.json.publishableKey);
-      var appearance = { theme: 'night', variables: { colorPrimary: '#7c6cff', borderRadius: '8px' } };
+      var appearance = {
+        theme: 'night',
+        variables: {
+          colorPrimary: '#7c6cff',
+          colorBackground: '#0b0e15',
+          colorText: '#f3f4f8',
+          colorTextSecondary: '#9ca3b7',
+          colorTextPlaceholder: '#737b91',
+          borderRadius: '8px',
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        },
+      };
       var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance });
-      var walletElement = walletElements.create('expressCheckout', { paymentMethods: { applePay: 'always', googlePay: 'never', link: 'never', paypal: 'never', amazonPay: 'never', klarna: 'never' } });
+      var walletElement = walletElements.create('expressCheckout', { paymentMethods: { applePay: 'always', googlePay: 'always', link: 'always', paypal: 'always', amazonPay: 'never', klarna: 'never' } });
       walletElement.mount('#stripe-wallet-element');
       walletElement.on('ready', function (event) {
-        if (event.availablePaymentMethods && event.availablePaymentMethods.applePay) walletBox.hidden = false;
+        if (event.availablePaymentMethods && Object.keys(event.availablePaymentMethods).some(function (method) { return ['applePay', 'googlePay', 'link', 'paypal'].indexOf(method) >= 0 && event.availablePaymentMethods[method]; })) walletBox.hidden = false;
         else walletElement.unmount();
       });
       walletElement.on('confirm', function () {
-        walletMessage.textContent = '正在向 Apple Pay 验证支付方式…';
+        walletMessage.textContent = '正在验证快捷支付方式…';
         stripe.confirmSetup({ elements: walletElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
           .then(function (result) {
-            if (result.error) throw new Error(result.error.message || 'Apple Pay 验证失败，请重试。');
+            if (result.error) throw new Error(result.error.message || '快捷支付验证失败，请重试。');
             setupIntent = result.setupIntent;
-            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('Apple Pay 验证尚未完成，请重试。');
+            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('快捷支付验证尚未完成，请重试。');
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; walletMessage.textContent = 'Apple Pay 已验证。'; walletMessage.style.color = 'var(--secondary)';
+            cardReady = true; walletMessage.textContent = '快捷支付已验证。'; walletMessage.style.color = 'var(--secondary)';
           })
           .catch(function (error) { walletMessage.textContent = error.message || 'Apple Pay 验证失败，请重试。'; });
       });
       stripeElements = stripe.elements({ appearance: appearance });
-      var cardElement = stripeElements.create('card', { hidePostalCode: true });
+      var cardElement = stripeElements.create('card', {
+        hidePostalCode: true,
+        style: {
+          base: {
+            color: '#f3f4f8',
+            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            fontSize: '15px',
+            fontSmoothing: 'antialiased',
+            '::placeholder': { color: '#737b91' },
+          },
+          invalid: { color: '#ff8c9b', iconColor: '#ff8c9b' },
+        },
+      });
       cardElement.mount('#stripe-card-element');
       cardElement.on('ready', function () { cardConfirm.disabled = false; });
       cardConfirm.addEventListener('click', function () {

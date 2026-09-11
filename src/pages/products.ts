@@ -8,7 +8,7 @@ function card(p: Product, multiplier: number): string {
   const monthly = p.pricePerDay > 0 ? `$${monthlyRate(p.pricePerDay, multiplier)}/month` : '—'
   const chips = p.specs.slice(0, 5).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
-  const searchText = [p.name, p.brand, p.model, p.categoryLabel, ...p.specs].join(' ').toLowerCase()
+  const searchText = [p.name, p.brand, p.model, p.categoryLabel, p.cpu, p.gpu, p.ram, p.storage, p.os, p.description].join(' ').toLowerCase()
   return /* html */ `
   <article class="card product-card" data-product data-category="${esc(p.category)}" data-available="${p.available ? 'true' : 'false'}" data-price="${p.pricePerDay}" data-name="${esc(p.name.toLowerCase())}" data-search="${esc(searchText)}">
     <div class="product-visual" aria-hidden="true">
@@ -60,10 +60,10 @@ export function renderProducts(data: ProductsData): string {
 </section>
 <section class="section products-section">
   <div class="wrap">
-    <div class="catalog-tools" aria-label="产品筛选">
+    <div class="catalog-tools" role="search" aria-label="搜索和筛选租赁设备">
       <label class="search-box" for="product-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
-        <input id="product-search" type="search" placeholder="搜索型号、CPU、显卡…" autocomplete="off">
+        <input id="product-search" type="search" placeholder="搜索型号、CPU、显卡、操作系统…" autocomplete="off" aria-label="搜索租赁设备" aria-controls="product-grid" enterkeyhint="search">
       </label>
       <div class="filter-chips" id="category-filters">
         <button class="filter-chip is-active" type="button" data-category="all">全部 <span>${products.length}</span></button>
@@ -74,7 +74,7 @@ export function renderProducts(data: ProductsData): string {
         <select id="product-sort" aria-label="排序方式"><option value="default">默认排序</option><option value="price">价格从低到高</option><option value="name">名称排序</option></select>
       </div>
     </div>
-    <div class="catalog-meta"><strong id="result-count">${products.length}</strong> 台设备<span>月租为参考价，最终费用以确认订单为准</span></div>
+    <div class="catalog-meta"><strong id="result-count" aria-live="polite">${products.length}</strong> 台设备<span>月租为参考价，最终费用以确认订单为准</span></div>
     <div class="grid catalog-grid" id="product-grid">${cards}</div>
     <div class="empty-state" id="filter-empty" hidden><strong>没有匹配的设备</strong><p>试试更短的关键词，或清除筛选条件。</p><button class="btn btn-ghost" type="button" id="clear-filters">清除筛选</button></div>
   </div>
@@ -90,14 +90,22 @@ export function renderProducts(data: ProductsData): string {
   var sort = document.getElementById('product-sort');
   var count = document.getElementById('result-count');
   var empty = document.getElementById('filter-empty');
-  var activeCategory = new URLSearchParams(location.search).get('category') || 'all';
+  var initialParams = new URLSearchParams(location.search);
+  var activeCategory = initialParams.get('category') || 'all';
+  search.value = initialParams.get('q') || '';
+
+  function normalize(value) {
+    return String(value || '').normalize('NFKD').toLowerCase().replace(/\\s+/g, ' ').trim();
+  }
 
   function apply() {
-    var term = search.value.trim().toLowerCase();
+    var term = normalize(search.value);
+    var terms = term ? term.split(' ') : [];
     var shown = 0;
     cards.forEach(function (card) {
       var matchCategory = activeCategory === 'all' || card.dataset.category === activeCategory;
-      var matchSearch = !term || card.dataset.search.indexOf(term) !== -1;
+      var haystack = normalize(card.dataset.search);
+      var matchSearch = terms.every(function (word) { return haystack.indexOf(word) !== -1; });
       var matchStock = !stock.checked || card.dataset.available === 'true';
       var visible = matchCategory && matchSearch && matchStock;
       card.hidden = !visible;
@@ -105,6 +113,9 @@ export function renderProducts(data: ProductsData): string {
     });
     count.textContent = String(shown);
     empty.hidden = shown !== 0 || cards.length === 0;
+    var url = new URL(location.href);
+    if (term) url.searchParams.set('q', search.value.trim()); else url.searchParams.delete('q');
+    history.replaceState(null, '', url.pathname + url.search);
   }
 
   function setCategory(category) {
