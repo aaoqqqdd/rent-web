@@ -149,7 +149,7 @@ ${renderSiteFooter(opts.contact)}
   }
   var translations = {
     skip: ['跳到主要内容', 'Skip to main content'], menuOpen: ['打开菜单', 'Open menu'], language: ['语言', 'Language'],
-    navProducts: ['产品目录', 'Products'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系', 'Contact'], navLookup: ['查订单', 'Order lookup'],
+    navProducts: ['产品目录', 'Products'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系我们', 'Contact us'], navLookup: ['订单详情', 'Order Details'],
     cart: ['购物车', 'Cart'], account: ['账号中心', 'Account'], footerIntro: ['为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。', 'Reliable computer rentals for study, work, creative projects and short-term needs. Browse live inventory and apply for the time you need.'],
     footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'],
     footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help']
@@ -217,46 +217,20 @@ ${renderSiteFooter(opts.contact)}
 
   var announcement = document.querySelector('[data-site-announcement]');
   if (announcement) {
-    var refreshAnnouncement = function () {
-      fetch('/api/public-notices?limit=1', { headers: { accept: 'application/json' }, cache: 'no-store' })
-        .then(function (response) { return response.ok ? response.json() : null; })
-        .then(function (data) {
-          var notice = data && data.notices && data.notices[0];
-          var title = announcement.querySelector('[data-site-announcement-title]');
-          var link = announcement.querySelector('[data-site-announcement-link]');
-          if (!title || !link) return;
-          if (!notice) {
-            announcement.hidden = true;
-            return;
-          }
-          title.textContent = notice.title || '最新通告';
-          link.href = '/announcements/' + encodeURIComponent(notice.id);
-          announcement.hidden = false;
-        })
-        .catch(function () {});
-    };
-    refreshAnnouncement();
-    window.setInterval(refreshAnnouncement, 30000);
+    fetch('/api/public-notices?limit=1', { headers: { accept: 'application/json' } })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) {
+        var notice = data && data.notices && data.notices[0];
+        if (!notice) return;
+        var title = announcement.querySelector('[data-site-announcement-title]');
+        var link = announcement.querySelector('[data-site-announcement-link]');
+        if (!title || !link) return;
+        title.textContent = notice.title || '最新通告';
+        link.href = '/announcements/' + encodeURIComponent(notice.id);
+        announcement.hidden = false;
+      })
+      .catch(function () {});
   }
-
-  var updateCouponLabels = function () {
-    var english = window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en';
-    document.querySelectorAll('[data-coupon-prefix]').forEach(function (node) {
-      var callout = node.closest('[data-coupon-prefix-zh]');
-      if (callout) node.textContent = callout.getAttribute(english ? 'data-coupon-prefix-en' : 'data-coupon-prefix-zh') || '';
-    });
-    document.querySelectorAll('[data-coupon-benefit]').forEach(function (node) {
-      var callout = node.closest('[data-coupon-benefit-zh]');
-      if (!callout) return;
-      node.textContent = callout.getAttribute(english ? 'data-coupon-benefit-en' : 'data-coupon-benefit-zh') || '';
-    });
-    document.querySelectorAll('[data-coupon-cta]').forEach(function (node) {
-      var callout = node.closest('[data-coupon-cta-zh]');
-      if (callout) node.textContent = callout.getAttribute(english ? 'data-coupon-cta-en' : 'data-coupon-cta-zh') || '';
-    });
-  };
-  updateCouponLabels();
-  window.addEventListener('geekslope:language-change', updateCouponLabels);
 
   // 动效自托管（原来挂在 gsap CDN 上：一旦那个脚本加载失败——网络、广告拦截、
   // 校园/公司网络限制——全站动效会无声地整体消失。改成原生 CSS 动画 +

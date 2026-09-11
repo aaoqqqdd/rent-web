@@ -4,8 +4,8 @@ export const ENGLISH_COPY: Record<string, string> = {
   // Shared navigation and actions
   '跳到主要内容': 'Skip to main content', '打开菜单': 'Open menu', '关闭菜单': 'Close menu',
   '主导航': 'Main navigation', '网站法律信息': 'Website legal information', '语言': 'Language',
-  '设备库': 'Devices', '如何租': 'How it works', '关于我们': 'About us', '联系': 'Contact',
-  '查订单': 'Order lookup', '购物车': 'Cart', '进入用户中心': 'Account', '退出': 'Log out',
+  '设备库': 'Devices', '如何租': 'How it works', '关于我们': 'About us', '联系我们': 'Contact us',
+  '订单详情': 'Order Details', '购物车': 'Cart', '进入用户中心': 'Account', '退出': 'Log out',
   '登录 / 注册': 'Log in / Register', '退出登录（同时退出 rent）': 'Log out of both sites',
   '产品': 'Products', '服务': 'Services', '条款': 'Legal', '联系我们': 'Contact us',
   '游戏笔记本': 'Gaming laptops', '轻薄商务本': 'Ultrabooks', '台式工作站': 'Workstations',
