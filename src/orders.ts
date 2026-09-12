@@ -198,12 +198,18 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
           ? `${appUrl}/contract/view/${encodeURIComponent(contractId)}`
           : undefined,
     } : undefined
+    const contractPending = contractStatus === 'pending_sign'
+    const contractSigned = ['signed', 'completed'].includes(contractStatus)
     const statusLabel = refundPending && !['cancelled', 'canceled'].includes(rawStatus)
       ? '待退款'
-      : contractStatus === 'pending_sign'
-        ? '待签署'
-        : contractStatus && ['signed', 'completed'].includes(contractStatus) && ['approved', 'awaiting_signature', 'pending_payment'].includes(rawStatus)
-          ? '已签署'
+      : contractPending && ['approved', 'awaiting_signature'].includes(rawStatus)
+        ? '已确认 · 待签署'
+        : contractPending
+          ? '待签署'
+          : contractSigned && ['approved', 'pending_pickup'].includes(rawStatus)
+            ? '已签署 · 待取货'
+            : contractSigned && ['awaiting_signature', 'pending_payment'].includes(rawStatus)
+              ? '已签署'
           : ORDER_STATUS_LABELS[rawStatus] || rawStatus || '处理中'
 
     return {

@@ -735,11 +735,11 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .lookup-result h2 { font-size: clamp(28px, 4vw, 40px); }
 .lookup-result .form-intro { margin-top: 8px; color: var(--muted-fg); }
 .lookup-order-info { display: grid; gap: 8px; margin-top: 24px; padding: 0; border: 0; color: var(--muted-fg); font-size: 13px; }
-.lookup-order-info strong { color: var(--fg); font-size: 16px; }.lookup-login { margin-top: 18px; }
+.lookup-order-info strong { color: var(--fg); font-size: 16px; }.lookup-login { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }.lookup-login .btn { width: auto; }
 .lookup-orders { max-width: 1100px; margin: 0 auto 48px; }.lookup-orders .section-head { margin-bottom: 18px; }.lookup-orders .section-head > p { max-width: 260px; }
 .order-record { overflow: hidden; margin-top: 18px; border: 1px solid var(--border-bright); border-radius: 14px; background: var(--card); }
 .order-record-head { display: flex; justify-content: space-between; gap: 20px; align-items: start; padding: 24px; border-bottom: 1px solid var(--border); background: linear-gradient(110deg, rgba(124,108,255,.10), rgba(89,229,193,.035)); }
-.order-record-head h2 { margin-top: 8px; font-size: clamp(20px, 3vw, 28px); }.order-status { flex: none; padding: 7px 11px; border: 1px solid rgba(89,229,193,.3); border-radius: 999px; color: var(--secondary); background: rgba(89,229,193,.08); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.order-record-head h2 { margin-top: 8px; font-size: clamp(20px, 3vw, 28px); }.order-record-head-actions { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 12px; }.order-status { padding: 7px 11px; border: 1px solid rgba(89,229,193,.3); border-radius: 999px; color: var(--secondary); background: rgba(89,229,193,.08); font-family: var(--mono); font-size: 10px; white-space: nowrap; }.order-contract-action { min-height: 38px; padding: 9px 14px; font-size: 12px; }
 .order-record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); }.order-record-section { min-width: 0; padding: 28px; background: var(--card); }.order-record-section h3 { margin-top: 9px; font-size: 18px; }.lookup-data-list { display: grid; gap: 0; margin-top: 16px; }.lookup-data-list > div { display: grid; grid-template-columns: minmax(106px, .36fr) minmax(0, 1fr); gap: 16px; align-items: start; padding: 11px 0; border-top: 1px solid var(--border); font-size: 13px; }.lookup-data-list dt, .lookup-data-list dd { margin: 0; }.lookup-data-list dt { color: var(--muted-fg); }.lookup-data-list dd { min-width: 0; overflow-wrap: anywhere; line-height: 1.55; }.contract-status-row, .credential-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 16px; padding: 12px 0; border-top: 1px solid var(--border); font-size: 12px; }.contract-status-row strong, .credential-row strong { color: var(--secondary); font-family: var(--mono); overflow-wrap: anywhere; text-align: right; }.order-record-section > .btn { margin-top: 14px; }.credential-section { background: linear-gradient(145deg, rgba(89,229,193,.055), var(--card)); }
 .order-lookup-hero .wrap { padding-top: 58px; padding-bottom: 48px; }
 .order-lookup-hero { min-height: 280px; }
@@ -847,6 +847,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .lookup-wrap .form-card { padding: 20px 18px; }
   .lookup-wrap .btn { width: 100%; }
   .order-record-head { flex-direction: column; gap: 12px; padding: 20px 18px; }
+  .order-record-head-actions { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
   .order-record-section { padding: 20px 18px; }
   .lookup-data-list > div { grid-template-columns: 1fr; gap: 4px; }
   .credential-row, .contract-status-row { align-items: flex-start; flex-direction: column; gap: 6px; }
