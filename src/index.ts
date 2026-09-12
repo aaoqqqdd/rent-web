@@ -183,7 +183,9 @@ app.get('/api/coupons/rental-cart-preview', async (c) => {
   } catch {
     deviceIds = String(c.req.query('deviceIds') || '').split(',').map((value) => value.trim()).filter(Boolean)
   }
-  const result = await previewRentalCoupon(c, [...new Set(deviceIds)], Number(c.req.query('days') || 0), String(c.req.query('code') || ''))
+  let terms: unknown = undefined
+  try { terms = JSON.parse(String(c.req.query('terms') || 'null')) } catch { terms = undefined }
+  const result = await previewRentalCoupon(c, [...new Set(deviceIds)], Number(c.req.query('days') || 0), String(c.req.query('code') || ''), terms)
   return c.json(result, result.ok ? 200 : 400)
 })
 

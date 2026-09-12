@@ -272,17 +272,18 @@ ${renderSiteFooter(opts.contact)}
   function readCartState() {
     try {
       var value = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-      if (Array.isArray(value)) return { ids: cleanIds(value), term: null };
-      return { ids: cleanIds(Array.isArray(value.items) ? value.items : []), term: value.term && typeof value.term === 'object' ? value.term : null };
-    } catch (_) { return { ids: [], term: null }; }
+      if (Array.isArray(value)) return { ids: cleanIds(value), term: null, terms: {} };
+      return { ids: cleanIds(Array.isArray(value.items) ? value.items : []), term: value.term && typeof value.term === 'object' ? value.term : null, terms: value.terms && typeof value.terms === 'object' ? value.terms : {} };
+    } catch (_) { return { ids: [], term: null, terms: {} }; }
   }
   function readCart() { return readCartState().ids; }
-  function writeCart(ids, term) {
+  function writeCart(ids, term, terms) {
     var clean = cleanIds(ids);
-    var state = { items: clean, term: term === undefined ? readCartState().term : term };
+    var previous = readCartState();
+    var state = { items: clean, term: term === undefined ? previous.term : term, terms: terms === undefined ? previous.terms : terms };
     try { localStorage.setItem(CART_KEY, JSON.stringify(state)); } catch (_) {}
     renderCart(clean);
-    window.dispatchEvent(new CustomEvent('geekslope:cart-change', { detail: { ids: clean, term: state.term } }));
+    window.dispatchEvent(new CustomEvent('geekslope:cart-change', { detail: { ids: clean, term: state.term, terms: state.terms } }));
     return clean;
   }
   function renderCart(ids) {
@@ -303,7 +304,9 @@ ${renderSiteFooter(opts.contact)}
     var state = readCartState();
     var ids = state.ids;
     if (ids.indexOf(id) < 0) ids.push(id);
-    return writeCart(ids, term === undefined ? state.term : term);
+    var terms = state.terms || {};
+    if (term !== undefined) terms[id] = term;
+    return writeCart(ids, undefined, terms);
   }
   function removeFromCart(id) { return writeCart(readCart().filter(function (item) { return item !== id; })); }
   function setCartTerm(term) { return writeCart(readCart(), term); }

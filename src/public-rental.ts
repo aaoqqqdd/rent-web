@@ -11,6 +11,13 @@ const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const LONG_TERM_RENTAL_DAYS = 30
 
+interface RentalTerm {
+  startDate: string
+  endDate: string
+  startPeriod: 'AM' | 'PM'
+  endPeriod: 'AM' | 'PM'
+}
+
 function depositAuthorizationWindowDays(cardBrand: unknown): 7 | 30 {
   const brand = String(cardBrand || '').trim().toLowerCase()
   return brand === 'visa' || brand === 'mastercard' ? 30 : 7
@@ -66,6 +73,32 @@ function rentalDays(startDate: string, endDate: string, startPeriod: string, end
   const dateDays = Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86400000)
   const halfDays = dateDays * 2 + (endPeriod === 'PM' ? 1 : 0) - (startPeriod === 'PM' ? 1 : 0)
   return { halfDays, days: Math.ceil(halfDays / 2) }
+}
+
+function parseDeviceTerms(body: Record<string, unknown>, deviceIds: string[]): Record<string, RentalTerm> {
+  let raw: Record<string, unknown> = {}
+  if (body.deviceTerms && typeof body.deviceTerms === 'object' && !Array.isArray(body.deviceTerms)) raw = body.deviceTerms as Record<string, unknown>
+  if (typeof body.deviceTerms === 'string') {
+    try {
+      const parsed = JSON.parse(body.deviceTerms)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) raw = parsed as Record<string, unknown>
+    } catch { /* fall back to the legacy shared term fields */ }
+  }
+  const fallback = {
+    startDate: String(body.startDate || '').trim(),
+    endDate: String(body.endDate || '').trim(),
+    startPeriod: body.startPeriod === 'PM' ? 'PM' as const : 'AM' as const,
+    endPeriod: body.endPeriod === 'PM' ? 'PM' as const : 'AM' as const,
+  }
+  return Object.fromEntries(deviceIds.map((deviceId) => {
+    const value = raw[deviceId] && typeof raw[deviceId] === 'object' ? raw[deviceId] as Record<string, unknown> : {}
+    return [deviceId, {
+      startDate: String(value.startDate || fallback.startDate).trim(),
+      endDate: String(value.endDate || fallback.endDate).trim(),
+      startPeriod: value.startPeriod === 'PM' ? 'PM' : fallback.startPeriod,
+      endPeriod: value.endPeriod === 'PM' ? 'PM' : fallback.endPeriod,
+    } satisfies RentalTerm]
+  }))
 }
 
 function calculateRentalFee(device: Record<string, unknown>, days: number): number {
@@ -299,8 +332,8 @@ async function createAdminNotifications(c: RentalContext, orderId: string, messa
   } catch { /* notifications must not undo a successfully created order */ }
 }
 
-export async function previewRentalCoupon(c: RentalContext, deviceIds: string[], days: number, code: string): Promise<Record<string, unknown>> {
-  if (!deviceIds.length || !Number.isInteger(days) || days < 1 || days > 365 || !code) return { ok: false, message: '请先选择有效租期并输入优惠码。' }
+export async function previewRentalCoupon(c: RentalContext, deviceIds: string[], days: number, code: string, terms?: unknown): Promise<Record<string, unknown>> {
+  if (!deviceIds.length || !code) return { ok: false, message: '请先选择设备、有效租期并输入优惠码。' }
   const devices: Record<string, unknown>[] = []
   for (const deviceId of deviceIds.slice(0, MAX_CART_ITEMS)) {
     const device = await c.env.RENT.prepare('SELECT * FROM devices WHERE id = ?').bind(deviceId).first<Record<string, unknown>>()
@@ -309,7 +342,20 @@ export async function previewRentalCoupon(c: RentalContext, deviceIds: string[],
   }
   const coupon = await c.env.RENT.prepare("SELECT * FROM coupons WHERE code = ? COLLATE NOCASE AND active = 1 AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP) AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP) AND (max_uses IS NULL OR used_count < max_uses)").bind(code.trim().toUpperCase().slice(0, 40)).first<Record<string, unknown>>()
   if (!coupon) return { ok: false, message: '优惠码无效、已过期或已达到使用次数上限。' }
-  const fees = devices.map((device) => calculateRentalFee(device, days))
+  const hasPerDeviceTerms = terms !== undefined && terms !== null && terms !== ''
+  const termMap = hasPerDeviceTerms ? parseDeviceTerms({ deviceTerms: terms }, deviceIds) : {}
+  const fees = devices.map((device, index) => {
+    if (!hasPerDeviceTerms) return calculateRentalFee(device, days)
+    const term = termMap[deviceIds[index]]
+    const period = validDate(term.startDate) && validDate(term.endDate) ? rentalDays(term.startDate, term.endDate, term.startPeriod, term.endPeriod) : { days: 0 }
+    return calculateRentalFee(device, period.days)
+  })
+  if (hasPerDeviceTerms && fees.some((_, index) => {
+    const term = termMap[deviceIds[index]]
+    const period = validDate(term.startDate) && validDate(term.endDate) ? rentalDays(term.startDate, term.endDate, term.startPeriod, term.endPeriod) : { days: 0 }
+    return period.days < 1 || period.days > 365
+  })) return { ok: false, message: '请为每台设备选择有效租期。' }
+  if (!hasPerDeviceTerms && (days < 1 || days > 365)) return { ok: false, message: '请选择有效租期。' }
   const eligible = devices.map((device, index) => couponMatchesDevice(coupon, device) ? index : -1).filter((index) => index >= 0)
   if (!eligible.length) return { ok: false, message: '该优惠码不适用于购物车中的设备。' }
   const base = eligible.reduce((sum, index) => sum + fees[index], 0)
@@ -327,10 +373,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const deviceIds = parseDeviceIds(body)
   if (!deviceIds.length) return json(c, 400, { ok: false, message: '购物车中没有可提交的设备。' })
   if (deviceIds.length > MAX_CART_ITEMS) return json(c, 400, { ok: false, message: `单次最多提交 ${MAX_CART_ITEMS} 台设备。` })
-  const startDate = String(body.startDate || '').trim()
-  const endDate = String(body.endDate || '').trim()
-  const startPeriod = body.startPeriod === 'PM' ? 'PM' : 'AM'
-  const endPeriod = body.endPeriod === 'PM' ? 'PM' : 'AM'
+  const deviceTerms = parseDeviceTerms(body, deviceIds)
   const deliveryMethod = body.deliveryMethod === 'Delivery' ? 'Delivery' : 'Pickup'
   const contactName = String(body.contactName || '').trim().slice(0, 120)
   const contactEmail = String(body.contactEmail || '').trim().toLowerCase().slice(0, 200)
@@ -339,7 +382,6 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const paymentMethod = body.paymentMethod === 'balance' ? 'balance' : 'card'
   const refundMethod = body.refundMethod === 'balance' ? 'balance' : 'original'
   const agreed = ['1', 'on', 'true', 'yes'].includes(String(body.agree || '').toLowerCase())
-  if (!validDate(startDate) || !validDate(endDate)) return json(c, 400, { ok: false, message: '请填写有效的开始日期和结束日期。' })
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
   if (!contactName || !contactPhone) return json(c, 400, { ok: false, message: '请填写姓名和联系电话。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
@@ -360,15 +402,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const config = await getRentalConfig(c.env)
   const settings = await paymentSettings(c)
   if (paymentMethod === 'balance' && !settings.balancePayment) return json(c, 400, { ok: false, message: '账户余额支付当前未启用。' })
-  const period = rentalDays(startDate, endDate, startPeriod, endPeriod)
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-  if (startDate < today || endDate < today || period.halfDays <= 0) return json(c, 400, { ok: false, message: '请选择有效的未来租期，归还时间必须晚于取货时间。' })
-  if (period.days < config.minimumRentalDays) return json(c, 400, { ok: false, message: `最短租赁时间为 ${config.minimumRentalDays} 天。` })
   const unavailableDates = new Set(config.unavailableDates)
-  for (let day = Date.parse(`${startDate}T00:00:00Z`); day < Date.parse(`${endDate}T00:00:00Z`); day += 86400000) {
-    const date = new Date(day).toISOString().slice(0, 10)
-    if (unavailableDates.has(date)) return json(c, 409, { ok: false, message: '所选租期包含不可用日期，请重新选择。' })
-  }
 
   let location = ''
   if (deliveryMethod === 'Pickup') {
@@ -385,7 +420,13 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   }
 
   const devices: Record<string, unknown>[] = []
+  const rentalPlans = new Map<string, { term: RentalTerm; period: { halfDays: number; days: number } }>()
   for (const deviceId of deviceIds) {
+    const term = deviceTerms[deviceId]
+    if (!term || !validDate(term.startDate) || !validDate(term.endDate)) return json(c, 400, { ok: false, message: '请为每台设备填写有效的取货和归还日期。' })
+    const period = rentalDays(term.startDate, term.endDate, term.startPeriod, term.endPeriod)
+    if (term.startDate < today || term.endDate < today || period.halfDays <= 0) return json(c, 400, { ok: false, message: '请选择有效的未来租期，归还时间必须晚于取货时间。' })
+    if (period.days < config.minimumRentalDays) return json(c, 400, { ok: false, message: `每台设备的最短租赁时间为 ${config.minimumRentalDays} 天。` })
     const device = await c.env.RENT.prepare('SELECT * FROM devices WHERE id = ?').bind(deviceId).first<Record<string, unknown>>()
     const lifecycle = String(device?.lifecycle_status || device?.lifecycleStatus || '').toUpperCase()
     const available = device && (String(device.status || '').toLowerCase() === 'available' || lifecycle === 'READY' || lifecycle === 'RESERVED')
@@ -393,18 +434,22 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     try {
       const unavailable = await c.env.RENT.prepare('SELECT unavailable_date FROM device_unavailable_dates WHERE device_id = ?').bind(deviceId).all<{ unavailable_date?: unknown }>()
       const unavailableDates = new Set((unavailable.results || []).map((row) => String(row.unavailable_date || '')))
-      for (let day = Date.parse(`${startDate}T00:00:00Z`); day < Date.parse(`${endDate}T00:00:00Z`); day += 86400000) {
+      for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day < Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
         if (unavailableDates.has(new Date(day).toISOString().slice(0, 10))) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选日期不可用。` })
       }
     } catch { /* older deployments may not have per-device unavailable dates */ }
-    const conflictStart = shiftDate(startDate, -config.bufferDays)
-    const conflictEnd = shiftDate(endDate, config.bufferDays)
+    for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day < Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
+      if (unavailableDates.has(new Date(day).toISOString().slice(0, 10))) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选日期不可用。` })
+    }
+    const conflictStart = shiftDate(term.startDate, -config.bufferDays)
+    const conflictEnd = shiftDate(term.endDate, config.bufferDays)
     const conflict = await c.env.RENT.prepare("SELECT id FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate < ? AND endDate > ? LIMIT 1").bind(deviceId, conflictEnd, conflictStart).first()
     if (conflict) return json(c, 409, { ok: false, message: `${String(device?.name || '设备')} 在所选日期已有订单。` })
     devices.push(device as Record<string, unknown>)
+    rentalPlans.set(deviceId, { term, period })
   }
 
-  const fees = devices.map((device) => calculateRentalFee(device, period.days))
+  const fees = devices.map((device) => calculateRentalFee(device, rentalPlans.get(String(device.id))!.period.days))
   const discounts = devices.map(() => 0)
   let coupon: Record<string, unknown> | null = null
   if (couponCode) {
@@ -464,6 +509,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   try {
     for (let index = 0; index < devices.length; index += 1) {
       const device = devices[index]
+      const rentalPlan = rentalPlans.get(String(device.id))!
       const orderId = id('o')
       const orderNo = `OD-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().replaceAll('-', '').slice(0, 6).toUpperCase()}`
       const deposit = numberValue(device.depositAmount, device.deposit_amount)
@@ -472,8 +518,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       await c.env.RENT.prepare(
         `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
-      ).bind(orderId, orderNo, user.id, device.id, startDate, endDate, startPeriod, endPeriod, period.days, paymentMethod === 'balance' ? 'balance' : 'bank_transfer', total, deposit, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
-      const depositMode = depositPaymentModeForRental(period.days, paymentMethod === 'card', stripeCardBrand)
+      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'bank_transfer', total, deposit, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
+      const depositMode = depositPaymentModeForRental(rentalPlan.period.days, paymentMethod === 'card', stripeCardBrand)
       await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
         .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositMode, orderId).run()
       orderIds.push(orderId)
@@ -481,7 +527,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       // 长租（SetupIntent 模式）不在这里扣款，损坏或逾期时才按实际费用从保存的卡扣。
       if (depositMode === 'PREAUTH' && deposit > 0) {
         try {
-          await authorizeDepositForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, period.days, stripeCustomerId)
+          await authorizeDepositForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, rentalPlan.period.days, stripeCustomerId)
         } catch (error) {
           depositAuthError = error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。'
           break
@@ -500,14 +546,14 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const totalRent = fees.reduce((sum, fee) => sum + fee, 0)
   const totalDeposit = devices.reduce((sum, device) => sum + numberValue(device.depositAmount, device.deposit_amount), 0)
   const totalDiscount = discounts.reduce((sum, discount) => sum + discount, 0)
-  await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，${startDate} ${startPeriod} 至 ${endDate} ${endPeriod}。租金 AUD$${totalRent.toFixed(2)}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
+  await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
   const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
   const paymentBreakdown = paymentMethod === 'card'
     ? firstOrder?.deposit_payment_mode === 'PREAUTH'
-      ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权（不会立即入账）；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
-      : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片（不预扣，仅在损坏或逾期时按实际费用扣款）；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
+      ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
+      : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
     : ''
-  return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: period.days, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
+  return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: rentalPlans.get(deviceIds[0])?.period.days || 0, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
 }
 
 export async function parseRequestBody(c: RentalContext): Promise<Record<string, unknown> | null> {

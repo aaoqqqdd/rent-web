@@ -225,6 +225,26 @@ p { margin: 0; }
 .cart-page-item > div:first-child > span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; }
 .cart-page-item h3 { margin-top: 7px; font-size: 20px; }
 .cart-page-item p { margin-top: 5px; color: var(--muted-fg); font-size: 13px; }
+.cart-page-item--term { align-items: flex-start; }
+.device-term-editor { max-width: 650px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.device-term-editor-head { display: flex; justify-content: space-between; align-items: center; color: var(--fg); font-size: 13px; }
+.term-date-grid, .term-period-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.term-date-field, .term-period-field { position: relative; display: grid; gap: 6px; color: var(--muted-fg); font-size: 11px; }
+.term-date-field input, .term-period-field select { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--border-bright); border-radius: 8px; color: var(--fg); background: #0b0e15; font: inherit; }
+.term-date-field input:focus, .term-period-field select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,.13); }
+.date-picker { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: 280px; padding: 12px; border: 1px solid var(--border-bright); border-radius: 10px; background: #111520; box-shadow: 0 18px 45px rgba(0,0,0,.42); }
+.date-picker[hidden] { display: none; }
+.date-picker-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; color: var(--fg); }
+.date-picker-nav { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 6px; color: var(--fg); background: transparent; cursor: pointer; }
+.date-picker-week, .date-picker-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.date-picker-week { margin-bottom: 4px; color: var(--muted-fg); font-size: 10px; }
+.date-picker-grid button { min-height: 30px; border: 0; border-radius: 6px; color: var(--fg); background: transparent; cursor: pointer; }
+.date-picker-grid button:hover:not(:disabled), .date-picker-grid button.is-selected { color: #fff; background: var(--primary); }
+.date-picker-grid button.is-outside { color: #555d71; }
+.date-picker-grid button:disabled { opacity: .22; cursor: not-allowed; }
+.term-status { margin-top: 12px; color: var(--secondary) !important; font-size: 12px !important; }
+.term-status[data-state="error"] { color: #ff9b9b !important; }
+.cart-page-summary .is-disabled { opacity: .45; cursor: not-allowed; }
 .cart-page-price { display: flex; align-items: center; gap: 18px; flex: none; }
 .cart-page-price strong { font-size: 20px; }
 .cart-page-price strong small { color: var(--muted-fg); font-size: 12px; font-weight: 500; }
