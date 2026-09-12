@@ -384,7 +384,6 @@ export function renderApply(data: ApplyData): string {
   var ENDPOINT = '/api/rental-request';
   var SETUP_ENDPOINT = '/api/rental-setup-intent';
   var MIN_DAYS = ${config.minimumRentalDays};
-  var LONG_TERM_DAYS = 30;
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
   var DEVICE_AVAILABILITY = {};
@@ -616,9 +615,8 @@ export function renderApply(data: ApplyData): string {
         ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
         : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，余额不足';
     }
-    var depositNote = rentalDays >= LONG_TERM_DAYS ? '押金使用 SetupIntent 保存卡片，不预扣，仅在损坏或逾期时按实际费用扣款' : '短期租赁押金按卡种预授权（Visa/Mastercard 最多 30 天，其他卡 7 天），超过窗口改用 SetupIntent';
     summary.textContent = rentalDays
-      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + '（' + depositNote + '） · 租金支付手续费 $' + paymentFee.toFixed(2) + ' = 租金付款参考 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
+      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' · 租金支付手续费 $' + paymentFee.toFixed(2) + ' = 租金付款参考 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
       : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2);
     validateAvailability();
   }
