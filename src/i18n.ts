@@ -7,7 +7,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '设备库': 'Devices', '如何租': 'How it works', '关于我们': 'About us', '联系我们': 'Contact us',
   '订单详情': 'Order Details', '购物车': 'Cart', '进入用户中心': 'Account', '退出': 'Log out',
   '登录 / 注册': 'Log in / Register', '退出登录（同时退出 rent）': 'Log out of both sites',
-  '产品': 'Products', '服务': 'Services', '条款': 'Legal', '联系我们': 'Contact us',
+  '产品': 'Products', '服务': 'Services', '条款': 'Legal',
   '游戏笔记本': 'Gaming laptops', '轻薄商务本': 'Ultrabooks', '台式工作站': 'Workstations',
   '全部产品': 'All products', '租赁说明': 'Rental guide', '常见问题': 'FAQ',
   '用户协议': 'User terms', '服务条款': 'Service terms', '退款政策': 'Refund policy',
@@ -82,7 +82,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   // Home
   'MELBOURNE · 设备租赁': 'MELBOURNE · DEVICE RENTAL', '设备不用拥有，': 'You do not need to own the device,',
   '进度照样向前。': 'to keep moving forward.', '打开设备库': 'Browse devices', '先了解怎么租': 'See how renting works',
-  '✓ 提交不扣款': '✓ No charge on application', '✓ 押金可退': '✓ Refundable deposit', '✓ 本地技术支持': '✓ Local technical support',
+  '✓ 提交不扣款': '✓ No charge on application', '✓最快当天可取': '✓ Pickup as Soon as Today', '✓ 本地技术支持': '✓ Local technical support',
   '实时租赁概览': 'Live rental overview', '实时现货': 'Available now', '起租价格': 'Starting rate',
   '申请状态': 'Application status', '确认档期': 'Availability review', '浏览全部库存': 'Browse all inventory',
   '交付前检测': 'Pre-delivery inspection', '租期可调整': 'Flexible rental term', '本地交付': 'Local delivery', '租期内支持': 'Support throughout your rental',

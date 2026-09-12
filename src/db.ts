@@ -65,6 +65,9 @@ export interface PublicNotice {
   expiresAt?: string
   couponDiscount?: string
   couponDiscountType?: 'percent' | 'fixed'
+  couponDeviceId?: string
+  couponBrand?: string
+  couponConfigKeyword?: string
   couponBenefitZh?: string
   couponBenefitEn?: string
 }
@@ -76,6 +79,10 @@ const CATEGORY_LABEL: Record<Product['category'], string> = {
 }
 
 function categorize(row: Record<string, unknown>): Product['category'] {
+  const stored = String(row.category ?? '').trim().toLowerCase()
+  if (/gaming|game|游戏|电竞/.test(stored)) return 'gaming'
+  if (/ultrabook|laptop|notebook|business|商务|轻薄|笔记本/.test(stored)) return 'ultrabook'
+  if (/workstation|desktop|tower|台式|工作站/.test(stored)) return 'workstation'
   const hay = `${row.name ?? ''} ${row.model ?? ''} ${row.description ?? ''}`.toLowerCase()
   const gpu = String(row.gpu ?? '').toLowerCase()
   if (/desktop|workstation|tower|台式|工作站|mac ?mini|mac ?studio|imac/.test(hay)) return 'workstation'
@@ -153,7 +160,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       result = await env.RENT.prepare(
         `SELECT MIN(id) AS id, title, message, created_at, MAX(expires_at) AS expires_at
          FROM notifications
-         WHERE type = 'announcement' AND deleted_at IS NULL
+         WHERE type IN ('announcement', 'agreement_update', 'policy_update', 'legal_update') AND deleted_at IS NULL
            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
          GROUP BY title, message, created_at
          ORDER BY created_at DESC
@@ -164,7 +171,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       result = await env.RENT.prepare(
         `SELECT MIN(id) AS id, title, message, created_at
          FROM notifications
-         WHERE type = 'announcement' AND deleted_at IS NULL
+           WHERE type IN ('announcement', 'agreement_update', 'policy_update', 'legal_update') AND deleted_at IS NULL
          GROUP BY title, message, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
@@ -217,7 +224,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       const discountValue = Number(row.discount_value ?? 0)
       const discount = discountType === '百分比折扣' ? `${discountValue}%` : `AUD$${discountValue.toFixed(2)}`
       const couponBenefitZh = discountType === '百分比折扣'
-        ? `${Math.max(0, 100 - discountValue)}折优惠`
+        ? `立减 ${discountValue}%`
         : `立减 ${discount}`
       const couponBenefitEn = discountType === '百分比折扣'
         ? `${discountValue}% off rental orders`
@@ -237,6 +244,9 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         couponCode: code,
         couponDiscount: discount,
         couponDiscountType: String(row.discount_type ?? '') === 'percent' ? 'percent' : 'fixed',
+        couponDeviceId: row.device_id ? String(row.device_id) : undefined,
+        couponBrand: row.brand ? String(row.brand) : undefined,
+        couponConfigKeyword: row.config_keyword ? String(row.config_keyword) : undefined,
         couponBenefitZh,
         couponBenefitEn,
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
@@ -245,7 +255,15 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
   } catch {
     // 兼容 coupons 表或较早表结构尚未部署的环境。
   }
-  return notices
+  // 创建优惠码时，rent 还会给客户发送一条 announcement 通知；优惠码本身
+  // 已由 coupons 表生成可直接选设备的卡片，避免同一优惠在横幅里重复显示为
+  // 可查看详情的普通通告。
+  const couponCodes = notices.filter((notice) => notice.kind === 'coupon').map((notice) => notice.couponCode || '')
+  return notices.filter((notice) => !(
+    notice.kind === 'announcement'
+    && notice.title.includes('优惠')
+    && (/优惠码|新优惠/.test(notice.message) || couponCodes.some((code) => code && notice.message.toUpperCase().includes(code)))
+  ))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, Math.max(1, Math.min(100, limit)))
 }
@@ -254,6 +272,15 @@ export async function getPublicNotice(env: Env, id: string): Promise<PublicNotic
   if (!id.startsWith('announcement:') && !id.startsWith('coupon:')) return null
   const notices = await listPublicNotices(env, 100)
   return notices.find((notice) => notice.id === id) ?? null
+}
+
+export function couponAppliesToProduct(notice: PublicNotice, product: Product): boolean {
+  if (notice.kind !== 'coupon') return true
+  const text = [product.name, product.brand, product.model, product.cpu, product.ram, product.storage, product.gpu, product.os, product.description]
+    .filter(Boolean).join(' ').toLowerCase()
+  return (!notice.couponDeviceId || notice.couponDeviceId === product.id)
+    && (!notice.couponBrand || notice.couponBrand.trim().toLowerCase() === product.brand.trim().toLowerCase())
+    && (!notice.couponConfigKeyword || text.includes(notice.couponConfigKeyword.trim().toLowerCase()))
 }
 
 /** 首页「为你精选」——每个类别取一台代表机型（优先当前可租），最多 3 张。 */

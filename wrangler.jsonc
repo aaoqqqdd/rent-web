@@ -20,18 +20,19 @@
 		}
 	],
 	"vars": {
-		// rent 主应用的公开地址。营销站的「立即租赁」表单会 POST 到
-		//   ${APP_URL}/public/rental-request
-		// 订单创建后仍停留在本站显示提交结果，后续签约付款在主应用完成。
+		// rent 主应用的公开地址，用于登录、账号中心和后续签约付款跳转。
 		"APP_URL": "https://rent.ydnw6zt6vj.workers.dev",
 		// 月租展示价 = 日租 × 该系数（取整）。仅用于官网展示，真实计费仍在 rent 内完成。
 		"MONTHLY_MULTIPLIER": "20",
 		// Cloudflare Turnstile 站点公钥（与 rent 主应用同一个 Turnstile 组件）。
 		// 留空则「立即租赁」表单不显示人机验证；rent 侧未配置 TURNSTILE_SECRET_KEY 时也会放行。
 		"TURNSTILE_SITE_KEY": ""
+		// Stripe 可直接使用环境变量；若留空，官网会读取 rent 中加密保存的 Stripe 配置。
 	}
 	// 可选覆盖项（用 `wrangler secret put` 或在此加 vars）：
 	//   CONTACT_PHONE / CONTACT_EMAIL —— 覆盖 systemSettings.companyDetails 里的联系方式
+	//   SETTINGS_ENCRYPTION_KEY —— 读取共享 D1 中加密的 Stripe 配置（与 rent 使用同一个 secret）
+	//   STRIPE_PUBLISHABLE_KEY / STRIPE_SECRET_KEY —— 也可直接配置 Stripe（secret 请使用 wrangler secret）
 	//   TURNSTILE_SECRET_KEY（secret）—— /register 注册接口的服务端人机校验密钥。
 	//     未配置则跳过校验（与 rent 公开接口一致）。与 TURNSTILE_SITE_KEY 配套。
 	//

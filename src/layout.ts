@@ -225,8 +225,15 @@ ${renderSiteFooter(opts.contact)}
         var title = announcement.querySelector('[data-site-announcement-title]');
         var link = announcement.querySelector('[data-site-announcement-link]');
         if (!title || !link) return;
-        title.textContent = notice.title || '最新通告';
-        link.href = '/announcements/' + encodeURIComponent(notice.id);
+        var isCoupon = notice.kind === 'coupon' && notice.couponCode;
+        title.textContent = isCoupon
+          ? '🎉 新优惠上线！使用优惠码 ' + notice.couponCode + ' ' + (notice.couponBenefitZh || '')
+          : (notice.title || '最新通告');
+        link.href = isCoupon
+          ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
+          : '/announcements/' + encodeURIComponent(notice.id);
+        var action = link.querySelector('span');
+        if (action) action.firstChild.textContent = isCoupon ? '去挑选设备 ' : '查看详情 ';
         announcement.hidden = false;
       })
       .catch(function () {});

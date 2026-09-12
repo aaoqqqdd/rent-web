@@ -72,7 +72,7 @@ export function renderHome(data: HomeData): string {
         <a class="btn btn-primary btn-lg" href="/products">打开设备库 <span>→</span></a>
         <a class="btn btn-ghost btn-lg" href="/rental-guide">先了解怎么租</a>
       </div>
-      <div class="hero-notes"><span>✓ 提交不扣款</span><span>✓ 押金可退</span><span>✓ 本地技术支持</span></div>
+      <div class="hero-notes"><span>✓ 提交不扣款</span><span>✓ 最快当天可取</span><span>✓ 本地技术支持</span></div>
     </div>
     <div class="rental-console" aria-label="实时租赁概览">
       <div class="console-head"><span><i></i> RENTAL DESK / LIVE</span><span>${new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span></div>

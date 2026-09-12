@@ -10,6 +10,7 @@ import {
   getLegalDocument,
   getSiteContact,
   getPublicNotice,
+  couponAppliesToProduct,
   listProducts,
   listPublicNotices,
   minDailyRate,
@@ -24,6 +25,8 @@ import { renderLogin } from './pages/login'
 import { renderAbout, renderContact, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
+import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
+import { autocompleteMelbourneAddresses } from './address'
 import {
   clearedSessionCookie,
   createSession,
@@ -44,6 +47,9 @@ export interface Env {
   CONTACT_PHONE?: string
   CONTACT_EMAIL?: string
   TURNSTILE_SITE_KEY?: string
+  SETTINGS_ENCRYPTION_KEY?: string
+  STRIPE_PUBLISHABLE_KEY?: string
+  STRIPE_SECRET_KEY?: string
   // Turnstile 服务端密钥（`wrangler secret put TURNSTILE_SECRET_KEY`）。
   // 未配置时 /register 跳过人机校验（与 rent 公开接口行为一致）。
   TURNSTILE_SECRET_KEY?: string
@@ -141,6 +147,46 @@ app.get('/api/public-notices', async (c) => {
   const requestedLimit = Number(c.req.query('limit') || 20)
   const notices = await listPublicNotices(c.env, Number.isFinite(requestedLimit) ? requestedLimit : 20)
   return c.json({ notices }, 200, { 'cache-control': 'no-store, max-age=0' })
+})
+
+app.get('/api/address/autocomplete', async (c) => {
+  const query = String(c.req.query('q') || '').trim()
+  if (query.length < 3) return c.json({ suggestions: [] }, 200, { 'cache-control': 'no-store' })
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-address-autocomplete', ip, 30, 60))) return c.json({ error: '地址查询过于频繁，请稍后再试。' }, 429)
+  const config = await getRentalConfig(c.env)
+  const suggestions = await autocompleteMelbourneAddresses(query, config.deliveryAreas)
+  return c.json({ suggestions, message: suggestions.length ? undefined : '没有找到墨尔本地址，请继续输入或手工填写。' }, 200, { 'cache-control': 'no-store' })
+})
+
+app.get('/api/coupons/rental-cart-preview', async (c) => {
+  let deviceIds: string[] = []
+  try {
+    const parsed = JSON.parse(String(c.req.query('deviceIds') || '[]'))
+    deviceIds = Array.isArray(parsed) ? parsed.map((value) => String(value).trim()).filter(Boolean) : []
+  } catch {
+    deviceIds = String(c.req.query('deviceIds') || '').split(',').map((value) => value.trim()).filter(Boolean)
+  }
+  const result = await previewRentalCoupon(c, [...new Set(deviceIds)], Number(c.req.query('days') || 0), String(c.req.query('code') || ''))
+  return c.json(result, result.ok ? 200 : 400)
+})
+
+app.post('/api/rental-setup-intent', async (c) => {
+  try {
+    return c.json(await createRentalSetupIntent(c))
+  } catch (error) {
+    return c.json({ ok: false, message: error instanceof Error ? error.message : '信用卡验证暂不可用，请稍后重试。' }, 400)
+  }
+})
+
+app.get('/api/account-balance', async (c) => c.json(await lookupAccountBalance(c, String(c.req.query('email') || '')), 200, { 'Cache-Control': 'no-store' }))
+
+app.post('/api/rental-request', async (c) => {
+  const body = await parseRequestBody(c)
+  if (!body) return c.json({ ok: false, message: '请求格式无效。' }, 400)
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-rental-request', ip, 6, 900))) return c.json({ ok: false, message: '提交请求过于频繁，请稍后再试。' }, 429)
+  return handleRentalRequest(c, body)
 })
 
 app.get('/favicon.ico', (c) =>
@@ -245,12 +291,17 @@ app.get('/announcements/:id', (c) =>
 
 app.get('/products', (c) =>
   cachedHtml(c, HTML_TTL, async (user) => {
-    const [products, contact] = await Promise.all([
+    const [products, contact, notices] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
+      c.req.query('coupon') ? listPublicNotices(c.env, 100) : Promise.resolve([]),
     ])
+    const couponCode = (c.req.query('coupon') || '').trim().toUpperCase()
+    const coupon = notices.find((notice) => notice.kind === 'coupon' && notice.couponCode === couponCode)
+    const visibleProducts = coupon ? products.filter((product) => couponAppliesToProduct(coupon, product)) : products
     const body = renderProducts({
-      products,
+      products: visibleProducts,
+      couponCode: coupon?.couponCode,
     })
     return renderPage({
       title: `墨尔本电脑租赁设备库 — ${contact.name}`,
@@ -268,8 +319,8 @@ app.get('/products', (c) =>
         isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
         mainEntity: {
           '@type': 'ItemList',
-          numberOfItems: products.length,
-          itemListElement: products.filter((product) => product.id).map((product, index) => ({
+          numberOfItems: visibleProducts.length,
+          itemListElement: visibleProducts.filter((product) => product.id).map((product, index) => ({
             '@type': 'ListItem', position: index + 1, name: product.name,
             url: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}`,
           })),

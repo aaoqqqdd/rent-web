@@ -243,6 +243,25 @@ p { margin: 0; }
 .cart-empty { text-align: center; padding: 42px 24px; }
 .cart-empty h3 { margin-bottom: 8px; }
 .cart-empty p { color: var(--muted-fg); font-size: 14px; margin-bottom: 20px; }
+.address-autocomplete { position: relative; }
+.address-search-status { margin-top: 7px; color: var(--muted-fg); font-size: 12px; line-height: 1.5; }
+.address-search-status[data-state="loading"] { color: var(--primary); }
+.address-search-status[data-state="success"] { color: var(--secondary); }
+.address-search-status[data-state="error"] { color: #ff9a9a; }
+.address-suggestions {
+  position: relative; z-index: 5; display: grid; gap: 2px; max-height: 240px; overflow-y: auto;
+  margin-top: 8px; padding: 5px; border: 1px solid var(--border-bright); border-radius: 10px;
+  background: #0b0e15; box-shadow: 0 14px 30px rgba(0,0,0,.28);
+}
+.address-suggestions[hidden] { display: none; }
+.address-suggestions button {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; width: 100%;
+  padding: 10px; border: 0; border-radius: 7px; background: transparent; color: var(--fg);
+  text-align: left; font: inherit; cursor: pointer;
+}
+.address-suggestions button:hover, .address-suggestions button[aria-selected="true"] { background: rgba(124,108,255,.14); }
+.address-suggestion-marker { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; padding-top: 2px; }
+.address-attribution { display: block; margin-top: 5px; color: var(--muted-fg); font-size: 10px; }
 .coupon-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; margin-top: 18px; }
 .coupon-row .field { margin: 0; }
 .coupon-row .btn { min-height: 43px; }
@@ -657,12 +676,16 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .stripe-setup-box .btn { margin-top: 12px; }
 .choice-line { display: block; margin-top: 11px; color: var(--fg); font-size: 13px; font-weight: 400 !important; }
 .choice-line input { width: auto; min-height: auto; margin-right: 7px; accent-color: var(--primary); }
+.legal-agreement { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }
+.legal-agreement input { width: 18px !important; min-height: 18px; margin: 3px 0 0; }
+.legal-agreement label { min-width: 0; line-height: 1.6; }
 .temporary-credentials { display: grid; gap: 8px; margin-top: 18px; padding: 18px; border: 1px solid rgba(89,229,193,.3); border-radius: 10px; background: rgba(89,229,193,.06); }
 .temporary-credentials > span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .temporary-credentials strong { font-size: 14px; }.temporary-credentials b { color: var(--secondary); font-family: var(--mono); letter-spacing: .04em; }
 .temporary-credentials p { color: var(--muted-fg); font-size: 12px; }
 .lookup-wrap { max-width: 620px; }.lookup-result { margin-top: 18px; }.lookup-result h2 { font-size: 24px; }.lookup-order-info { display: grid; gap: 8px; margin-top: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted-fg); font-size: 13px; }.lookup-order-info strong { color: var(--fg); font-size: 16px; }.lookup-login { margin-top: 18px; }
 .order-lookup-hero .wrap { padding-top: 58px; padding-bottom: 48px; }
+.order-lookup-hero { min-height: 280px; }
 .order-lookup-hero h1 { max-width: 620px; margin-top: 10px; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; }
 .order-lookup-hero p { max-width: 560px; margin-top: 14px; font-size: 14px; line-height: 1.7; }
 .lookup-wrap { max-width: 540px; }

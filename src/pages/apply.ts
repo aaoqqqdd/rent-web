@@ -1,5 +1,5 @@
-// 购物车 / 下单页。购物车保存在浏览器 localStorage；提交时由 rent 主应用为每台设备
-// 创建一张 pending_approval 订单，多个订单共享租期、取还方式和联系人信息。
+// 购物车 / 下单页。购物车保存在浏览器 localStorage；提交时由官网 Worker
+// 直接校验并写入共享 D1 的 pending_approval 订单。
 
 import { esc } from '../layout'
 import type { Product, RentalConfig } from '../db'
@@ -76,7 +76,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       var ids = Array.isArray(value) ? value : value.items;
       var term = Array.isArray(value) ? null : value.term;
       return { ids: Array.isArray(ids) ? ids.filter(function (id, index) { return map.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [], term: term };
-    } catch (_) { return []; }
+    } catch (_) { return { ids: [], term: null }; }
   }
   function write(ids, term) {
     var state = { items: ids, term: term };
@@ -119,7 +119,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       var daily = document.createElement('strong'); daily.textContent = '$' + product.day;
       var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
       var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
-      price.append(daily, depositText); row.append(detail, price);
+      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
+      price.append(daily, depositText, remove); row.append(detail, price);
       items.appendChild(row);
     });
     total.textContent = ids.length ? ids.length + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + (rentalDays * ids.reduce(function (sum, id) { return sum + Number(map.get(id).day || 0); }, 0)).toFixed(2) + ' · 押金 $' + deposit.toFixed(2) : '';
@@ -134,6 +135,14 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   endInput.addEventListener('change', saveTerm);
   startPeriodInput.addEventListener('change', saveTerm);
   endPeriodInput.addEventListener('change', saveTerm);
+  items.addEventListener('click', function (event) {
+    var remove = event.target.closest('[data-cart-remove]');
+    if (!remove) return;
+    selectedId = '';
+    var state = read();
+    write(state.ids.filter(function (id) { return id !== remove.dataset.cartRemove; }), state.term);
+    render();
+  });
   render();
 })();
 </script>`
@@ -211,18 +220,10 @@ export function renderApply(data: ApplyData): string {
         <p class="coupon-hint" id="coupon-hint" aria-live="polite">有优惠码？提交时会同时校验适用设备、租期和折扣金额。</p>
       </div>
 
-      <div class="form-card">
-        <div class="form-card-head"><span>02</span><div><h3>租赁日期</h3><p>半天时段也会折算进预计租期</p></div></div>
-        <div class="row2">
-          <div class="field"><label for="startDate">取货日期</label><input type="date" id="startDate" name="startDate" lang="en-AU" required disabled></div>
-          <div class="field"><label for="startPeriod">取货时段</label><select id="startPeriod" name="startPeriod" disabled><option value="AM">上午</option><option value="PM">下午</option></select></div>
-        </div>
-        <div class="row2">
-          <div class="field"><label for="endDate">归还日期</label><input type="date" id="endDate" name="endDate" lang="en-AU" required disabled></div>
-          <div class="field"><label for="endPeriod">归还时段</label><select id="endPeriod" name="endPeriod" disabled><option value="AM">上午</option><option value="PM">下午</option></select></div>
-        </div>
-        <p class="hint">最短租期 ${config.minimumRentalDays} 天。租期已在购物车确认；如需修改，请返回购物车。</p>
-      </div>
+      <input type="hidden" id="startDate" name="startDate" required>
+      <input type="hidden" id="endDate" name="endDate" required>
+      <input type="hidden" id="startPeriod" name="startPeriod" value="AM">
+      <input type="hidden" id="endPeriod" name="endPeriod" value="AM">
 
       <div class="form-card">
         <div class="form-card-head"><span>03</span><div><h3>取还方式</h3><p>配送范围与运费会在审核时确认</p></div></div>
@@ -232,13 +233,20 @@ export function renderApply(data: ApplyData): string {
         </div>
         <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
         <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
+          <div class="field address-autocomplete">
+            <label for="delivery-address-search">搜索墨尔本地址</label>
+            <input id="delivery-address-search" type="search" autocomplete="off" role="combobox" aria-controls="address-suggestions" aria-expanded="false" placeholder="例如 123 Collins Street, Melbourne">
+            <div class="address-search-status" id="address-search-status" aria-live="polite">输入至少 3 个字符开始联想。</div>
+            <div class="address-suggestions" id="address-suggestions" role="listbox" hidden></div>
+            <small class="address-attribution">地址数据 © OpenStreetMap contributors</small>
+          </div>
           <div class="field"><label for="deliveryStreet">街道地址</label><input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1"></div>
           <div class="row3">
             <div class="field"><label for="deliverySuburb">Suburb</label><input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra"></div>
             <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
           </div>
           <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
-          <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? ` 可配送区域：${esc(deliveryAreas)}。` : ''} 其他郊区请选到店自取。</p>
+          <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? ` 可配送区域：${esc(deliveryAreas)}。` : ''} 其他城市或郊区请选到店自取。</p>
         </div>
       </div>
 
@@ -250,10 +258,15 @@ export function renderApply(data: ApplyData): string {
           <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
         </div>
         <div class="row2">
-          <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name"></div>
-          <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel"></div>
+          <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name" required></div>
+          <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
         </div>
-        <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email"></div>
+        <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
+        <div class="row2">
+          <div class="field"><label for="password">设置 / 输入密码</label><input type="password" id="password" name="password" minlength="8" autocomplete="new-password" required></div>
+          <div class="field"><label for="passwordConfirm">确认密码</label><input type="password" id="passwordConfirm" name="passwordConfirm" minlength="8" autocomplete="new-password" required></div>
+        </div>
+        <p class="hint">已有账号请填写原密码；新账号密码至少 8 位，并包含字母、数字和符号。</p>
         <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
         <div class="payment-method-options" id="payment-method-options" hidden>
           <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
@@ -272,7 +285,7 @@ export function renderApply(data: ApplyData): string {
           <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
         </div>
         <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
-        <div class="field" style="display:flex;gap:8px;align-items:flex-start">
+        <div class="field legal-agreement">
           <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
           <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
         </div>
@@ -293,7 +306,7 @@ export function renderApply(data: ApplyData): string {
     <div class="form-card" id="apply-done" hidden style="margin-top:18px">
       <h3 class="success-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 2.5 2.5L16.5 9"></path></svg><span>申请已提交</span></h3>
       <p id="apply-done-msg" style="color:var(--muted-fg);font-size:14px"></p>
-      <div class="temporary-credentials" id="temporary-credentials" hidden><span>请立即保存</span><strong>订单编号：<b id="done-order-no"></b></strong><strong>临时账户密码：<b id="done-temp-password"></b></strong><p>已注册用户请直接登录账号中心；临时密码只在这里显示。</p></div>
+      <div class="temporary-credentials" id="temporary-credentials" hidden><span>申请已提交</span><strong>订单编号：<b id="done-order-no"></b></strong><p>请使用刚才设置的密码，进入账号中心查看申请进度。</p></div>
       <p style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px"><a class="btn btn-primary" href="${esc(appUrl)}/login">进入账号中心查看申请</a><a class="btn btn-ghost" href="/products">继续浏览产品</a></p>
     </div>
   </div>
@@ -304,12 +317,13 @@ export function renderApply(data: ApplyData): string {
   var CART_KEY = 'geekslope-cart-v1';
   var PRODUCTS = ${scriptJson(cartProducts)};
   var SELECTED_ID = ${scriptJson(selectedId)};
-  var ENDPOINT = ${scriptJson(`${appUrl}/public/rental-request`)};
-  var SETUP_ENDPOINT = ${scriptJson(`${appUrl}/public/rental-setup-intent`)};
+  var ENDPOINT = '/api/rental-request';
+  var SETUP_ENDPOINT = '/api/rental-setup-intent';
   var MIN_DAYS = ${config.minimumRentalDays};
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
-  var COUPON_ENDPOINT = ${scriptJson(`${appUrl}/api/coupons/rental-cart-preview`)};
+  var DELIVERY_AREAS = ${scriptJson(config.deliveryAreas)};
+  var COUPON_ENDPOINT = '/api/coupons/rental-cart-preview';
   var productMap = new Map(PRODUCTS.map(function (product) { return [product.id, product]; }));
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function readCart() {
@@ -341,25 +355,35 @@ export function renderApply(data: ApplyData): string {
   var deliveryFields = document.getElementById('delivery-fields');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
+  var couponState = 'empty';
+  var checkoutBlocked = false;
   var stripe = null;
   var stripeElements = null;
   var setupIntent = null;
   var cardReady = false;
-    var stripeFeeRate = 0.025;
-    var accountBalance = null;
+  var stripeFeeRate = 0.025;
+  var accountBalance = null;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
   var setupIntentInput = document.getElementById('stripeSetupIntentId');
   var balanceOption = document.getElementById('payment-method-options');
   var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
-            var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
+  var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
   var refundBalanceInput = document.getElementById('refund-balance');
   var contactEmail = document.getElementById('contactEmail');
-  var balanceEndpoint = ${scriptJson(`${appUrl}/public/account-balance`)};
+  var passwordInput = document.getElementById('password');
+  var passwordConfirmInput = document.getElementById('passwordConfirm');
+  var balanceEndpoint = '/api/account-balance';
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
   var walletMessage = document.getElementById('stripe-wallet-message');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
+  var addressSearch = document.getElementById('delivery-address-search');
+  var addressSuggestions = document.getElementById('address-suggestions');
+  var addressStatus = document.getElementById('address-search-status');
+  var addressTimer = null;
+  var addressRequest = null;
+  var activeAddressSuggestion = -1;
 
   function todayStr() {
     var date = new Date();
@@ -369,6 +393,98 @@ export function renderApply(data: ApplyData): string {
     var date = new Date(dateString + 'T00:00:00');
     date.setDate(date.getDate() + amount);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
+  function normalizeAddress(value) {
+    return String(value || '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  function isMelbourneDeliveryAddress() {
+    if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
+    var text = normalizeAddress((addressSearch && addressSearch.value || '') + ' ' + document.getElementById('deliverySuburb').value);
+    var areas = ['melbourne', 'docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne'].concat(DELIVERY_AREAS || []);
+    return areas.map(normalizeAddress).filter(Boolean).some(function (area) { return text.indexOf(area.replace('melbourne cbd', 'melbourne')) >= 0; });
+  }
+  function showFormError(message) {
+    checkoutBlocked = true;
+    errBox.textContent = message;
+    errBox.hidden = false;
+  }
+  function clearCheckoutError() {
+    checkoutBlocked = false;
+    if (!form.querySelector(':invalid')) errBox.hidden = true;
+  }
+  function markCouponDirty() {
+    var code = document.getElementById('couponCode').value.trim();
+    couponState = code ? 'unchecked' : 'empty';
+    appliedDiscount = 0;
+  }
+  function setAddressStatus(message, state) {
+    if (addressStatus) { addressStatus.textContent = message; addressStatus.dataset.state = state || ''; }
+  }
+  function closeAddressSuggestions() {
+    if (!addressSuggestions) return;
+    addressSuggestions.hidden = true;
+    addressSearch.setAttribute('aria-expanded', 'false');
+    activeAddressSuggestion = -1;
+  }
+  function setActiveAddressSuggestion(index) {
+    var options = addressSuggestions.querySelectorAll('button[role="option"]');
+    if (!options.length) return;
+    activeAddressSuggestion = Math.max(0, Math.min(index, options.length - 1));
+    options.forEach(function (option, optionIndex) { option.setAttribute('aria-selected', String(optionIndex === activeAddressSuggestion)); });
+    options[activeAddressSuggestion].scrollIntoView({ block: 'nearest' });
+  }
+  function renderAddressSuggestions(items) {
+    addressSuggestions.replaceChildren();
+    items.forEach(function (item) {
+      var button = document.createElement('button');
+      button.type = 'button'; button.setAttribute('role', 'option'); button.setAttribute('aria-selected', 'false');
+      button.dataset.address = JSON.stringify(item);
+      var marker = document.createElement('span'); marker.className = 'address-suggestion-marker'; marker.textContent = 'AU';
+      var label = document.createElement('span'); label.textContent = item.text;
+      button.append(marker, label); addressSuggestions.appendChild(button);
+    });
+    addressSuggestions.hidden = !items.length;
+    addressSearch.setAttribute('aria-expanded', String(Boolean(items.length)));
+  }
+  if (addressSearch && addressSuggestions) {
+    addressSearch.addEventListener('input', function () {
+      window.clearTimeout(addressTimer);
+      if (addressRequest) addressRequest.abort();
+      var query = addressSearch.value.trim();
+      if (query.length < 3) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入至少 3 个字符开始联想。'); return; }
+      setAddressStatus('正在查找墨尔本地址…', 'loading');
+      addressTimer = window.setTimeout(function () {
+        addressRequest = new AbortController();
+        fetch('/api/address/autocomplete?q=' + encodeURIComponent(query), { headers: { Accept: 'application/json' }, signal: addressRequest.signal })
+          .then(readJsonResponse)
+          .then(function (result) {
+            if (!result.ok) throw new Error((result.json && result.json.error) || '地址联想暂时不可用。');
+            renderAddressSuggestions(result.json.suggestions || []);
+            setAddressStatus(result.json.suggestions && result.json.suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', result.json.suggestions && result.json.suggestions.length ? 'ready' : 'empty');
+          })
+          .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(error.message || '地址联想暂时不可用，请手工填写。', 'error'); } });
+      }, 300);
+    });
+    addressSearch.addEventListener('keydown', function (event) {
+      var options = addressSuggestions.querySelectorAll('button[role="option"]');
+      if (addressSuggestions.hidden || !options.length) return;
+      if (event.key === 'ArrowDown') { event.preventDefault(); setActiveAddressSuggestion(activeAddressSuggestion + 1); }
+      if (event.key === 'ArrowUp') { event.preventDefault(); setActiveAddressSuggestion(activeAddressSuggestion <= 0 ? options.length - 1 : activeAddressSuggestion - 1); }
+      if (event.key === 'Enter' && activeAddressSuggestion >= 0) { event.preventDefault(); options[activeAddressSuggestion].click(); }
+      if (event.key === 'Escape') closeAddressSuggestions();
+    });
+    addressSuggestions.addEventListener('click', function (event) {
+      var button = event.target.closest('button[role="option"]');
+      if (!button) return;
+      var item = JSON.parse(button.dataset.address || '{}');
+      addressSearch.value = item.formattedAddress || item.text || '';
+      document.getElementById('deliveryStreet').value = item.street || '';
+      document.getElementById('deliverySuburb').value = item.suburb || '';
+      document.getElementById('deliveryState').value = item.state || 'VIC';
+      document.getElementById('deliveryPostcode').value = item.postcode || '';
+      closeAddressSuggestions(); setAddressStatus('地址已自动填写，请核对后提交。', 'success');
+    });
+    document.addEventListener('click', function (event) { if (!event.target.closest('.address-autocomplete')) closeAddressSuggestions(); });
   }
   var today = todayStr();
   startD.min = today;
@@ -423,9 +539,9 @@ export function renderApply(data: ApplyData): string {
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
-         document.getElementById('balance-payment-note').textContent = accountBalance >= total
-           ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
-           : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，本次余额不足，系统会先抵扣余额，剩余金额再通过信用卡支付。';
+      document.getElementById('balance-payment-note').textContent = accountBalance >= total
+        ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
+        : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，余额不足';
     }
     summary.textContent = rentalDays
       ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' · 支付手续费 $' + paymentFee.toFixed(2) + ' = 应付 $' + payableTotal.toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
@@ -442,11 +558,20 @@ export function renderApply(data: ApplyData): string {
       var detail = document.createElement('div');
       var name = document.createElement('strong'); name.textContent = product.name;
       var meta = document.createElement('span'); meta.textContent = (product.model ? product.model + ' · ' : '') + '$' + product.day + '/day · 押金 $' + product.deposit;
-      detail.append(name, meta); row.append(detail); itemsBox.append(row);
+      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
+      detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
     });
     submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
     refreshSummary();
   }
+  itemsBox.addEventListener('click', function (event) {
+    var remove = event.target.closest('[data-cart-remove]');
+    if (!remove) return;
+    SELECTED_ID = '';
+    cartIds = saveCart(cartIds.filter(function (id) { return id !== remove.dataset.cartRemove; }));
+    markCouponDirty();
+    renderCart();
+  });
   function setCardMessage(message, isSuccess) {
     cardMessage.textContent = message;
     cardMessage.style.color = isSuccess ? 'var(--secondary)' : '';
@@ -533,9 +658,12 @@ export function renderApply(data: ApplyData): string {
             setupIntent = result.setupIntent;
             if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('快捷支付验证尚未完成，请重试。');
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; walletMessage.textContent = '快捷支付已验证。'; walletMessage.style.color = 'var(--secondary)';
+            cardReady = true; walletMessage.textContent = '快捷支付已验证。'; walletMessage.style.color = 'var(--secondary)'; clearCheckoutError();
           })
-          .catch(function (error) { walletMessage.textContent = error.message || 'Apple Pay 验证失败，请重试。'; });
+          .catch(function (error) {
+            var message = error.message || 'Apple Pay 验证失败，请重试。';
+            walletMessage.textContent = message; showFormError(message);
+          });
       });
       stripeElements = stripe.elements({ appearance: appearance });
       var cardElement = stripeElements.create('card', {
@@ -553,7 +681,7 @@ export function renderApply(data: ApplyData): string {
         },
       });
       cardElement.mount('#stripe-card-element');
-      cardElement.on('ready', function () { cardConfirm.disabled = false; });
+      cardElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage('信用卡资料已加载，请填写后点击验证。'); });
       cardConfirm.addEventListener('click', function () {
         cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
         stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: document.getElementById('contactName').value, email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
@@ -562,25 +690,60 @@ export function renderApply(data: ApplyData): string {
             setupIntent = result.setupIntent;
             if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('卡片验证尚未完成，请重试。');
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证。', true);
+            cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证。', true); clearCheckoutError();
           })
-          .catch(function (error) { cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(error.message || '卡片验证失败，请重试。'); });
+          .catch(function (error) {
+            var message = error.message || '卡片验证失败，请重试。';
+            cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(message); showFormError(message);
+          });
       });
     })
-    .catch(function (error) { setCardMessage(error.message || '安全付款组件暂不可用，请联系客服。'); });
-  ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, function () { appliedDiscount = 0; refreshSummary(); }); }); });
+    .catch(function (error) {
+      var message = error.message || '安全付款组件暂不可用，请联系客服。';
+      setCardMessage(message); showFormError(message);
+    });
+  ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });
   method.addEventListener('change', function () {
     var delivery = method.value === 'Delivery'; deliveryFields.hidden = !delivery; pickupField.hidden = delivery;
     var pickupLocation = document.getElementById('pickupLocation');
     pickupLocation.disabled = delivery || ${hasPickupLocations ? 'false' : 'true'};
     pickupLocation.required = !delivery && ${hasPickupLocations ? 'true' : 'false'};
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) { document.getElementById(id).required = delivery; });
+    validateDeliveryAddress(false);
+  });
+  function validateDeliveryAddress(showError) {
+    var suburb = document.getElementById('deliverySuburb');
+    if (method.value !== 'Delivery') { suburb.setCustomValidity(''); return true; }
+    var street = document.getElementById('deliveryStreet').value.trim();
+    var suburbValue = suburb.value.trim();
+    var postcode = document.getElementById('deliveryPostcode').value.trim();
+    var message = street && suburbValue && postcode && !isMelbourneDeliveryAddress()
+      ? '送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。' : '';
+    suburb.setCustomValidity(message);
+    if (message && showError) showFormError(message);
+    return !message;
+  }
+  function validateContactFields(showError) {
+    var message = passwordInput.value && passwordConfirmInput.value && passwordInput.value !== passwordConfirmInput.value
+      ? '两次输入的密码不一致。' : '';
+    passwordConfirmInput.setCustomValidity(message);
+    if (message && showError) showFormError(message);
+    return !message;
+  }
+  ['input', 'change'].forEach(function (eventName) {
+    ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) {
+      document.getElementById(id).addEventListener(eventName, function () { validateDeliveryAddress(true); });
+    });
+  });
+  [passwordInput, passwordConfirmInput].forEach(function (input) {
+    input.addEventListener('input', function () { validateContactFields(true); });
   });
   method.dispatchEvent(new Event('change'));
   document.getElementById('coupon-check').addEventListener('click', function () {
     var code = document.getElementById('couponCode').value.trim();
     var hint = document.getElementById('coupon-hint');
-    if (!code) { hint.textContent = '请先输入优惠码。'; return; }
+    if (!code) { couponState = 'empty'; appliedDiscount = 0; hint.textContent = '请先输入优惠码。'; return; }
+    couponState = 'checking';
     hint.textContent = '正在校验优惠码…';
     var params = new URLSearchParams({ deviceIds: JSON.stringify(cartIds), days: String(days()), code: code });
     fetch(COUPON_ENDPOINT + '?' + params.toString(), { headers: { Accept: 'application/json' } })
@@ -589,10 +752,13 @@ export function renderApply(data: ApplyData): string {
         if (!result.ok || !result.json || !result.json.ok) throw new Error((result.json && result.json.message) || '优惠码无效。');
         hint.textContent = result.json.message || ('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2));
         appliedDiscount = Number(result.json.discount || 0);
+        couponState = 'valid';
+        clearCheckoutError();
         refreshSummary();
       })
-      .catch(function (error) { hint.textContent = error.message || '优惠码校验失败，请稍后重试。'; });
+      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = error.message || '优惠码校验失败，请稍后重试。'; showFormError(hint.textContent); });
   });
+  document.getElementById('couponCode').addEventListener('input', markCouponDirty);
   renderCart();
 
   var doneBox = document.getElementById('apply-done');
@@ -608,16 +774,37 @@ export function renderApply(data: ApplyData): string {
     saveContactInfo.checked = true;
   }
   if (contactEmail.value) lookupBalance();
+  form.addEventListener('invalid', function (event) {
+    var field = event.target;
+    if (field && field.validationMessage) {
+      var message = field.id === 'agree' ? '请先勾选同意服务条款与隐私政策。'
+        : field.id === 'deliveryPostcode' && field.validity.patternMismatch ? '请输入 4 位澳洲邮编。'
+        : field.validationMessage;
+      showFormError(message);
+    }
+  }, true);
+  form.addEventListener('input', function (event) {
+    var field = event.target;
+    if (field && field.checkValidity() && !form.querySelector(':invalid')) { checkoutBlocked = false; errBox.hidden = true; }
+  });
   form.addEventListener('submit', function (event) {
-    event.preventDefault(); errBox.hidden = true;
+    event.preventDefault();
+    if (checkoutBlocked) { errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    errBox.hidden = true;
     if (!cartIds.length) { renderCart(); return; }
-    if (!form.reportValidity()) return;
+    if (!validateDeliveryAddress(true) || !validateContactFields(true) || !form.reportValidity()) return;
+    var enteredCoupon = document.getElementById('couponCode').value.trim();
+    if (enteredCoupon && couponState !== 'valid') {
+      showFormError('请先点击“使用优惠码”完成校验，确认优惠码有效后再提交。');
+      errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     if (selectedPaymentMethod !== 'balance' && (!cardReady || !setupIntentInput.value)) {
-      errBox.textContent = '请先填写并验证信用卡信息。验证过程不会扣款。'; errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      showFormError('请先填写并验证信用卡信息。验证过程不会扣款。'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     if (days() < MIN_DAYS) {
-      errBox.textContent = '租期不能少于 ' + MIN_DAYS + ' 天，请调整归还日期。'; errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      showFormError('租期不能少于 ' + MIN_DAYS + ' 天，请调整归还日期。'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
@@ -634,7 +821,7 @@ export function renderApply(data: ApplyData): string {
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
           saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
-          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-temp-password').textContent = result.json.temporaryPassword || '请进入账号中心登录'; credentialBox.hidden = false; }
+          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; credentialBox.hidden = false; }
           doneBox.hidden = false;
           if (!reduceMotion) doneBox.classList.add('is-in');
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
@@ -642,7 +829,7 @@ export function renderApply(data: ApplyData): string {
         throw new Error((result.json && result.json.message) || '提交失败，请稍后重试。');
       })
       .catch(function (error) {
-        errBox.textContent = error.message || '提交失败，请稍后重试。'; errBox.hidden = false; submitBtn.disabled = false; submitBtn.textContent = '提交 ' + cartIds.length + ' 台设备申请'; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showFormError(error.message || '提交失败，请稍后重试。'); submitBtn.disabled = false; submitBtn.textContent = '提交 ' + cartIds.length + ' 台设备申请'; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
   });
 })();
