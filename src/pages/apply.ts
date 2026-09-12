@@ -271,91 +271,107 @@ export function renderApply(data: ApplyData): string {
     <form id="apply-form" hidden>
       <div class="form-alert" id="form-error" hidden></div>
 
-      <div class="form-card">
-        <div class="form-card-head"><span>01</span><div><h3>订单摘要</h3><p>设备已从购物车带入，需修改时返回购物车</p></div></div>
-        <div class="field">
-          <label>已选择设备</label>
-          <div class="cart-checkout-list" id="cart-items"></div>
-        </div>
-        <p class="hint"><a href="/apply" style="color:var(--primary)">返回购物车修改设备</a> · 每台库存设备只能加入一次，单次最多 10 台。</p>
-        <div class="form-summary" id="summary"></div>
-        <div class="coupon-row">
-          <div class="field">
-            <label for="couponCode">优惠码（选填）</label>
-            <input id="couponCode" name="couponCode" maxlength="40" autocomplete="off" placeholder="输入优惠码">
-          </div>
-          <button class="btn btn-ghost" type="button" id="coupon-check">使用优惠码</button>
-        </div>
-        <p class="coupon-hint" id="coupon-hint" aria-live="polite">有优惠码？提交时会同时校验适用设备、租期和折扣金额。</p>
-      </div>
-
       <input type="hidden" id="startDate" name="startDate" required>
       <input type="hidden" id="endDate" name="endDate" required>
       <input type="hidden" id="startPeriod" name="startPeriod" value="AM">
       <input type="hidden" id="endPeriod" name="endPeriod" value="AM">
 
-      <div class="form-card">
-        <div class="form-card-head"><span>03</span><div><h3>取还方式</h3><p>配送范围与运费会在审核时确认</p></div></div>
-        <div class="field">
-          <label for="deliveryMethod">取还方式</label>
-          <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
+      <div class="apply-grid">
+        <div class="apply-grid-main">
+          <div class="form-card">
+            <div class="form-card-head"><span>01</span><div><h3>订单摘要</h3><p>设备已从购物车带入，需修改时返回购物车</p></div></div>
+            <div class="field">
+              <label>已选择设备</label>
+              <div class="cart-checkout-list" id="cart-items"></div>
+            </div>
+            <p class="hint"><a href="/apply" style="color:var(--primary)">返回购物车修改设备</a> · 每台库存设备只能加入一次，单次最多 10 台。</p>
+            <div class="form-summary" id="summary"></div>
+            <div class="coupon-row">
+              <div class="field">
+                <label for="couponCode">优惠码（选填）</label>
+                <input id="couponCode" name="couponCode" maxlength="40" autocomplete="off" placeholder="输入优惠码">
+              </div>
+              <button class="btn btn-ghost" type="button" id="coupon-check">使用优惠码</button>
+            </div>
+            <p class="coupon-hint" id="coupon-hint" aria-live="polite">有优惠码？提交时会同时校验适用设备、租期和折扣金额。</p>
+          </div>
+
+          <div class="form-card">
+            <div class="form-card-head"><span>02</span><div><h3>取还方式</h3><p>配送范围与运费会在审核时确认</p></div></div>
+            <div class="field">
+              <label for="deliveryMethod">取还方式</label>
+              <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
+            </div>
+            <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
+            <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
+              <div class="field address-autocomplete">
+                <label for="delivery-address-search">搜索墨尔本地址</label>
+                <input id="delivery-address-search" type="search" autocomplete="off" role="combobox" aria-controls="address-suggestions" aria-expanded="false" placeholder="例如 123 Collins Street, Melbourne">
+                <div class="address-search-status" id="address-search-status" aria-live="polite">输入至少 3 个字符开始联想。</div>
+                <div class="address-suggestions" id="address-suggestions" role="listbox" hidden></div>
+                <small class="address-attribution">地址数据 © OpenStreetMap contributors</small>
+              </div>
+              <div class="field"><label for="deliveryStreet">街道地址</label><input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1"></div>
+              <div class="row3">
+                <div class="field"><label for="deliverySuburb">Suburb</label><input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra"></div>
+                <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
+              </div>
+              <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
+              <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? ` 可配送区域：${esc(deliveryAreas)}。` : ''} 其他城市或郊区请选到店自取。</p>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <div class="form-card-head"><span>03</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
+            <div class="row2">
+              <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name" required></div>
+              <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
+            </div>
+            <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
+            <p class="hint">无需填写密码或登录。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号可直接提交申请。</p>
+            <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
+          </div>
+
+          <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
         </div>
-        <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
-        <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
-          <div class="field address-autocomplete">
-            <label for="delivery-address-search">搜索墨尔本地址</label>
-            <input id="delivery-address-search" type="search" autocomplete="off" role="combobox" aria-controls="address-suggestions" aria-expanded="false" placeholder="例如 123 Collins Street, Melbourne">
-            <div class="address-search-status" id="address-search-status" aria-live="polite">输入至少 3 个字符开始联想。</div>
-            <div class="address-suggestions" id="address-suggestions" role="listbox" hidden></div>
-            <small class="address-attribution">地址数据 © OpenStreetMap contributors</small>
+
+        <div class="apply-grid-payment">
+          <div class="form-card" id="wallet-step-card" hidden>
+            <div class="form-card-head"><span>04</span><div><h3>快捷支付</h3><p>使用 Apple Pay / Google Pay / Link 可自动填充联系与地址信息</p></div></div>
+            <div class="stripe-wallet-box" id="stripe-wallet-box">
+              <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
+              <div id="stripe-wallet-element"></div>
+              <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
+            </div>
           </div>
-          <div class="field"><label for="deliveryStreet">街道地址</label><input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1"></div>
-          <div class="row3">
-            <div class="field"><label for="deliverySuburb">Suburb</label><input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra"></div>
-            <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
+
+          <div class="form-card">
+            <div class="form-card-head"><span>05</span><div><h3>支付方式</h3><p>验证支付方式，押金归还时使用</p></div></div>
+            <div class="payment-method-options" id="payment-method-options" hidden>
+              <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
+            </div>
+            <div class="stripe-setup-box">
+              <div class="stripe-setup-head"><div><label>信用卡资料</label><p>验证支付方式。</p></div><span>SECURE / STRIPE</span></div>
+              <div id="stripe-card-element" class="stripe-card-element"></div>
+              <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
+              <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
+              <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
+            </div>
+            <div class="refund-choice">
+              <label>押金处理方式</label>
+              <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
+              <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
+            </div>
+            <p class="hint">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
           </div>
-          <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
-          <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? ` 可配送区域：${esc(deliveryAreas)}。` : ''} 其他城市或郊区请选到店自取。</p>
         </div>
       </div>
 
-      <div class="form-card">
-        <div class="form-card-head"><span>04</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
-        <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
-          <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
-          <div id="stripe-wallet-element"></div>
-          <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
-        </div>
-        <div class="row2">
-          <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name" required></div>
-          <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
-        </div>
-        <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
-        <p class="hint">无需填写密码或登录。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号可直接提交申请。</p>
-        <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
-        <div class="payment-method-options" id="payment-method-options" hidden>
-          <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
-        </div>
-        <div class="stripe-setup-box">
-          <div class="stripe-setup-head"><div><label>信用卡资料</label><p>验证支付方式。</p></div><span>SECURE / STRIPE</span></div>
-          <div id="stripe-card-element" class="stripe-card-element"></div>
-          <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
-          <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
-          <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
-        </div>
-        <div class="refund-choice">
-          <label>押金处理方式</label>
-          <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
-          <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
-        </div>
-        <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
-        <div class="field legal-agreement">
-          <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
-          <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
-        </div>
-        ${stripeScript}${turnstile}
-        <p class="hint">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
+      <div class="field legal-agreement">
+        <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
+        <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
       </div>
+      ${stripeScript}${turnstile}
 
       <div class="apply-expectations" aria-label="提交申请后的流程">
         <div><span>提交时</span><strong>不会立即扣款</strong><p>先创建租赁申请，保留你的设备、租期和联系信息。</p></div>
@@ -440,6 +456,7 @@ export function renderApply(data: ApplyData): string {
   var balanceEndpoint = '/api/account-balance';
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
+  var walletStepCard = document.getElementById('wallet-step-card');
   var walletMessage = document.getElementById('stripe-wallet-message');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
   var addressSearch = document.getElementById('delivery-address-search');
@@ -695,7 +712,7 @@ export function renderApply(data: ApplyData): string {
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
     stripeSetupBox.hidden = useBalance;
-    walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
+    walletStepCard.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
   }
   function lookupBalance() {
     var email = contactEmail.value.trim();
