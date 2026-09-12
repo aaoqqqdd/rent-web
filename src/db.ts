@@ -177,8 +177,6 @@ function buildPolicyUpdateNotice(raw: string): { title: string; message: string 
   const policyName = (match?.[1] || '相关条款').trim()
   const title = `${policyName}协议内容已更新`
   const message = [
-    `**${title}**`,
-    '',
     `我们已更新《${policyName}》。`,
     '',
     `最新版本已发布于本网站的相关页面，并自公布之日起生效。继续使用我们的服务，即表示您已阅读并同意更新后的《${policyName}》。`,

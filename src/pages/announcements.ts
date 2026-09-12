@@ -31,7 +31,7 @@ function noticeCard(notice: PublicNotice): string {
   <span class="notice-card-kind">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</span>
   <h2>${esc(title)}</h2>
   <time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time>
-  <p>${esc(notice.message)}</p>
+  <p>${noticeMessage(notice.message)}</p>
   <span class="text-link">${isCoupon ? '去挑选设备' : '查看详情'} <span aria-hidden="true">→</span></span>
 </a>`
 }
