@@ -128,7 +128,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   // Cart and checkout
   '先选好设备，再开始结账': 'Choose your devices before checkout', '在这里确认设备和预计费用，下一步再填写租期、取还方式与联系信息。': 'Confirm devices and estimated costs here, then enter dates, handover and contact details.',
   '当前选择': 'Current selection', '你的设备清单': 'Your device list', '设备会保存在当前浏览器中，最多同时选择 10 台。': 'Devices are saved in this browser. You can select up to 10 at once.',
-  '购物车还是空的': 'Your cart is empty', '先去设备库挑选电脑，加入后会显示在这里。': 'Choose a computer from the device catalogue and it will appear here.',
+  '购物车还是空的': 'Your cart is empty', '当前购物车为空': 'Your cart is empty', '先去设备库挑选电脑，加入后会显示在这里。': 'Choose a computer from the device catalogue and it will appear here.',
   '去选择设备': 'Choose devices', '预计费用': 'Estimated cost', '租金会根据实际日期计算，押金在归还验收后按规则处理。': 'Rental is based on the actual dates; the deposit is handled after return inspection.',
   '继续选设备': 'Choose more devices', '前往结账': 'Proceed to checkout', '租赁申请': 'Rental application',
   '确认设备，安排你的使用时间': 'Confirm your devices and schedule', '现在只提交申请。档期和费用确认后，再进入合同与付款。': 'This submits an application only. Contract and payment follow after availability and costs are confirmed.',

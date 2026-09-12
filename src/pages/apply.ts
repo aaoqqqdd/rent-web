@@ -31,7 +31,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
 <section class="page-hero compact"><div class="wrap"><div class="kicker">购物车</div><h1>先选设备，再确认租期</h1><p>设备详情页先选租期；加入购物车后，只需在这里修改租期。</p></div></section>
 <section class="section apply-section"><div class="wrap form-wrap cart-page-wrap">
   <div class="section-head"><div class="kicker">当前选择</div><h2>你的设备清单</h2><p>设备会保存在当前浏览器中，最多同时选择 10 台。</p></div>
-  <div class="form-card cart-empty" id="cart-page-empty" hidden><h3>购物车还是空的</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
+  <div class="form-card cart-empty" id="cart-page-empty"><h3>当前购物车为空</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
   <div id="cart-page-content" hidden>
     <div class="form-card cart-term-card">
       <p class="hint">请在下方每台设备卡片中选择取货和归还日期</p>
@@ -45,6 +45,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var products = ${scriptJson(cartProducts)};
   var selectedId = ${scriptJson(selectedId)};
   var map = new Map(products.map(function (product) { return [product.id, product]; }));
+  window.__GeekSlopeCartValidProductIds = products.map(function (product) { return product.id; });
   var key = 'geekslope-cart-v1';
   var empty = document.getElementById('cart-page-empty');
   var content = document.getElementById('cart-page-content');
@@ -298,8 +299,8 @@ export function renderApply(data: ApplyData): string {
       <h2>确认设备与租赁信息</h2>
     </div>
 
-    <div class="form-card cart-empty" id="cart-empty" hidden>
-      <h3>购物车还是空的</h3>
+    <div class="form-card cart-empty" id="cart-empty">
+      <h3>当前购物车为空</h3>
       <p>先去设备库挑选电脑，加入后会保存在这里。</p>
       <a class="btn btn-primary" href="/products">去选择设备</a>
     </div>
@@ -440,6 +441,7 @@ export function renderApply(data: ApplyData): string {
   var DELIVERY_AREAS = ${scriptJson(config.deliveryAreas)};
   var COUPON_ENDPOINT = '/api/coupons/rental-cart-preview';
   var productMap = new Map(PRODUCTS.map(function (product) { return [product.id, product]; }));
+  window.__GeekSlopeCartValidProductIds = PRODUCTS.map(function (product) { return product.id; });
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function readCartState() {
     try {

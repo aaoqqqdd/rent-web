@@ -268,7 +268,9 @@ ${renderSiteFooter(opts.contact)}
 
   var CART_KEY = 'geekslope-cart-v1';
   function cleanIds(ids) {
-    return ids.filter(function (id, index) { return typeof id === 'string' && id && ids.indexOf(id) === index; }).slice(0, 10);
+    var clean = ids.filter(function (id, index) { return typeof id === 'string' && id && ids.indexOf(id) === index; }).slice(0, 10);
+    var validProductIds = window.__GeekSlopeCartValidProductIds;
+    return Array.isArray(validProductIds) ? clean.filter(function (id) { return validProductIds.indexOf(id) >= 0; }) : clean;
   }
   function readCartState() {
     try {
