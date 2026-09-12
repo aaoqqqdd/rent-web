@@ -349,7 +349,7 @@ export function renderApply(data: ApplyData): string {
         </div>
         <div class="refund-choice">
           <label>押金处理方式</label>
-          <p class="hint">短期租赁使用预授权：Visa/Mastercard 请求延长保留最多 30 天，其他卡按 7 天普通预授权；归还无损坏时直接释放。30 天及以上长期租赁不预扣押金，仅在损坏或逾期时按实际费用扣款。</p>
+          <p class="hint">短期租赁优先使用押金预授权：Visa/Mastercard 请求延长保留最多 30 天，其他卡按 7 天普通预授权；租期超过对应窗口时改用 SetupIntent 保存卡片，不预扣押金。归还无损坏时直接释放预授权；仅在损坏或逾期时按实际费用扣款。</p>
           <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
           <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
         </div>
@@ -623,7 +623,7 @@ export function renderApply(data: ApplyData): string {
         ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
         : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，余额不足';
     }
-    var depositNote = rentalDays >= LONG_TERM_DAYS ? '长期租赁押金不预扣，仅在损坏或逾期时按实际费用扣款' : '短期租赁押金预授权（Visa/Mastercard 最多 30 天，其他卡 7 天），归还无损坏时释放';
+    var depositNote = rentalDays >= LONG_TERM_DAYS ? '押金使用 SetupIntent 保存卡片，不预扣，仅在损坏或逾期时按实际费用扣款' : '短期租赁押金按卡种预授权（Visa/Mastercard 最多 30 天，其他卡 7 天），超过窗口改用 SetupIntent';
     summary.textContent = rentalDays
       ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + '（' + depositNote + '） · 租金支付手续费 $' + paymentFee.toFixed(2) + ' = 租金付款参考 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
       : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2);

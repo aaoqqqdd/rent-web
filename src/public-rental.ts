@@ -11,6 +11,16 @@ const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const LONG_TERM_RENTAL_DAYS = 30
 
+function depositAuthorizationWindowDays(cardBrand: unknown): 7 | 30 {
+  const brand = String(cardBrand || '').trim().toLowerCase()
+  return brand === 'visa' || brand === 'mastercard' ? 30 : 7
+}
+
+function depositPaymentModeForRental(rentalPeriod: number, cardPayment: boolean, cardBrand: unknown): 'PAID' | 'PREAUTH' | 'SETUP_INTENT' {
+  if (!cardPayment) return 'PAID'
+  return rentalPeriod >= LONG_TERM_RENTAL_DAYS || rentalPeriod > depositAuthorizationWindowDays(cardBrand) ? 'SETUP_INTENT' : 'PREAUTH'
+}
+
 function json(c: RentalContext, status: number, payload: Record<string, unknown>): Response {
   return c.json(payload, status as never)
 }
@@ -171,12 +181,13 @@ async function stripeRequest(c: RentalContext, path: string, params?: URLSearchP
   return result
 }
 
-async function verifySetupIntent(c: RentalContext, setupIntentId: string): Promise<string> {
+async function verifySetupIntent(c: RentalContext, setupIntentId: string): Promise<{ paymentMethodId: string; cardBrand: string }> {
   if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) throw new Error('信用卡验证信息无效，请重新验证。')
   const intent = await stripeRequest(c, `setup_intents/${setupIntentId}`)
   const paymentMethodId = typeof intent.payment_method === 'string' ? intent.payment_method : String(intent.payment_method?.id || '')
   if (intent.status !== 'succeeded' || !/^pm_[A-Za-z0-9_]+$/.test(paymentMethodId)) throw new Error('请先完成信用卡验证。')
-  return paymentMethodId
+  const paymentMethod = await stripeRequest(c, `payment_methods/${paymentMethodId}`)
+  return { paymentMethodId, cardBrand: String(paymentMethod.card?.brand || '') }
 }
 
 export async function createRentalSetupIntent(c: RentalContext): Promise<Record<string, unknown>> {
@@ -259,11 +270,14 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (!password || password !== passwordConfirm || !isStrongPassword(password)) return json(c, 400, { ok: false, message: '请填写一致的密码（至少 8 位，且包含字母、数字和符号）。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
   let stripePaymentMethodId = ''
+  let stripeCardBrand = ''
   const setupIntentId = String(body.stripeSetupIntentId || '').trim()
   if (paymentMethod === 'card') {
     if (!setupIntentId) return json(c, 400, { ok: false, message: '请先填写并验证信用卡信息。' })
     try {
-      stripePaymentMethodId = await verifySetupIntent(c, setupIntentId)
+      const verified = await verifySetupIntent(c, setupIntentId)
+      stripePaymentMethodId = verified.paymentMethodId
+      stripeCardBrand = verified.cardBrand
     } catch (error) {
       return json(c, 400, { ok: false, message: error instanceof Error ? error.message : '信用卡验证失败，请重试。' })
     }
@@ -371,7 +385,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
       ).bind(orderId, orderNo, user.id, device.id, startDate, endDate, startPeriod, endPeriod, period.days, paymentMethod === 'balance' ? 'balance' : 'bank_transfer', total, deposit, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
       await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
-        .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, paymentMethod === 'card' ? (period.days >= LONG_TERM_RENTAL_DAYS ? 'SETUP_INTENT' : 'PREAUTH') : 'PAID', orderId).run()
+        .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(period.days, paymentMethod === 'card', stripeCardBrand), orderId).run()
       orderIds.push(orderId)
     }
   } catch (error) {
