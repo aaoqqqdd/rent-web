@@ -29,7 +29,7 @@ export function renderSiteHeader(options: HeaderOptions, contact: SiteContact): 
       <a href="/products"${active('/products')} data-i18n="navProducts">产品目录</a>
       <a href="/rental-guide"${active('/rental-guide')} data-i18n="navGuide">租赁说明</a>
       <a href="/about"${active('/about')} data-i18n="navAbout">关于我们</a>
-      <a href="/contact"${active('/contact')} data-i18n="navContact">联系我们</a>
+      <a href="/about#contact"${active('/about')} data-i18n="navContact">联系我们</a>
       <a href="/order-lookup"${active('/order-lookup')} data-i18n="navLookup">订单查询</a>
     </nav>
     <div class="header-actions">

@@ -197,7 +197,7 @@ export function renderHome(data: HomeData): string {
     <div class="kicker">READY WHEN YOU ARE</div>
     <h2>下一台电脑，不必等到买下它。</h2>
     <p>先看实时库存；如果不确定配置，告诉我们要运行的软件和使用天数。</p>
-    <div class="hero-actions"><a class="btn btn-primary btn-lg" href="/products">浏览设备</a><a class="btn btn-ghost btn-lg" href="/contact">咨询配置</a></div>
+    <div class="hero-actions"><a class="btn btn-primary btn-lg" href="/products">浏览设备</a><a class="btn btn-ghost btn-lg" href="/about#contact">咨询配置</a></div>
   </div>
 </section>`
 }

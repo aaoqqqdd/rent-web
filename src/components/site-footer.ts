@@ -24,7 +24,7 @@ export function renderSiteFooter(contact: SiteContact): string {
         <a href="/rental-guide" data-i18n="rentalGuide">租赁说明</a>
         <a href="/rental-guide#faq" data-i18n="faq">常见问题</a>
         <a href="/about" data-i18n="navAbout">关于我们</a>
-        <a href="/contact" data-i18n="contactUs">联系我们</a>
+        <a href="/about#contact" data-i18n="contactUs">联系我们</a>
       </div>
       <div class="foot-col foot-legal">
         <h4 data-i18n="terms">条款</h4>
@@ -44,7 +44,7 @@ export function renderSiteFooter(contact: SiteContact): string {
       <span>© ${year} ${esc(contact.name)}. 保留所有权利。</span>
       <span>
         <a href="/cookie-policy" data-i18n="cookiePolicy">Cookie 政策</a>
-        <a href="/contact" data-i18n="getHelp">获取帮助</a>
+        <a href="/about#contact" data-i18n="getHelp">获取帮助</a>
       </span>
     </div>
   </div>
