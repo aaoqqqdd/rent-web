@@ -118,11 +118,12 @@ async function checkCouponCustomerEligibility(c: RentalContext, coupon: Record<s
 
 /** 官网申请提交时立即为押金做预授权（PREAUTH 模式），审核通过后只扣租金，不再动押金。
  * 与主站 src/actions/stripePayments.ts 的 createDepositAuthorization 保持一致的窗口 / 降级规则。 */
-async function authorizeDepositForOrder(c: RentalContext, orderId: string, userId: string, depositAmount: number, paymentMethodId: string, cardBrand: string, rentalPeriodDays: number): Promise<void> {
+async function authorizeDepositForOrder(c: RentalContext, orderId: string, userId: string, depositAmount: number, paymentMethodId: string, cardBrand: string, rentalPeriodDays: number, customerId: string): Promise<void> {
   const authorizationWindowDays = depositAuthorizationWindowDays(cardBrand)
   const params = new URLSearchParams({
     amount: String(cents(depositAmount)),
     currency: 'aud',
+    customer: customerId,
     payment_method: paymentMethodId,
     capture_method: 'manual',
     confirm: 'true',
@@ -236,13 +237,25 @@ async function stripeRequest(c: RentalContext, path: string, params?: URLSearchP
   return result
 }
 
-async function verifySetupIntent(c: RentalContext, setupIntentId: string): Promise<{ paymentMethodId: string; cardBrand: string }> {
+async function verifySetupIntent(c: RentalContext, setupIntentId: string): Promise<{ paymentMethodId: string; cardBrand: string; customerId: string }> {
   if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) throw new Error('信用卡验证信息无效，请重新验证。')
   const intent = await stripeRequest(c, `setup_intents/${setupIntentId}`)
   const paymentMethodId = typeof intent.payment_method === 'string' ? intent.payment_method : String(intent.payment_method?.id || '')
   if (intent.status !== 'succeeded' || !/^pm_[A-Za-z0-9_]+$/.test(paymentMethodId)) throw new Error('请先完成信用卡验证。')
   const paymentMethod = await stripeRequest(c, `payment_methods/${paymentMethodId}`)
-  return { paymentMethodId, cardBrand: String(paymentMethod.card?.brand || '') }
+  const customerId = typeof paymentMethod.customer === 'string' ? paymentMethod.customer : String(paymentMethod.customer?.id || '')
+  return { paymentMethodId, cardBrand: String(paymentMethod.card?.brand || ''), customerId }
+}
+
+/** SetupIntent 创建时没有关联 Customer，off_session 复用前必须先把 PaymentMethod 附加到一个 Customer 上，
+ * 否则 Stripe 会拒绝："The provided PaymentMethod cannot be attached. To reuse a PaymentMethod, you must
+ * attach it to a Customer first." */
+async function ensureStripeCustomer(c: RentalContext, existingCustomerId: string, paymentMethodId: string, name: string, email: string): Promise<string> {
+  if (existingCustomerId) return existingCustomerId
+  const customer = await stripeRequest(c, 'customers', new URLSearchParams({ name, email, 'metadata[source]': 'geekslope-web-rental-application' }), `rental-customer-${paymentMethodId}`)
+  const customerId = String(customer.id)
+  await stripeRequest(c, `payment_methods/${paymentMethodId}/attach`, new URLSearchParams({ customer: customerId }))
+  return customerId
 }
 
 export async function createRentalSetupIntent(c: RentalContext): Promise<Record<string, unknown>> {
@@ -323,6 +336,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
   let stripePaymentMethodId = ''
   let stripeCardBrand = ''
+  let stripeCustomerId = ''
   const setupIntentId = String(body.stripeSetupIntentId || '').trim()
   if (paymentMethod === 'card') {
     if (!setupIntentId) return json(c, 400, { ok: false, message: '请先填写并验证信用卡信息。' })
@@ -330,6 +344,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       const verified = await verifySetupIntent(c, setupIntentId)
       stripePaymentMethodId = verified.paymentMethodId
       stripeCardBrand = verified.cardBrand
+      stripeCustomerId = await ensureStripeCustomer(c, verified.customerId, stripePaymentMethodId, contactName, contactEmail)
     } catch (error) {
       return json(c, 400, { ok: false, message: error instanceof Error ? error.message : '信用卡验证失败，请重试。' })
     }
@@ -445,7 +460,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       // 长租（SetupIntent 模式）不在这里扣款，损坏或逾期时才按实际费用从保存的卡扣。
       if (depositMode === 'PREAUTH' && deposit > 0) {
         try {
-          await authorizeDepositForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, period.days)
+          await authorizeDepositForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, period.days, stripeCustomerId)
         } catch (error) {
           depositAuthError = error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。'
           break
