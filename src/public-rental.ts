@@ -270,13 +270,25 @@ async function stripeRequest(c: RentalContext, path: string, params?: URLSearchP
   return result
 }
 
-async function verifySetupIntent(c: RentalContext, setupIntentId: string): Promise<{ paymentMethodId: string; cardBrand: string }> {
+async function verifySetupIntent(c: RentalContext, setupIntentId: string): Promise<{ paymentMethodId: string; cardBrand: string; customerId: string }> {
   if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) throw new Error('信用卡验证信息无效，请重新验证。')
   const intent = await stripeRequest(c, `setup_intents/${setupIntentId}`)
   const paymentMethodId = typeof intent.payment_method === 'string' ? intent.payment_method : String(intent.payment_method?.id || '')
   if (intent.status !== 'succeeded' || !/^pm_[A-Za-z0-9_]+$/.test(paymentMethodId)) throw new Error('请先完成信用卡验证。')
   const paymentMethod = await stripeRequest(c, `payment_methods/${paymentMethodId}`)
-  return { paymentMethodId, cardBrand: String(paymentMethod.card?.brand || '') }
+  const customerId = typeof paymentMethod.customer === 'string' ? paymentMethod.customer : String(paymentMethod.customer?.id || '')
+  return { paymentMethodId, cardBrand: String(paymentMethod.card?.brand || ''), customerId }
+}
+
+/** SetupIntent 创建时没有关联 Customer，off_session 复用前必须先把 PaymentMethod 附加到一个 Customer 上，
+ * 否则 Stripe 会拒绝："The provided PaymentMethod cannot be attached. To reuse a PaymentMethod, you must
+ * attach it to a Customer first." */
+async function ensureStripeCustomer(c: RentalContext, existingCustomerId: string, paymentMethodId: string, name: string, email: string): Promise<string> {
+  if (existingCustomerId) return existingCustomerId
+  const customer = await stripeRequest(c, 'customers', new URLSearchParams({ name, email, 'metadata[source]': 'geekslope-web-rental-application' }), `rental-customer-${paymentMethodId}`)
+  const customerId = String(customer.id)
+  await stripeRequest(c, `payment_methods/${paymentMethodId}/attach`, new URLSearchParams({ customer: customerId }))
+  return customerId
 }
 
 /** SetupIntent 在申请页创建时还不知道申请人资料，因此先不绑定 Customer。
