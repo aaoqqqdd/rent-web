@@ -60,7 +60,7 @@ export interface Env {
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
 const CSS_TTL = 86400
-const HTML_CACHE_VERSION = '20260912-clean-guide-links-v1'
+const HTML_CACHE_VERSION = '20260913-pricing-display-v7'
 
 const app = new Hono<{ Bindings: Env }>()
 

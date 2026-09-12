@@ -405,7 +405,7 @@ export function pickFeatured(products: Product[]): Product[] {
   return chosen.slice(0, 3)
 }
 
-/** 「最低 $X/day」——用于标题与 hero 文案。无数据时返回 0。 */
+/** 周租/月租优惠折算后的最低有效日租价——用于首页起价文案。无数据时返回 0。 */
 export function minDailyRate(products: Product[]): number {
   const rates = products.flatMap((p) => [
     p.pricePerDay,
@@ -452,31 +452,12 @@ export function weeklyDailyRate(pricePerDay: number, discountPercent: number): n
   return Number((pricePerDay * (1 - Math.min(100, Math.max(0, discountPercent)) / 100)).toFixed(2))
 }
 
-export interface DiscountedDailyOffer {
-  rate: number
-  label: '周租折后' | '月租折后'
-}
-
-/**
- * 用于产品卡上的“折后日价”。月租折扣优先，因为它是更长期的价格；
- * 没有月租折扣时才使用周租折扣。没有折扣则返回 null，日租仍显示原价。
- */
-export function bestDiscountedDailyOffer(
-  pricePerDay: number,
-  weeklyDiscountPercent: number,
-  monthlyDiscountPercent: number,
-): DiscountedDailyOffer | null {
-  if (monthlyDiscountPercent > 0) return { rate: monthlyDailyRate(pricePerDay, monthlyDiscountPercent), label: '月租折后' }
-  if (weeklyDiscountPercent > 0) return { rate: weeklyDailyRate(pricePerDay, weeklyDiscountPercent), label: '周租折后' }
-  return null
-}
-
 export function weeklyRentalRate(pricePerDay: number, discountPercent: number): number {
   return Number((weeklyDailyRate(pricePerDay, discountPercent) * 7).toFixed(2))
 }
 
 export function monthlyDailyRate(pricePerDay: number, discountPercent: number): number {
-  return Number((pricePerDay * 30 * (1 - Math.min(100, Math.max(0, discountPercent)) / 100) / 30).toFixed(2))
+  return Number((pricePerDay * (1 - Math.min(100, Math.max(0, discountPercent)) / 100)).toFixed(2))
 }
 
 export function monthlyRentalRate(pricePerDay: number, discountPercent: number): number {
