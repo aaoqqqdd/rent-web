@@ -91,11 +91,19 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       .catch(function () { if (requestKey === availabilityKey) { availabilityFailed = true; availabilityReady = true; render(); } });
   }
   function clearChildren(node) { while (node && node.firstChild) node.removeChild(node.firstChild); }
-  function formatDate(value) { return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
+  function formatDate(value) { return value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
+  function maskDate(value) {
+    var digits = String(value || '').replace(/\\D/g, '').slice(0, 8);
+    return digits.length > 4 ? digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4)
+      : digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2)
+        : digits;
+  }
   function parseDate(value) {
-    var text = String(value || '').trim(); var match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+    var text = String(value || '').trim();
+    if (/^\\d{8}$/.test(text)) text = text.slice(0, 2) + '/' + text.slice(2, 4) + '/' + text.slice(4);
+    var match = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(text);
     if (match) text = match[3] + '-' + match[2] + '-' + match[1];
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return '';
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) return '';
     var date = new Date(text + 'T00:00:00Z'); return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === text ? text : '';
   }
   function termDays(term) {
@@ -174,15 +182,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       var price = document.createElement('div'); price.className = 'cart-page-price';
       var priceValue = document.createElement('div');
       var rawDaily = Number(product.day || 0);
-      var effectiveDaily = rentalDays > 0 ? rentalFee(product, rentalDays) / rentalDays : rawDaily;
       var daily = document.createElement('strong');
-      if (rentalDays > 0 && effectiveDaily < rawDaily - 0.005) {
-        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + rawDaily.toFixed(2);
-        priceValue.appendChild(original);
-        daily.textContent = '$' + effectiveDaily.toFixed(2);
-      } else {
-        daily.textContent = '$' + product.day;
-      }
+      daily.textContent = rawDaily > 0 ? '$' + rawDaily.toFixed(2) : '询价';
       var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
       priceValue.appendChild(daily);
       var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
@@ -222,11 +223,11 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function dateField(id, role, term) {
     var field = document.createElement('div'); field.className = 'term-date-field'; var label = document.createElement('label'); label.textContent = role === 'start' ? '取货日期' : '归还日期';
-    var control = document.createElement('div'); control.className = 'term-date-control'; var input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric'; input.autocomplete = 'off'; input.placeholder = 'dd/mm/yyyy'; input.value = formatDate(term[role === 'start' ? 'startDate' : 'endDate']); var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'date-picker-toggle'; toggle.setAttribute('aria-label', role === 'start' ? '打开取货日期日历' : '打开归还日期日历'); toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>'; var picker = document.createElement('div'); picker.className = 'date-picker'; picker.hidden = true;
+    var control = document.createElement('div'); control.className = 'term-date-control'; var input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric'; input.autocomplete = 'off'; input.maxLength = 10; input.placeholder = 'dd/mm/yyyy'; input.value = formatDate(term[role === 'start' ? 'startDate' : 'endDate']); var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'date-picker-toggle'; toggle.setAttribute('aria-label', role === 'start' ? '打开取货日期日历' : '打开归还日期日历'); toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>'; var picker = document.createElement('div'); picker.className = 'date-picker'; picker.hidden = true;
     var open = function () { picker.hidden = false; toggle.setAttribute('aria-expanded', 'true'); var value = parseDate(input.value) || term[role === 'start' ? 'startDate' : 'endDate'] || today(); var date = new Date(value + 'T00:00:00'); renderPicker(picker, id, role, term, new Date(date.getFullYear(), date.getMonth(), 1)); };
     var close = function () { picker.hidden = true; toggle.setAttribute('aria-expanded', 'false'); };
     toggle.setAttribute('aria-expanded', 'false'); toggle.addEventListener('click', function () { if (picker.hidden) open(); else close(); });
-    input.addEventListener('focus', open); input.addEventListener('click', open); input.addEventListener('input', function () { input.setCustomValidity(''); });
+    input.addEventListener('focus', open); input.addEventListener('click', open); input.addEventListener('input', function () { input.value = maskDate(input.value); input.setCustomValidity(''); });
     input.addEventListener('blur', function () { window.setTimeout(function () { if (!control.contains(document.activeElement)) close(); }, 100); var value = parseDate(input.value); if (!value) { input.setCustomValidity('请输入有效日期（格式：dd/mm/yyyy）。'); return; } var state = read(); var next = state.terms[id] || term; next[role === 'start' ? 'startDate' : 'endDate'] = value; state.terms[id] = next; persist(state.ids, state.terms); render(); });
     control.append(input, toggle, picker); field.append(label, control); return field;
   }
@@ -520,9 +521,9 @@ export function renderApply(data: ApplyData): string {
     date.setDate(date.getDate() + amount);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
-  function formatDate(value) { return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
+  function formatDate(value) { return value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
   function normalizeAddress(value) {
-    return String(value || '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    return String(value || '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').replace(/\\s+/g, ' ').trim();
   }
   function isMelbourneDeliveryAddress() {
     if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
@@ -632,7 +633,7 @@ export function renderApply(data: ApplyData): string {
     return period === 'AM' ? slots.indexOf('morning_service') >= 0 || slots.indexOf('morning') >= 0 : slots.indexOf('afternoon') >= 0 || slots.indexOf('evening_service') >= 0;
   }
   function termError(id, term) {
-    if (!term.startDate || !term.endDate || !/^\d{4}-\d{2}-\d{2}$/.test(term.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(term.endDate)) return '请为每台设备填写有效租期。';
+    if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return '请为每台设备填写有效租期。';
     if (term.startDate < today || termDays(term) < MIN_DAYS) return '每台设备的租期不能少于 ' + MIN_DAYS + ' 天。';
     if (dateUnavailable(id, term.startDate) || periodUnavailable(term.startDate, term.startPeriod)) return '该设备取货日期或时段不可用。';
     for (var day = term.startDate; day < term.endDate; day = addDays(day, 1)) if (dateUnavailable(id, day)) return '该设备在所选租期内不可用。';
@@ -678,16 +679,8 @@ export function renderApply(data: ApplyData): string {
       var name = document.createElement('strong'); name.textContent = product.name;
       var meta = document.createElement('span');
       var rawDaily = Number(product.day || 0);
-      var effectiveDaily = rentalDays > 0 ? rentalFee(product, rentalDays) / rentalDays : rawDaily;
       var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + ' · ' + rentalDays + ' 天 · ';
-      if (rentalDays > 0 && effectiveDaily < rawDaily - 0.005) {
-        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + rawDaily.toFixed(2);
-        meta.textContent = priceText;
-        meta.appendChild(original);
-        meta.appendChild(document.createTextNode(' $' + effectiveDaily.toFixed(2) + '/day · 押金 $' + product.deposit));
-      } else {
-        meta.textContent = priceText + '$' + product.day + '/day · 押金 $' + product.deposit;
-      }
+      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : '询价') + '/day · 押金 $' + product.deposit;
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
     });

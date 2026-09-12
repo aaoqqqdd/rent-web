@@ -1,7 +1,7 @@
 // 单台设备详情页。数据直接来自设备表，提供完整配置、费用口径与下单入口。
 
 import { esc } from '../layout'
-import { bestDiscountedDailyOffer, monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
 
 interface ProductDetailData {
   product: Product
@@ -19,7 +19,6 @@ function specRow(label: string, value: string): string {
 export function renderProductDetail({ product, config }: ProductDetailData): string {
   const weekly = weeklyRentalRate(product.pricePerDay, product.weeklyDiscountPercent)
   const monthly = monthlyRentalRate(product.pricePerDay, product.monthlyDiscountPercent)
-  const dailyOffer = bestDiscountedDailyOffer(product.pricePerDay, product.weeklyDiscountPercent, product.monthlyDiscountPercent)
   const applyHref = `/apply?device=${encodeURIComponent(product.id)}`
   const description = product.description.trim() || '这台设备已经过基础功能检查，适合短期项目、学习、创作或临时替代使用。具体外观与随机配件以交付前确认为准。'
   const pickupText = config.pickupLocations.length
@@ -47,9 +46,9 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       ${product.model ? `<p class="detail-model">型号 ${esc(product.model)}</p>` : ''}
       <p class="detail-description">${esc(description)}</p>
       <div class="detail-price">
-        <div><span>按日</span>${product.pricePerDay > 0 && dailyOffer ? `<del class="price-original">$${product.pricePerDay.toFixed(2)}/ day</del><strong>$${dailyOffer.rate.toFixed(2)}</strong><small>${dailyOffer.label} / day</small>` : `<strong>${product.pricePerDay > 0 ? `$${esc(product.pricePerDay)}` : '询价'}</strong><small>${product.pricePerDay > 0 ? '/ day' : '联系客服'}</small>`}</div>
-        <div><span>周租</span>${product.pricePerDay > 0 && product.weeklyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 7).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(weekly)}` : '—'}</strong><small>${product.weeklyDiscountPercent > 0 ? `折扣 ${esc(product.weeklyDiscountPercent)}%` : '/ week'}</small></div>
-        <div><span>月租参考</span>${product.pricePerDay > 0 && product.monthlyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 30).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(monthly)}` : '—'}</strong><small>${product.monthlyDiscountPercent > 0 ? `折扣 ${esc(product.monthlyDiscountPercent)}%` : product.pricePerDay > 0 ? '/ month' : ''}</small></div>
+        <div><span>按日</span><strong>${product.pricePerDay > 0 ? `$${esc(product.pricePerDay)}` : '询价'}</strong><small>${product.pricePerDay > 0 ? '/ day' : '联系客服'}</small></div>
+        <div><span>周租</span>${product.pricePerDay > 0 && product.weeklyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 7).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(weekly)}` : '—'}</strong><small>${product.pricePerDay > 0 ? '/ week' : ''}</small></div>
+        <div><span>月租</span>${product.pricePerDay > 0 && product.monthlyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 30).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(monthly)}` : '—'}</strong><small>${product.pricePerDay > 0 ? '/ month' : ''}</small></div>
         <div><span>可退押金</span><strong>${product.depositAmount > 0 ? `$${esc(product.depositAmount)}` : '待确认'}</strong><small>验收后退还</small></div>
       </div>
       <div class="detail-rental-term">
@@ -135,8 +134,16 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var parts = String(value || '').split('-');
     return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : '';
   };
+  var maskDate = function (value) {
+    var digits = String(value || '').replace(/\\D/g, '').slice(0, 8);
+    return digits.length > 4 ? digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4)
+      : digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2)
+        : digits;
+  };
   var parseDate = function (value) {
-    var match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value || '').trim());
+    var text = String(value || '').trim();
+    if (/^\\d{8}$/.test(text)) text = text.slice(0, 2) + '/' + text.slice(2, 4) + '/' + text.slice(4);
+    var match = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(text);
     if (!match) return '';
     var iso = match[3] + '-' + match[2] + '-' + match[1];
     var date = new Date(iso + 'T00:00:00Z');
@@ -149,6 +156,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     return value;
   };
   var invalidDateMessage = '请输入有效日期（格式：dd/mm/yyyy）。';
+  var pastDateMessage = '日期不能早于今天。';
   var unavailableDateMessage = '该设备在此日期不可用，请选择其他日期。';
   var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
   var clearChildren = function (node) { while (node && node.firstChild) node.removeChild(node.firstChild); };
@@ -222,7 +230,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       startValue = nextAvailable(startValue);
       setDateValue(start, startValue);
     }
-    start.setCustomValidity(isUnavailable(startValue) ? unavailableDateMessage : '');
+    start.setCustomValidity(startValue < start.min ? pastDateMessage : isUnavailable(startValue) ? unavailableDateMessage : '');
     end.min = nextAvailable(addDays(startValue, minimumDays));
     end.dataset.minIso = end.min;
     var endValue = readDateValue(end);
@@ -230,7 +238,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       endValue = end.min;
       setDateValue(end, endValue);
     }
-    end.setCustomValidity(!endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期。' : isUnavailable(endValue) ? unavailableDateMessage : '');
+    end.setCustomValidity(!endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : isUnavailable(endValue) ? unavailableDateMessage : '');
   };
   start.min = dateString(today); setDateValue(start, start.min);
   end.min = addDays(start.min, minimumDays); setDateValue(end, end.min);
@@ -239,8 +247,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     .then(function (response) { return response.json(); })
     .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); })
     .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); });
-  start.addEventListener('input', function () { applyDateRules(false); });
-  end.addEventListener('input', function () { applyDateRules(false); });
+  start.addEventListener('input', function () { start.value = maskDate(start.value); applyDateRules(false); });
+  end.addEventListener('input', function () { end.value = maskDate(end.value); applyDateRules(false); });
   start.addEventListener('change', function () { applyDateRules(false); });
   end.addEventListener('change', function () { applyDateRules(false); });
   startToggle.addEventListener('click', function () { openPicker(startPicker, start, startToggle, 'start'); });
