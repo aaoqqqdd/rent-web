@@ -725,22 +725,30 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .temporary-credentials > span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .temporary-credentials strong { font-size: 14px; }.temporary-credentials b { color: var(--secondary); font-family: var(--mono); letter-spacing: .04em; }
 .temporary-credentials p { color: var(--muted-fg); font-size: 12px; }
-.lookup-wrap { max-width: 620px; }.lookup-result { margin-top: 18px; }.lookup-result h2 { font-size: 24px; }.lookup-order-info { display: grid; gap: 8px; margin-top: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted-fg); font-size: 13px; }.lookup-order-info strong { color: var(--fg); font-size: 16px; }.lookup-login { margin-top: 18px; }
-.lookup-orders { margin-bottom: 36px; }.lookup-orders .section-head { margin-bottom: 18px; }.lookup-orders .section-head > p { max-width: 260px; }
+.lookup-wrap { max-width: 1100px; }
+.lookup-query-card { max-width: 680px; margin: 0 auto 48px; }
+.lookup-wrap .lookup-query-card .form-card { padding: clamp(24px, 4vw, 34px); }
+.lookup-query-card .form-card-head { display: block; }
+.lookup-query-card .form-card-head > span { display: block; margin-bottom: 12px; }
+.lookup-result { margin-top: 0; padding: 0; border: 0; background: transparent; }
+.lookup-result h2 { font-size: clamp(28px, 4vw, 40px); }
+.lookup-result .form-intro { margin-top: 8px; color: var(--muted-fg); }
+.lookup-order-info { display: grid; gap: 8px; margin-top: 24px; padding: 0; border: 0; color: var(--muted-fg); font-size: 13px; }
+.lookup-order-info strong { color: var(--fg); font-size: 16px; }.lookup-login { margin-top: 18px; }
+.lookup-orders { max-width: 1100px; margin: 0 auto 48px; }.lookup-orders .section-head { margin-bottom: 18px; }.lookup-orders .section-head > p { max-width: 260px; }
 .order-record { overflow: hidden; margin-top: 18px; border: 1px solid var(--border-bright); border-radius: 14px; background: var(--card); }
 .order-record-head { display: flex; justify-content: space-between; gap: 20px; align-items: start; padding: 24px; border-bottom: 1px solid var(--border); background: linear-gradient(110deg, rgba(124,108,255,.10), rgba(89,229,193,.035)); }
 .order-record-head h2 { margin-top: 8px; font-size: clamp(20px, 3vw, 28px); }.order-status { flex: none; padding: 7px 11px; border: 1px solid rgba(89,229,193,.3); border-radius: 999px; color: var(--secondary); background: rgba(89,229,193,.08); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
-.order-record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); }.order-record-section { min-width: 0; padding: 24px; background: var(--card); }.order-record-section h3 { margin-top: 9px; font-size: 18px; }.lookup-data-list { display: grid; gap: 0; margin-top: 16px; }.lookup-data-list > div { display: grid; grid-template-columns: minmax(90px, .42fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); font-size: 12px; }.lookup-data-list dt { color: var(--muted-fg); }.lookup-data-list dd { min-width: 0; overflow-wrap: anywhere; }.contract-status-row, .credential-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 16px; padding: 12px 0; border-top: 1px solid var(--border); font-size: 12px; }.contract-status-row strong, .credential-row strong { color: var(--secondary); font-family: var(--mono); overflow-wrap: anywhere; text-align: right; }.order-record-section > .btn { margin-top: 14px; }.credential-section { background: linear-gradient(145deg, rgba(89,229,193,.055), var(--card)); }
+.order-record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); }.order-record-section { min-width: 0; padding: 28px; background: var(--card); }.order-record-section h3 { margin-top: 9px; font-size: 18px; }.lookup-data-list { display: grid; gap: 0; margin-top: 16px; }.lookup-data-list > div { display: grid; grid-template-columns: minmax(106px, .36fr) minmax(0, 1fr); gap: 16px; align-items: start; padding: 11px 0; border-top: 1px solid var(--border); font-size: 13px; }.lookup-data-list dt, .lookup-data-list dd { margin: 0; }.lookup-data-list dt { color: var(--muted-fg); }.lookup-data-list dd { min-width: 0; overflow-wrap: anywhere; line-height: 1.55; }.contract-status-row, .credential-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 16px; padding: 12px 0; border-top: 1px solid var(--border); font-size: 12px; }.contract-status-row strong, .credential-row strong { color: var(--secondary); font-family: var(--mono); overflow-wrap: anywhere; text-align: right; }.order-record-section > .btn { margin-top: 14px; }.credential-section { background: linear-gradient(145deg, rgba(89,229,193,.055), var(--card)); }
 .order-lookup-hero .wrap { padding-top: 58px; padding-bottom: 48px; }
 .order-lookup-hero { min-height: 280px; }
 .order-lookup-hero h1 { max-width: 620px; margin-top: 10px; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; }
 .order-lookup-hero p { max-width: 560px; margin-top: 14px; font-size: 14px; line-height: 1.7; }
-.lookup-wrap { max-width: 540px; }
 .lookup-wrap .form-card { padding: 24px; }
 .lookup-wrap .field { margin-bottom: 14px; }
 .lookup-wrap .field label { font-size: 12px; }
 .lookup-wrap .btn { min-height: 42px; padding: 10px 16px; font-size: 13px; }
-.lookup-result h2 { font-size: 20px; }
+.lookup-result h2 { font-size: clamp(28px, 4vw, 40px); }
 .lookup-result .form-intro { margin-bottom: 16px; font-size: 12px; }
 
 /* ---------- footer ---------- */
@@ -791,6 +799,9 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .service-standard-grid { grid-template-columns: repeat(2, 1fr); }
   .apply-grid { grid-template-columns: 1fr; }
   .apply-grid-payment { position: static; }
+}
+@media (max-width: 760px) {
+  .order-record-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
   .nav { display: none; }

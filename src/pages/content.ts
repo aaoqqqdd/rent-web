@@ -258,15 +258,17 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
   return /* html */ `
 <section class="page-hero compact order-lookup-hero"><div class="wrap"><div class="kicker">订单查询</div><h1>订单进度与交付信息</h1><p>输入订单编号和申请邮箱，可查看审核、签约、取货、租赁和退款状态。</p></div></section>
 <section class="section"><div class="wrap form-wrap lookup-wrap">
+  <div class="lookup-query-card">
+    <form class="form-card" id="order-lookup-form">
+      <div class="form-card-head"><span>LOOKUP</span><div><h3>查询一笔订单</h3><p>订单号和申请邮箱需要与提交时一致。</p></div></div>
+      <div class="form-alert" id="lookup-error" hidden></div>
+      <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="例如 ORD-20260101-ABC123" autocomplete="off" required></div>
+      <div class="field"><label for="lookup-email">申请邮箱</label><input id="lookup-email" name="email" type="email" autocomplete="email" required></div>
+      ${turnstileSiteKey ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>` : ''}
+      <button class="btn btn-primary btn-lg" type="submit" id="lookup-submit">查询订单</button>
+    </form>
+  </div>
   ${orderList}
-  <form class="form-card" id="order-lookup-form">
-    <div class="form-card-head"><span>LOOKUP</span><div><h3>查询一笔订单</h3><p>订单号和申请邮箱需要与提交时一致。</p></div></div>
-    <div class="form-alert" id="lookup-error" hidden></div>
-    <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="例如 ORD-20260101-ABC123" autocomplete="off" required></div>
-    <div class="field"><label for="lookup-email">申请邮箱</label><input id="lookup-email" name="email" type="email" autocomplete="email" required></div>
-    ${turnstileSiteKey ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>` : ''}
-    <button class="btn btn-primary btn-lg" type="submit" id="lookup-submit">查询订单</button>
-  </form>
   <div class="form-card lookup-result" id="lookup-result" hidden>
     <h2>订单信息</h2><p id="lookup-message" class="form-intro"></p>
     <div id="lookup-credentials" class="temporary-credentials" hidden><span>临时账户</span><strong>订单编号：<b id="lookup-result-order"></b></strong><strong>临时密码：<b id="lookup-result-password"></b></strong><p>密码已更新，请立即保存。之后可进入账号中心登录。</p></div>
@@ -277,6 +279,7 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
 <script>
 (() => {
   var form = document.getElementById('order-lookup-form');
+  var queryCard = document.querySelector('.lookup-query-card');
   var error = document.getElementById('lookup-error');
   var result = document.getElementById('lookup-result');
   var submit = document.getElementById('lookup-submit');
@@ -301,7 +304,7 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
     var data = new FormData(form); var turnstile = form.querySelector('[name="cf-turnstile-response"]');
     fetch('/api/order-lookup', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ orderNo: data.get('orderNo'), email: data.get('email'), turnstileToken: turnstile ? turnstile.value : '' }) })
       .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
-      .then(function (response) { if (!response.ok || !response.json.ok) throw new Error(response.json.message || '查询失败。'); result.hidden = false; document.getElementById('lookup-message').textContent = response.json.message || '已找到订单。'; if (response.json.registered) { document.getElementById('lookup-credentials').hidden = true; document.getElementById('lookup-order-info').replaceChildren(); return; } document.getElementById('lookup-message').textContent = '已找到订单，以下为当前最新信息。'; var credentials = document.getElementById('lookup-credentials'); credentials.hidden = !response.json.temporaryPassword; if (response.json.temporaryPassword) { document.getElementById('lookup-result-order').textContent = response.json.order.orderNo; document.getElementById('lookup-result-password').textContent = response.json.temporaryPassword; } var info = document.getElementById('lookup-order-info'); info.replaceChildren(renderOrder(response.json.order, response.json.temporaryPassword)); })
+      .then(function (response) { if (!response.ok || !response.json.ok) throw new Error(response.json.message || '查询失败。'); result.hidden = false; if (queryCard) queryCard.hidden = true; document.getElementById('lookup-message').textContent = response.json.message || '已找到订单。'; if (response.json.registered) { document.getElementById('lookup-credentials').hidden = true; document.getElementById('lookup-order-info').replaceChildren(); return; } document.getElementById('lookup-message').textContent = '已找到订单，以下为当前最新信息。'; var credentials = document.getElementById('lookup-credentials'); credentials.hidden = !response.json.temporaryPassword; if (response.json.temporaryPassword) { document.getElementById('lookup-result-order').textContent = response.json.order.orderNo; document.getElementById('lookup-result-password').textContent = response.json.temporaryPassword; } var info = document.getElementById('lookup-order-info'); info.replaceChildren(renderOrder(response.json.order, response.json.temporaryPassword)); })
       .catch(function (reason) { error.textContent = reason.message || '查询失败，请稍后重试。'; error.hidden = false; if (window.turnstile) window.turnstile.reset(); })
       .finally(function () { submit.disabled = false; submit.textContent = '查询订单'; });
   });
