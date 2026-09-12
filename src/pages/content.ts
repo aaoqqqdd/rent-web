@@ -42,9 +42,9 @@ export function renderRentalGuide(config: RentalConfig): string {
   <div class="wrap">
     <div class="section-head"><div><div class="kicker">租金说明</div><h2>按实际使用时间来租</h2></div><p>从 ${esc(config.minimumRentalDays)} 天起，可覆盖短期任务到长期项目；准确租金以具体日期和审核后的订单为准。</p></div>
     <div class="rental-plan-grid" aria-label="租期选择说明">
-      <article><span>短期使用</span><h3>按日租赁</h3><strong>${esc(config.minimumRentalDays)} 天起</strong><p>适合临时出差、活动、考试或几天内完成的任务。</p><small>租金按日租价 × 实际租赁天数计算</small></article>
-      <article><span>项目周期</span><h3>按周规划</h3><strong>7 天以上</strong><p>适合课程、开发冲刺、培训或需要连续使用数周的项目。</p><small>下单页按实际日期即时估算</small></article>
-      <article class="featured"><b>长期项目</b><span>预算参考</span><h3>按月比较</h3><strong>30 天以上</strong><p>适合长期办公、创业团队或持续创作；产品页提供月租展示价。</p><small>月租展示价仅供比较，并非最终报价</small></article>
+      <article><h3>日租</h3><span class="plan-badge">${esc(config.minimumRentalDays)} 天起</span><p>适合短期项目、临时出差或活动使用。</p><strong class="plan-note">按天计费，最少租 ${esc(config.minimumRentalDays)} 天</strong></article>
+      <article><h3>周租</h3><span class="plan-badge">7 天以上</span><p>适合项目开发、培训课程或中期使用。</p><strong class="plan-note">部分设备享周租折扣，具体以产品页价格为准</strong></article>
+      <article class="featured"><b>最优惠</b><h3>月租</h3><span class="plan-badge">30 天以上</span><p>适合长期办公、创业团队或持续项目。</p><strong class="plan-note">部分设备享月租折扣，具体以产品页价格为准</strong></article>
     </div>
     <div class="process-note"><span>费用构成</span><p>预计金额可能包含租金、设备押金、优惠、配送费和支付手续费。付款前请核对审核后的最终订单与租赁合同。</p></div>
   </div>

@@ -531,15 +531,14 @@ html[lang^="en"] .header-cart { font-size: 12px; }
 .guide-steps article > span { display: grid; place-items: center; width: 86px; height: 86px; margin: 0 auto; border: 2px solid rgba(89,229,193,.7); border-radius: 50%; background: var(--bg); box-shadow: 0 0 28px rgba(89,229,193,.06), inset 0 0 18px rgba(89,229,193,.025); color: var(--secondary); font-family: var(--mono); font-size: 22px; font-weight: 800; letter-spacing: -.03em; }
 .guide-steps h3 { margin: 24px 0 12px; font-size: 17px; }
 .guide-steps p { max-width: 235px; margin: 0 auto; color: var(--muted-fg); font-size: 13px; line-height: 1.75; }
-.rental-plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.rental-plan-grid article { position: relative; min-height: 280px; padding: 28px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); }
-.rental-plan-grid article.featured { border-color: rgba(124,108,255,.52); background: linear-gradient(145deg, rgba(124,108,255,.12), transparent 60%), var(--bg); }
-.rental-plan-grid article > b { position: absolute; right: 18px; top: 18px; padding: 4px 8px; border-radius: 999px; background: var(--primary); color: #fff; font-family: var(--mono); font-size: 8px; letter-spacing: .08em; }
-.rental-plan-grid article > span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .1em; }
-.rental-plan-grid h3 { margin-top: 30px; font-size: 24px; }
-.rental-plan-grid strong { display: block; margin-top: 8px; color: #c9c5ff; font-size: 14px; }
-.rental-plan-grid p { margin-top: 38px; color: var(--muted-fg); font-size: 14px; }
-.rental-plan-grid small { display: block; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border); color: #7e869b; font-size: 11px; }
+.rental-plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.rental-plan-grid article { position: relative; padding: 32px 28px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg); }
+.rental-plan-grid article.featured { border-color: rgba(89,229,193,.55); box-shadow: 0 0 0 1px rgba(89,229,193,.12); }
+.rental-plan-grid article > b { position: absolute; right: 20px; top: 20px; padding: 5px 12px; border-radius: 999px; background: rgba(89,229,193,.15); color: var(--secondary); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.rental-plan-grid h3 { font-size: 22px; }
+.rental-plan-grid .plan-badge { display: inline-block; margin-top: 14px; padding: 5px 12px; border-radius: 8px; background: rgba(124,108,255,.14); color: #a5b4fc; font-size: 13px; font-weight: 600; }
+.rental-plan-grid p { margin-top: 18px; color: var(--muted-fg); font-size: 14px; line-height: 1.6; }
+.rental-plan-grid .plan-note { display: block; margin-top: 16px; color: var(--secondary); font-size: 13px; font-weight: 600; }
 .rental-terms-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .rental-terms-grid article { padding: 26px; border: 1px solid var(--border); border-radius: 13px; background: var(--bg); }
 .rental-terms-grid span { color: var(--primary); font-family: var(--mono); font-size: 10px; }
