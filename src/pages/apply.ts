@@ -118,11 +118,23 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       var model = document.createElement('p'); model.textContent = product.model || '配置详情见设备页';
       detail.append(category, name, model);
       var price = document.createElement('div'); price.className = 'cart-page-price';
-      var daily = document.createElement('strong'); daily.textContent = '$' + product.day;
+      var dailyBox = document.createElement('div');
+      var weeklyDiscount = Math.min(100, Math.max(0, Number(product.weeklyDiscountPercent || 0)));
+      var monthlyDiscount = Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0)));
+      var discount = monthlyDiscount > 0 ? monthlyDiscount : weeklyDiscount;
+      var discountLabel = monthlyDiscount > 0 ? '月租折后' : '周租折后';
+      if (discount > 0) {
+        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + Number(product.day).toFixed(2) + '/day';
+        dailyBox.appendChild(original);
+      }
+      var daily = document.createElement('strong');
+      daily.textContent = '$' + (Number(product.day) * (1 - discount / 100)).toFixed(2);
       var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
+      dailyBox.appendChild(daily);
+      if (discount > 0) { var discountText = document.createElement('small'); discountText.textContent = discountLabel; dailyBox.appendChild(discountText); }
       var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
-      price.append(daily, depositText, remove); row.append(detail, price);
+      price.append(dailyBox, depositText, remove); row.append(detail, price);
       items.appendChild(row);
     });
     var rent = ids.reduce(function (sum, id) { return sum + rentalFee(map.get(id), rentalDays); }, 0);
@@ -559,7 +571,7 @@ export function renderApply(data: ApplyData): string {
     }
     summary.textContent = rentalDays
       ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' · 支付手续费 $' + paymentFee.toFixed(2) + ' = 应付 $' + payableTotal.toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
-      : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2) + '（可退）';
+      : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2);
     validateAvailability();
   }
   function renderCart() {

@@ -33,7 +33,7 @@ function card(p: Product): string {
       <div><div class="lbl">周租</div><div class="val">${p.weeklyDiscountPercent > 0 ? `<del class="price-original">$${weeklyOriginal.toFixed(2)}/week</del>` : ''}${esc(weekly)} <small>${p.weeklyDiscountPercent > 0 ? `折后${p.weeklyDiscountPercent}%` : '7 天参考'}</small></div></div>
       <div><div class="lbl">月租</div><div class="val">${p.monthlyDiscountPercent > 0 ? `<del class="price-original">$${monthlyOriginal.toFixed(2)}/month</del>` : ''}${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
     </div>
-    ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}
+    ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}</div>` : ''}
     <div class="card-actions">
       <a class="btn btn-ghost" href="${detailHref}">查看详情</a>
       <a class="btn btn-primary" href="${detailHref}">选择租期</a>

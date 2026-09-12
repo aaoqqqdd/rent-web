@@ -2,10 +2,18 @@ import { esc } from '../layout'
 import type { PublicNotice } from '../db'
 
 function noticeDate(value: string): string {
-    if (!value) return ''
-    const date = new Date(value.replace(' ', 'T') + (value.includes('Z') ? '' : 'Z'))
-    if (Number.isNaN(date.getTime())) return value
-    return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Australia/Melbourne', dateStyle: 'medium', timeStyle: 'short' }).format(date)
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T')
+  const iso = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(date)
 }
 
 function noticeMessage(value: string): string {

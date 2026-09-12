@@ -151,38 +151,80 @@ export async function listProducts(env: Env): Promise<Product[]> {
 }
 
 /** 公开展示的最新通告与有效优惠码，不包含收件人、使用次数等内部字段。 */
+const PUBLIC_UPDATE_TYPES = new Set(['agreement_update', 'policy_update', 'legal_update'])
+
+function decodeNoticeEntities(value: string): string {
+  return value
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+}
+
+function publicUpdateMessage(value: string): string {
+  return decodeNoticeEntities(value)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    // Public notices are not addressed to a particular customer.
+    .replace(/^您好(?:\s+[^，,:：\n]{1,30})?[，,:：]\s*/i, '您好：')
+    .replace(/\{customer_name\}/gi, '客户')
+    .replace(/\{customer_email\}/gi, '')
+    .replace(/\{company_address\}|\{company_email\}/gi, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
 export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNotice[]> {
   const notices: PublicNotice[] = []
   try {
     const queryLimit = Math.max(1, Math.min(100, limit))
+    const seenNoticeKeys = new Set<string>()
     let result: { results?: Record<string, unknown>[] }
     try {
       result = await env.RENT.prepare(
-        `SELECT MIN(id) AS id, title, message, created_at, MAX(expires_at) AS expires_at
+        `SELECT MIN(id) AS id, type, title, message, created_at, MAX(expires_at) AS expires_at
          FROM notifications
-         WHERE type IN ('announcement', 'agreement_update', 'policy_update', 'legal_update') AND deleted_at IS NULL
+         WHERE ((type = 'announcement' AND sender_id IS NOT NULL)
+                OR type IN ('agreement_update', 'policy_update', 'legal_update'))
+           AND deleted_at IS NULL
            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-         GROUP BY title, message, created_at
+         GROUP BY type, title, message, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
-      ).bind(queryLimit).all<Record<string, unknown>>()
+      ).bind(Math.min(500, queryLimit * 20)).all<Record<string, unknown>>()
     } catch {
       // 0125 尚未应用时，回退到没有 expires_at 的旧通知表结构。
       result = await env.RENT.prepare(
-        `SELECT MIN(id) AS id, title, message, created_at
+        `SELECT MIN(id) AS id, type, title, message, created_at
          FROM notifications
-           WHERE type IN ('announcement', 'agreement_update', 'policy_update', 'legal_update') AND deleted_at IS NULL
-         GROUP BY title, message, created_at
+           WHERE type IN ('announcement', 'agreement_update', 'policy_update', 'legal_update')
+             AND deleted_at IS NULL
+         GROUP BY type, title, message, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
-      ).bind(queryLimit).all<Record<string, unknown>>()
+      ).bind(Math.min(500, queryLimit * 20)).all<Record<string, unknown>>()
     }
     for (const row of result.results ?? []) {
+      const type = String(row.type ?? 'announcement')
+      const isPublicUpdate = PUBLIC_UPDATE_TYPES.has(type)
+      const title = isPublicUpdate ? '协议内容已更新' : String(row.title ?? '最新通告')
+      const message = isPublicUpdate ? publicUpdateMessage(String(row.message ?? '')) : String(row.message ?? '')
+      // Notifications are stored once per recipient. Collapse the normalized
+      // copies so the public site shows one update instead of one card per user.
+      const timeKey = String(row.created_at ?? '').replace('T', ' ').slice(0, 16)
+      const key = `${type}|${title}|${message}|${isPublicUpdate ? timeKey : String(row.created_at ?? '')}`
+      if (seenNoticeKeys.has(key)) continue
+      seenNoticeKeys.add(key)
       notices.push({
         id: `announcement:${String(row.id ?? '')}`,
         kind: 'announcement',
-        title: String(row.title ?? '最新通告'),
-        message: String(row.message ?? ''),
+        title,
+        message,
         createdAt: String(row.created_at ?? ''),
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
       })
