@@ -376,17 +376,13 @@ export function renderApply(data: ApplyData): string {
         </div>
 
         <div class="apply-grid-payment">
-          <div class="form-card" id="wallet-step-card" hidden>
-            <div class="form-card-head"><span>04</span><div><h3>快捷支付</h3><p>使用 Apple Pay / Google Pay / Link 可自动填充联系与地址信息</p></div></div>
-            <div class="stripe-wallet-box" id="stripe-wallet-box">
+          <div class="form-card">
+            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>可使用快捷支付或信用卡验证，押金归还时使用</p></div></div>
+            <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
               <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
               <div id="stripe-wallet-element"></div>
               <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
             </div>
-          </div>
-
-          <div class="form-card">
-            <div class="form-card-head"><span>05</span><div><h3>支付方式</h3><p>验证支付方式，押金归还时使用</p></div></div>
             <div class="payment-method-options" id="payment-method-options" hidden>
               <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
             </div>
@@ -502,7 +498,6 @@ export function renderApply(data: ApplyData): string {
   var balanceEndpoint = '/api/account-balance';
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
-  var walletStepCard = document.getElementById('wallet-step-card');
   var walletMessage = document.getElementById('stripe-wallet-message');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
   var addressSearch = document.getElementById('delivery-address-search');
@@ -735,7 +730,7 @@ export function renderApply(data: ApplyData): string {
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
     stripeSetupBox.hidden = useBalance;
-    walletStepCard.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
+    walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
   }
   function lookupBalance() {
     var email = contactEmail.value.trim();
