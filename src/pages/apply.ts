@@ -616,7 +616,7 @@ export function renderApply(data: ApplyData): string {
         : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，余额不足';
     }
     summary.textContent = rentalDays
-      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' · 租金支付手续费 $' + paymentFee.toFixed(2) + ' = 租金付款参考 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
+      ? count + ' 台设备｜' + rentalDays + ' 天｜租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? '｜优惠 -$' + appliedDiscount.toFixed(2) : '') + '｜手续费 $' + paymentFee.toFixed(2) + '｜本次应付 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + '｜押金 $' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2);
     validateAvailability();
   }
