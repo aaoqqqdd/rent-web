@@ -103,6 +103,7 @@ ${renderSiteFooter(opts.contact)}
   var originalTitle = document.title;
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
+  function cleanChinesePunctuation(value) { return String(value || '').replace(/[。；]/g, ''); }
   function englishFor(value) {
     var lookup = String(value || '').replace(/\\s+/g, ' ').trim();
     var translated = englishCopy[lookup] || '';
@@ -121,12 +122,13 @@ ${renderSiteFooter(opts.contact)}
   function translateTextNode(node) {
     if (!node || !node.parentElement || node.parentElement.closest('script,style,[data-no-translate]')) return;
     var current = node.nodeValue || '';
-    if (/\\p{Script=Han}/u.test(current)) originalText.set(node, current);
+    if (/\\p{Script=Han}/u.test(current) && !originalText.has(node)) originalText.set(node, current);
     var source = originalText.get(node) || current;
     var trimmed = source.trim();
     if (!trimmed) return;
     var translated = currentLanguage === 'en' ? englishFor(trimmed) : trimmed;
     var next = source.slice(0, source.indexOf(trimmed)) + translated + source.slice(source.indexOf(trimmed) + trimmed.length);
+    next = cleanChinesePunctuation(next);
     if (node.nodeValue !== next) node.nodeValue = next;
   }
   function translateElement(element) {
@@ -136,7 +138,7 @@ ${renderSiteFooter(opts.contact)}
       var current = element.getAttribute(attribute);
       if (current && /\\p{Script=Han}/u.test(current)) saved[attribute] = current;
       var source = saved[attribute];
-      if (source) element.setAttribute(attribute, currentLanguage === 'en' ? englishFor(source) : source);
+      if (source) element.setAttribute(attribute, cleanChinesePunctuation(currentLanguage === 'en' ? englishFor(source) : source));
     });
     originalAttributes.set(element, saved);
   }
@@ -188,7 +190,6 @@ ${renderSiteFooter(opts.contact)}
   document.querySelectorAll('[data-language]').forEach(function (button) { button.addEventListener('click', function () { setLanguage(button.getAttribute('data-language') || 'zh'); }); });
   setLanguage(savedLanguage);
   new MutationObserver(function (mutations) {
-    if (currentLanguage !== 'en') return;
     mutations.forEach(function (mutation) {
       if (mutation.type === 'characterData') translateTextNode(mutation.target);
       mutation.addedNodes.forEach(translateTree);
