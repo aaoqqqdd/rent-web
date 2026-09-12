@@ -146,7 +146,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '搜索墨尔本地址': 'Search Melbourne address', '例如 123 Collins Street, Melbourne': 'e.g. 123 Collins Street, Melbourne', '输入至少 3 个字符开始联想。': 'Enter at least 3 characters to search.',
   '正在查找墨尔本地址…': 'Searching Melbourne addresses…', '请选择地址以自动填写。': 'Select an address to fill in the form.', '没有找到匹配的墨尔本地址，请继续输入。': 'No matching Melbourne address found. Keep typing.', '地址联想暂时不可用。': 'Address search is temporarily unavailable.', '地址联想暂时不可用，请手工填写。': 'Address search is temporarily unavailable. Please enter the address manually.', '地址已自动填写，请核对后提交。': 'Address filled in. Check it before submitting.', '地址数据 © OpenStreetMap contributors': 'Address data © OpenStreetMap contributors',
   '我们尚未配置公开自取点': 'No public pickup location is currently configured', '街道地址': 'Street address', '州': 'State', '邮编': 'Postcode', '4 位数字': '4 digits',
-  '联系与账号': 'Contact and account', '用于接收审核结果、后续签约与付款': 'Used for review updates, signing and payment', '无需填写密码或登录。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号可直接提交申请。': 'No password or login is required. New accounts receive a temporary password shown after submission; existing users can submit directly.',
+  '联系与账号': 'Contact and account', '用于接收审核结果、后续签约与付款': 'Used for review updates, signing and payment',
   '姓名': 'Name', '联系电话': 'Phone', '邮箱': 'Email', '保存我的信息，以便下次更快结账': 'Save my details for faster checkout next time',
   '账户余额支付': 'Pay with account balance', '混合支付（优先扣除余额，再支付剩余金额）': 'Split payment (use balance first, then pay the remainder)',
   '信用卡资料': 'Card details', '仅验证支付方式。': 'This only verifies the payment method.',
