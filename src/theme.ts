@@ -241,6 +241,7 @@ p { margin: 0; }
 }
 .cart-checkout-item strong, .cart-checkout-item span { display: block; }
 .cart-checkout-item span { color: var(--muted-fg); font-size: 12px; margin-top: 3px; }
+.cart-checkout-item span .price-original { display: inline; margin-right: 4px; }
 .cart-remove { padding: 7px 10px; border: 0; background: transparent; color: var(--muted-fg); font: inherit; font-size: 13px; cursor: pointer; }
 .cart-remove:hover { color: #ff9a9a; }
 .cart-empty { text-align: center; padding: 42px 24px; }

@@ -118,23 +118,22 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       var model = document.createElement('p'); model.textContent = product.model || '配置详情见设备页';
       detail.append(category, name, model);
       var price = document.createElement('div'); price.className = 'cart-page-price';
-      var dailyBox = document.createElement('div');
-      var weeklyDiscount = Math.min(100, Math.max(0, Number(product.weeklyDiscountPercent || 0)));
-      var monthlyDiscount = Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0)));
-      var discount = monthlyDiscount > 0 ? monthlyDiscount : weeklyDiscount;
-      var discountLabel = monthlyDiscount > 0 ? '月租折后' : '周租折后';
-      if (discount > 0) {
-        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + Number(product.day).toFixed(2) + '/day';
-        dailyBox.appendChild(original);
-      }
+      var priceValue = document.createElement('div');
+      var rawDaily = Number(product.day || 0);
+      var effectiveDaily = rentalDays > 0 ? rentalFee(product, rentalDays) / rentalDays : rawDaily;
       var daily = document.createElement('strong');
-      daily.textContent = '$' + (Number(product.day) * (1 - discount / 100)).toFixed(2);
+      if (rentalDays > 0 && effectiveDaily < rawDaily - 0.005) {
+        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + rawDaily.toFixed(2);
+        priceValue.appendChild(original);
+        daily.textContent = '$' + effectiveDaily.toFixed(2);
+      } else {
+        daily.textContent = '$' + product.day;
+      }
       var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
-      dailyBox.appendChild(daily);
-      if (discount > 0) { var discountText = document.createElement('small'); discountText.textContent = discountLabel; dailyBox.appendChild(discountText); }
+      priceValue.appendChild(daily);
       var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
-      price.append(dailyBox, depositText, remove); row.append(detail, price);
+      price.append(priceValue, depositText, remove); row.append(detail, price);
       items.appendChild(row);
     });
     var rent = ids.reduce(function (sum, id) { return sum + rentalFee(map.get(id), rentalDays); }, 0);
@@ -578,12 +577,24 @@ export function renderApply(data: ApplyData): string {
     form.hidden = cartIds.length === 0;
     emptyBox.hidden = cartIds.length !== 0;
     itemsBox.replaceChildren();
+    var rentalDays = days();
     cartIds.forEach(function (id) {
       var product = productMap.get(id);
       var row = document.createElement('div'); row.className = 'cart-checkout-item';
       var detail = document.createElement('div');
       var name = document.createElement('strong'); name.textContent = product.name;
-      var meta = document.createElement('span'); meta.textContent = (product.model ? product.model + ' · ' : '') + '$' + product.day + '/day · 押金 $' + product.deposit;
+      var meta = document.createElement('span');
+      var rawDaily = Number(product.day || 0);
+      var effectiveDaily = rentalDays > 0 ? rentalFee(product, rentalDays) / rentalDays : rawDaily;
+      var priceText = (product.model ? product.model + ' · ' : '');
+      if (rentalDays > 0 && effectiveDaily < rawDaily - 0.005) {
+        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + rawDaily.toFixed(2);
+        meta.textContent = priceText;
+        meta.appendChild(original);
+        meta.appendChild(document.createTextNode(' $' + effectiveDaily.toFixed(2) + '/day · 押金 $' + product.deposit));
+      } else {
+        meta.textContent = priceText + '$' + product.day + '/day · 押金 $' + product.deposit;
+      }
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
     });

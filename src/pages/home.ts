@@ -90,7 +90,7 @@ export function renderHome(data: HomeData): string {
       <div class="console-metrics">
         <div><span>实时现货</span><strong>${availableCount || '—'}<small> / ${products.length || '—'}</small></strong></div>
         <div><span>起租价格</span><strong>${minRate > 0 ? `$${minRate}` : '询价'}<small>${minRate > 0 ? ' / DAY 起' : ''}</small></strong></div>
-        <div><span>申请状态</span><strong>确认档期</strong></div>
+        <div><span>最短租期</span><strong>${esc(config.minimumRentalDays)}<small> 天起</small></strong></div>
       </div>
       <a href="/products" class="console-link"><span>浏览全部库存</span><span>↗</span></a>
     </div>
