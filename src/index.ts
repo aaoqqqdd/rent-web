@@ -237,10 +237,12 @@ app.get('/', (c) =>
       getSiteContact(c.env),
       getRentalConfig(c.env),
     ])
+    const featured = pickFeatured(products)
     const body = renderHome({
-      featured: pickFeatured(products),
+      featured,
       products,
-      minRate: minDailyRate(products),
+      minRate: minDailyRate(featured),
+      catalogMinRate: minDailyRate(products),
       config,
     })
     return renderPage({

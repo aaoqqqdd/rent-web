@@ -358,7 +358,7 @@ export function renderApply(data: ApplyData): string {
                 <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
               </div>
               <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
-              <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? ` 可配送区域：${esc(deliveryAreas)}。` : ''} 其他城市或郊区请选到店自取。</p>
+              <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? `<br>可配送区域：${esc(deliveryAreas)}` : ''}</p>
             </div>
           </div>
 
@@ -393,12 +393,6 @@ export function renderApply(data: ApplyData): string {
               <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
               <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
             </div>
-            <div class="refund-choice">
-              <label>押金处理方式</label>
-              <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
-              <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
-            </div>
-            <p class="hint">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
           </div>
         </div>
       </div>
@@ -415,7 +409,8 @@ export function renderApply(data: ApplyData): string {
         <div><span>确认后</span><strong>签约再付款</strong><p>档期确认后进入租赁系统，完成合同、付款和取机安排。</p></div>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">注册并提交申请</button>
+      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">提交申请</button>
+      <p class="form-note apply-submit-note">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁</p>
       <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">设备库</a> 或联系客服。</p>
     </form>
 
@@ -493,7 +488,6 @@ export function renderApply(data: ApplyData): string {
   var balanceOption = document.getElementById('payment-method-options');
   var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
   var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
-  var refundBalanceInput = document.getElementById('refund-balance');
   var contactEmail = document.getElementById('contactEmail');
   var balanceEndpoint = '/api/account-balance';
   var balanceLookupTimer = null;
@@ -736,14 +730,11 @@ export function renderApply(data: ApplyData): string {
     var email = contactEmail.value.trim();
     balanceOption.hidden = true;
     balancePaymentInput.checked = false;
-    refundBalanceInput.disabled = true;
-    if (document.querySelector('input[name="refundMethod"][value="balance"]:checked')) document.querySelector('input[name="refundMethod"][value="original"]').checked = true;
     if (!email) { updatePaymentMethodVisibility(); return; }
     fetch(balanceEndpoint + '?email=' + encodeURIComponent(email), { headers: { Accept: 'application/json' } })
       .then(readJsonResponse)
       .then(function (result) {
         if (!result.ok || !result.json || contactEmail.value.trim() !== email) return;
-        refundBalanceInput.disabled = !result.json.accountEligible;
         if (result.json.accountEligible) {
           balanceOption.hidden = false;
           var balance = Number(result.json.balance || 0);

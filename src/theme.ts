@@ -694,7 +694,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .apply-section .section-head h2 { margin-top: 10px; }
 .apply-grid { display: grid; grid-template-columns: 1fr 380px; align-items: start; gap: 18px; }
 .apply-grid-main, .apply-grid-payment { min-width: 0; }
-.apply-grid-payment { position: static; }
+.apply-grid-payment { position: static !important; inset: auto; max-height: none; overflow: visible; }
 .apply-grid-main .form-card + .form-card, .apply-grid-payment .form-card + .form-card { margin-top: 18px; }
 .apply-grid-main > .field { margin-top: 18px; }
 .form-card { border-radius: 14px; padding: 30px; }.form-card-head { display: flex; gap: 13px; align-items: center; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }.form-card-head > span { color: var(--primary); font-family: var(--mono); font-size: 10px; }.form-card-head h3 { font-size: 17px; }.form-card-head p { margin-top: 3px; color: var(--muted-fg); font-size: 11px; }
@@ -707,15 +707,16 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .apply-expectations span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .apply-expectations strong { display: block; margin-top: 18px; font-family: var(--display); font-size: 17px; }
 .apply-expectations p { margin-top: 8px; color: var(--muted-fg); font-size: 12px; line-height: 1.7; }
-.stripe-wallet-box, .stripe-setup-box, .refund-choice { margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }
+.stripe-wallet-box, .stripe-setup-box { margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }
 .stripe-setup-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
-.stripe-setup-head label, .refund-choice > label { display: block; font-size: 13px; font-weight: 600; }
+.stripe-setup-head label { display: block; font-size: 13px; font-weight: 600; }
 .stripe-setup-head p { margin-top: 5px; color: var(--muted-fg); font-size: 12px; }
 .stripe-setup-head > span { color: var(--secondary); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; white-space: nowrap; }
 .stripe-card-element { min-height: 48px; margin-top: 15px; padding: 14px 13px; border: 1px solid var(--border-bright); border-radius: 8px; background: #0b0e15; transition: border-color .15s, box-shadow .15s; }
 .stripe-card-element:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,.12); }
 .stripe-wallet-box [id="stripe-wallet-element"] { margin-top: 15px; }
 .stripe-setup-box .btn { margin-top: 12px; }
+.apply-submit-note { margin-top: 8px; font-size: 11px; }
 .choice-line { display: block; margin-top: 11px; color: var(--fg); font-size: 13px; font-weight: 400 !important; }
 .choice-line input { width: auto; min-height: auto; margin-right: 7px; accent-color: var(--primary); }
 .legal-agreement { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }

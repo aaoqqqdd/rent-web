@@ -47,12 +47,13 @@ interface HomeData {
   featured: Product[]
   products: Product[]
   minRate: number
+  catalogMinRate: number
   config: RentalConfig
 }
 
 export function renderHome(data: HomeData): string {
-  const { featured, products, minRate, config } = data
-  const fromLine = minRate > 0 ? `起租价格 $${minRate}/day 起` : '灵活租期，按需计费'
+  const { featured, products, minRate, catalogMinRate, config } = data
+  const fromLine = catalogMinRate > 0 ? `起租价格 $${catalogMinRate}/day 起` : '灵活租期，按需计费'
   const heroDevice = products.length ? products[Math.floor(Math.random() * products.length)] : featured[0]
   const availableCount = products.filter((p) => p.available).length
   const pickupSummary = config.pickupLocations.length
