@@ -745,7 +745,12 @@ export function renderApply(data: ApplyData): string {
         },
       };
       var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance });
-      var walletElement = walletElements.create('expressCheckout');
+      var walletElement = walletElements.create('expressCheckout', {
+        emailRequired: true,
+        phoneNumberRequired: true,
+        billingAddressRequired: true,
+        shippingAddressRequired: true,
+      });
       walletElement.mount('#stripe-wallet-element');
       walletElement.on('ready', function (event) {
         var labels = { applePay: 'Apple Pay', googlePay: 'Google Pay', link: 'Link', paypal: 'PayPal' };
@@ -757,7 +762,27 @@ export function renderApply(data: ApplyData): string {
         walletBox.setAttribute('data-available', 'true');
         updatePaymentMethodVisibility();
       });
-      walletElement.on('confirm', function () {
+      function applyWalletContact(event) {
+        var billing = event.billingDetails || {};
+        var shipping = event.shippingAddress || {};
+        var name = billing.name || shipping.name;
+        if (name) document.getElementById('contactName').value = name;
+        if (billing.phone) document.getElementById('contactPhone').value = billing.phone;
+        if (billing.email) {
+          contactEmail.value = billing.email;
+          contactEmail.dispatchEvent(new Event('input'));
+        }
+        var addr = shipping.address || billing.address;
+        if (addr && method.value === 'Delivery') {
+          if (addr.line1) document.getElementById('deliveryStreet').value = addr.line1;
+          if (addr.city) document.getElementById('deliverySuburb').value = addr.city;
+          if (addr.postal_code) document.getElementById('deliveryPostcode').value = addr.postal_code;
+          if (addr.state) document.getElementById('deliveryState').value = addr.state;
+          validateDeliveryAddress(false);
+        }
+      }
+      walletElement.on('confirm', function (event) {
+        applyWalletContact(event);
         walletMessage.textContent = '正在验证快捷支付方式…';
         stripe.confirmSetup({ elements: walletElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
           .then(function (result) {
@@ -788,7 +813,7 @@ export function renderApply(data: ApplyData): string {
         },
       });
       cardElement.mount('#stripe-card-element');
-      cardElement.on('ready', function () { cardConfirm.disabled = false; });
+      cardElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage(''); });
       cardConfirm.addEventListener('click', function () {
         cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
         stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: document.getElementById('contactName').value, email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
