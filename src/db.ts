@@ -26,6 +26,11 @@ export interface Product {
   specs: string[]
 }
 
+export interface DeviceAvailability {
+  unavailableDates: string[]
+  rentalRanges: Array<{ startDate: string; endDate: string }>
+}
+
 export interface SiteContact {
   name: string
   phone: string
@@ -148,6 +153,55 @@ export async function listProducts(env: Env): Promise<Product[]> {
   } catch {
     return []
   }
+}
+
+function shiftDate(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+/** 公开下单页需要的设备档期；只返回不可用日期和占用区间，不暴露订单信息。 */
+export async function getDeviceAvailability(
+  env: Env,
+  deviceIds: string[],
+  bufferDays = 0,
+): Promise<Record<string, DeviceAvailability>> {
+  const ids = [...new Set(deviceIds.map((id) => String(id).trim()).filter(Boolean))].slice(0, 10)
+  const result: Record<string, DeviceAvailability> = Object.fromEntries(
+    ids.map((id) => [id, { unavailableDates: [], rentalRanges: [] }]),
+  )
+  await Promise.all(ids.map(async (deviceId) => {
+    const availability = result[deviceId]
+    try {
+      const rows = await env.RENT.prepare(
+        'SELECT unavailable_date FROM device_unavailable_dates WHERE device_id = ? ORDER BY unavailable_date',
+      ).bind(deviceId).all<{ unavailable_date?: unknown }>()
+      availability.unavailableDates = (rows.results ?? [])
+        .map((row) => String(row.unavailable_date ?? '').slice(0, 10))
+        .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    } catch {
+      // 兼容尚未部署设备不可用日期表的旧数据库。
+    }
+    try {
+      const rows = await env.RENT.prepare(
+        "SELECT startDate, endDate FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL ORDER BY startDate",
+      ).bind(deviceId).all<{ startDate?: unknown; endDate?: unknown }>()
+      availability.rentalRanges = (rows.results ?? [])
+        .map((row) => ({
+          startDate: String(row.startDate ?? '').slice(0, 10),
+          endDate: String(row.endDate ?? '').slice(0, 10),
+        }))
+        .filter(({ startDate, endDate }) => /^\d{4}-\d{2}-\d{2}$/.test(startDate) && /^\d{4}-\d{2}-\d{2}$/.test(endDate) && startDate < endDate)
+        .map(({ startDate, endDate }) => ({
+          startDate: shiftDate(startDate, -Math.max(0, Math.floor(bufferDays))),
+          endDate: shiftDate(endDate, Math.max(0, Math.floor(bufferDays))),
+        }))
+    } catch {
+      // 兼容旧数据库；提交时仍会在可用的表结构上再次校验。
+    }
+  }))
+  return result
 }
 
 /** 公开展示的最新通告与有效优惠码，不包含收件人、使用次数等内部字段。 */

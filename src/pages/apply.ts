@@ -60,6 +60,10 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var items = document.getElementById('cart-page-items');
   var total = document.getElementById('cart-page-total');
   var minimumDays = ${config.minimumRentalDays};
+  var unavailableDates = ${scriptJson(config.unavailableDates)};
+  var availability = {};
+  var availabilityReady = false;
+  var availabilityKey = '';
   var startInput = document.getElementById('cart-start-date');
   var endInput = document.getElementById('cart-end-date');
   var startPeriodInput = document.getElementById('cart-start-period');
@@ -71,6 +75,30 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   function addDays(value, amount) {
     var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
+  function deviceDateUnavailable(date) {
+    if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
+    return read().ids.some(function (id) {
+      var item = availability[id] || {};
+      return (item.unavailableDates || []).indexOf(date) >= 0
+        || (item.rentalRanges || []).some(function (range) { return range.startDate <= date && date < range.endDate; });
+    });
+  }
+  function nextAvailableDate(date) {
+    var value = date || today();
+    for (var index = 0; index < 730 && deviceDateUnavailable(value); index += 1) value = addDays(value, 1);
+    return value;
+  }
+  function loadAvailability(ids) {
+    var key = ids.join(',');
+    if (!key || key === availabilityKey) return;
+    availabilityKey = key;
+    availabilityReady = false;
+    startInput.disabled = true; endInput.disabled = true;
+    fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify(ids)), { headers: { Accept: 'application/json' } })
+      .then(function (response) { return response.json(); })
+      .then(function (result) { if (key !== availabilityKey) return; availability = result.availability || {}; availabilityReady = true; render(); })
+      .catch(function () { if (key === availabilityKey) { availabilityReady = true; render(); } });
   }
   function read() {
     try {
@@ -97,14 +125,25 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     empty.hidden = ids.length > 0;
     content.hidden = ids.length === 0;
     if (ids.length) {
+      loadAvailability(ids);
       var term = state.term || { startDate: today(), endDate: addDays(today(), minimumDays), startPeriod: 'AM', endPeriod: 'AM' };
+      var savedStart = term.startDate;
+      var savedEnd = term.endDate;
       startInput.min = today();
       if (!term.startDate || term.startDate < startInput.min) term.startDate = startInput.min;
+      if (availabilityReady) term.startDate = nextAvailableDate(term.startDate);
       startInput.value = term.startDate;
       endInput.min = addDays(startInput.value, Math.max(1, minimumDays));
+      if (availabilityReady) endInput.min = nextAvailableDate(endInput.min);
       endInput.value = term.endDate && term.endDate >= endInput.min ? term.endDate : endInput.min;
+      if (availabilityReady && deviceDateUnavailable(endInput.value)) endInput.value = nextAvailableDate(endInput.value);
+      startInput.disabled = !availabilityReady; endInput.disabled = !availabilityReady;
       startPeriodInput.value = term.startPeriod || 'AM';
       endPeriodInput.value = term.endPeriod || 'AM';
+      if (availabilityReady && (startInput.value !== savedStart || endInput.value !== savedEnd)) {
+        write(ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: startPeriodInput.value, endPeriod: endPeriodInput.value });
+        return;
+      }
     }
     items.replaceChildren();
     var deposit = 0;
@@ -149,7 +188,12 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     return monthlyDays * monthlyRate + weeklyDays * weeklyRate + dailyDays * day;
   }
   function saveTerm() {
+    if (availabilityReady) {
+      if (deviceDateUnavailable(startInput.value)) startInput.value = nextAvailableDate(startInput.value);
+      if (deviceDateUnavailable(endInput.value)) endInput.value = nextAvailableDate(endInput.value);
+    }
     var minimumEnd = addDays(startInput.value || today(), Math.max(1, minimumDays));
+    if (availabilityReady) minimumEnd = nextAvailableDate(minimumEnd);
     endInput.min = minimumEnd;
     if (endInput.value < minimumEnd) endInput.value = minimumEnd;
     write(read().ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: startPeriodInput.value, endPeriod: endPeriodInput.value });
@@ -347,6 +391,8 @@ export function renderApply(data: ApplyData): string {
   var MIN_DAYS = ${config.minimumRentalDays};
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
+  var DEVICE_AVAILABILITY = {};
+  var AVAILABILITY_READY = false;
   var DELIVERY_AREAS = ${scriptJson(config.deliveryAreas)};
   var COUPON_ENDPOINT = '/api/coupons/rental-cart-preview';
   var productMap = new Map(PRODUCTS.map(function (product) { return [product.id, product]; }));
@@ -487,7 +533,7 @@ export function renderApply(data: ApplyData): string {
             renderAddressSuggestions(result.json.suggestions || []);
             setAddressStatus(result.json.suggestions && result.json.suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', result.json.suggestions && result.json.suggestions.length ? 'ready' : 'empty');
           })
-          .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(error.message || '地址联想暂时不可用，请手工填写。', 'error'); } });
+          .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(''); showFormError(error.message || '地址联想暂时不可用，请手工填写。'); } });
       }, 300);
     });
     addressSearch.addEventListener('keydown', function (event) {
@@ -539,11 +585,19 @@ export function renderApply(data: ApplyData): string {
       ? slots.indexOf('morning_service') >= 0 || slots.indexOf('morning') >= 0
       : slots.indexOf('afternoon') >= 0 || slots.indexOf('evening_service') >= 0;
   }
+  function deviceDateUnavailable(date) {
+    if (!date || UNAVAILABLE_DATES.indexOf(date) >= 0) return Boolean(date);
+    return cartIds.some(function (id) {
+      var item = DEVICE_AVAILABILITY[id] || {};
+      return (item.unavailableDates || []).indexOf(date) >= 0
+        || (item.rentalRanges || []).some(function (range) { return range.startDate <= date && date < range.endDate; });
+    });
+  }
   function validateAvailability() {
-    var startMessage = UNAVAILABLE_DATES.indexOf(startD.value) >= 0
+    var startMessage = !AVAILABILITY_READY ? '' : deviceDateUnavailable(startD.value)
       ? '该日期不可取货，请选择其他日期。'
       : periodUnavailable(startD.value, startP.value) ? '该取货时段不可用，请选择其他时段。' : '';
-    var endMessage = UNAVAILABLE_DATES.indexOf(endD.value) >= 0
+    var endMessage = !AVAILABILITY_READY ? '' : deviceDateUnavailable(endD.value)
       ? '该日期不可归还，请选择其他日期。'
       : periodUnavailable(endD.value, endP.value) ? '该归还时段不可用，请选择其他时段。' : '';
     startD.setCustomValidity(startMessage); startP.setCustomValidity(startMessage);
@@ -609,6 +663,14 @@ export function renderApply(data: ApplyData): string {
     var weeklyRate = day * (1 - Math.min(100, Math.max(0, Number(product.weeklyDiscountPercent || 0))) / 100);
     var monthlyRate = day * (1 - Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0))) / 100);
     return monthlyDays * monthlyRate + weeklyDays * weeklyRate + dailyDays * day;
+  }
+  if (cartIds.length) {
+    fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify(cartIds)), { headers: { Accept: 'application/json' } })
+      .then(function (response) { return response.json(); })
+      .then(function (result) { DEVICE_AVAILABILITY = result.availability || {}; AVAILABILITY_READY = true; refreshSummary(); })
+      .catch(function () { AVAILABILITY_READY = true; refreshSummary(); });
+  } else {
+    AVAILABILITY_READY = true;
   }
   itemsBox.addEventListener('click', function (event) {
     var remove = event.target.closest('[data-cart-remove]');
@@ -714,7 +776,7 @@ export function renderApply(data: ApplyData): string {
           })
           .catch(function (error) {
             var message = paymentError(error, 'Apple Pay 验证失败，请重试。');
-            walletMessage.textContent = message; showFormError(message);
+            walletMessage.textContent = ''; showFormError(message);
           });
       });
       stripeElements = stripe.elements({ appearance: appearance });
@@ -746,13 +808,13 @@ export function renderApply(data: ApplyData): string {
           })
           .catch(function (error) {
             var message = paymentError(error, '卡片验证失败，请重试。');
-            cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(message); showFormError(message);
+            cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(''); showFormError(message);
           });
       });
     })
     .catch(function (error) {
       var message = paymentError(error, '安全付款组件暂不可用，请联系客服。');
-      setCardMessage(message); showFormError(message);
+      setCardMessage(''); showFormError(message);
     });
   ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });
   method.addEventListener('change', function () {
@@ -808,7 +870,7 @@ export function renderApply(data: ApplyData): string {
         clearCheckoutError();
         refreshSummary();
       })
-      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = error.message || '优惠码校验失败，请稍后重试。'; showFormError(hint.textContent); });
+      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || '优惠码校验失败，请稍后重试。'); });
   });
   document.getElementById('couponCode').addEventListener('input', markCouponDirty);
   renderCart();

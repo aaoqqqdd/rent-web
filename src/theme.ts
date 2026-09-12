@@ -251,7 +251,6 @@ p { margin: 0; }
 .address-search-status { margin-top: 7px; color: var(--muted-fg); font-size: 12px; line-height: 1.5; }
 .address-search-status[data-state="loading"] { color: var(--primary); }
 .address-search-status[data-state="success"] { color: var(--secondary); }
-.address-search-status[data-state="error"] { color: #ff9a9a; }
 .address-suggestions {
   position: relative; z-index: 5; display: grid; gap: 2px; max-height: 240px; overflow-y: auto;
   margin-top: 8px; padding: 5px; border: 1px solid var(--border-bright); border-radius: 10px;

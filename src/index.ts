@@ -7,6 +7,7 @@ import { STYLES, STYLE_VERSION } from './theme'
 import { renderPage, FAVICON_SVG } from './layout'
 import {
   getRentalConfig,
+  getDeviceAvailability,
   getLegalDocument,
   getSiteContact,
   getPublicNotice,
@@ -149,6 +150,19 @@ app.get('/api/public-notices', async (c) => {
   const requestedLimit = Number(c.req.query('limit') || 20)
   const notices = await listPublicNotices(c.env, Number.isFinite(requestedLimit) ? requestedLimit : 20)
   return c.json({ notices }, 200, { 'cache-control': 'no-store, max-age=0' })
+})
+
+app.get('/api/device-availability', async (c) => {
+  let deviceIds: string[] = []
+  try {
+    const parsed = JSON.parse(String(c.req.query('deviceIds') || '[]'))
+    deviceIds = Array.isArray(parsed) ? parsed.map((value) => String(value).trim()).filter(Boolean).slice(0, 10) : []
+  } catch {
+    deviceIds = String(c.req.query('deviceIds') || '').split(',').map((value) => value.trim()).filter(Boolean).slice(0, 10)
+  }
+  const config = await getRentalConfig(c.env)
+  const availability = await getDeviceAvailability(c.env, deviceIds, config.bufferDays)
+  return c.json({ availability }, 200, { 'cache-control': 'no-store, max-age=0' })
 })
 
 app.get('/api/address/autocomplete', async (c) => {

@@ -122,14 +122,39 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var endPeriod = document.getElementById('detail-end-period');
   var button = document.getElementById('detail-add-cart');
   var minimumDays = ${config.minimumRentalDays};
+  var globalUnavailableDates = ${scriptJson(config.unavailableDates)};
+  var availability = {};
+  var availabilityReady = false;
   var today = new Date();
   var dateString = function (date) { return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); };
   var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
+  var isUnavailable = function (value) {
+    if (!value || globalUnavailableDates.indexOf(value) >= 0) return Boolean(value);
+    var item = availability[${JSON.stringify(product.id)}] || {};
+    return (item.unavailableDates || []).indexOf(value) >= 0
+      || (item.rentalRanges || []).some(function (range) { return range.startDate <= value && value < range.endDate; });
+  };
+  var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
+  var applyDateRules = function () {
+    if (!availabilityReady) return;
+    start.value = nextAvailable(start.value || start.min);
+    start.setCustomValidity(isUnavailable(start.value) ? '该设备在此日期不可用，请选择其他日期。' : '');
+    end.min = nextAvailable(addDays(start.value, minimumDays));
+    if (!end.value || end.value < end.min || isUnavailable(end.value)) end.value = end.min;
+    end.setCustomValidity(isUnavailable(end.value) ? '该设备在此日期不可用，请选择其他日期。' : '');
+  };
   start.min = dateString(today); start.value = start.min;
   end.min = addDays(start.value, minimumDays); end.value = end.min;
-  start.addEventListener('change', function () { end.min = addDays(start.value, minimumDays); if (end.value < end.min) end.value = end.min; });
+  start.disabled = true; end.disabled = true; button.disabled = true;
+  fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify([${JSON.stringify(product.id)}])), { headers: { Accept: 'application/json' } })
+    .then(function (response) { return response.json(); })
+    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; applyDateRules(); })
+    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; });
+  start.addEventListener('change', function () { applyDateRules(); });
+  end.addEventListener('change', function () { applyDateRules(); });
   button.addEventListener('click', function () {
-    if (!start.value || !end.value || end.value < end.min || !window.GeekSlopeCart) return;
+    applyDateRules();
+    if (!start.value || !end.value || end.value < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
     window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: start.value, endDate: end.value, startPeriod: startPeriod.value, endPeriod: endPeriod.value });
     location.href = ${JSON.stringify(applyHref)};
   });
