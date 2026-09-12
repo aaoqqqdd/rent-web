@@ -679,8 +679,11 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .apply-progress span { display: flex; align-items: center; gap: 7px; white-space: nowrap; }.apply-progress i { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid var(--border-bright); border-radius: 50%; font-family: var(--mono); font-size: 9px; font-style: normal; }.apply-progress .is-current { color: var(--fg); }.apply-progress .is-current i { border-color: var(--primary); background: var(--primary); color: #fff; }.apply-progress b { width: 58px; height: 1px; background: var(--border); }
 .form-wrap { max-width: 820px; }.apply-section { padding-top: 70px; }
 .apply-section .form-wrap { max-width: 1100px; }
+.apply-section .section-head { display: block; }
+.apply-section .section-head h2 { margin-top: 10px; }
 .apply-grid { display: grid; grid-template-columns: 1fr 380px; align-items: start; gap: 18px; }
 .apply-grid-main, .apply-grid-payment { min-width: 0; }
+.apply-grid-payment #wallet-step-card { position: sticky; top: 88px; align-self: start; }
 .apply-grid-main .form-card + .form-card, .apply-grid-payment .form-card + .form-card { margin-top: 18px; }
 .apply-grid-main > .field { margin-top: 18px; }
 .form-card { border-radius: 14px; padding: 30px; }.form-card-head { display: flex; gap: 13px; align-items: center; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }.form-card-head > span { color: var(--primary); font-family: var(--mono); font-size: 10px; }.form-card-head h3 { font-size: 17px; }.form-card-head p { margin-top: 3px; color: var(--muted-fg); font-size: 11px; }
@@ -776,6 +779,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .principle-grid.about-values { grid-template-columns: repeat(2, 1fr); }
   .service-standard-grid { grid-template-columns: repeat(2, 1fr); }
   .apply-grid { grid-template-columns: 1fr; }
+  .apply-grid-payment #wallet-step-card { position: static; }
 }
 @media (max-width: 620px) {
   .nav { display: none; }
