@@ -57,7 +57,7 @@ export function renderProducts(data: ProductsData): string {
   const categoryCounts = new Map(GROUP_ORDER.map(([category]) => [category, products.filter((p) => p.category === category).length]))
   const cards = products.length
     ? products.map((p) => card(p)).join('')
-    : '<div class="empty-state"><strong>设备库正在更新</strong><p>暂时没有可展示的设备，请稍后再来或直接联系我们。</p><a class="btn btn-ghost" href="/contact">联系顾问</a></div>'
+    : '<div class="empty-state"><strong>设备库正在更新</strong><p>暂时没有可展示的设备，请稍后再来或直接联系我们。</p><a class="btn btn-ghost" href="/about#contact">联系顾问</a></div>'
 
   return /* html */ `
 <section class="page-hero compact">
@@ -88,7 +88,7 @@ export function renderProducts(data: ProductsData): string {
     <div class="empty-state" id="filter-empty" hidden><strong>没有匹配的设备</strong><p>试试更短的关键词，或清除筛选条件。</p><button class="btn btn-ghost" type="button" id="clear-filters">清除筛选</button></div>
   </div>
 </section>
-<section class="info-band"><div class="wrap"><div><span>不知道选哪台？</span><strong>告诉我们用途、软件和预算，帮你匹配配置。</strong></div><a class="btn btn-light" href="/contact">咨询设备顾问</a></div></section>
+<section class="info-band"><div class="wrap"><div><span>不知道选哪台？</span><strong>告诉我们用途、软件和预算，帮你匹配配置。</strong></div><a class="btn btn-light" href="/about#contact">咨询设备顾问</a></div></section>
 <script>
 (() => {
   var grid = document.getElementById('product-grid');

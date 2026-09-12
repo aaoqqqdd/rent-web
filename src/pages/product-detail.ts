@@ -67,7 +67,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       </div>
       <div class="detail-actions">
         <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button">加入购物车并查看</button>
-        <a class="btn btn-ghost btn-lg" href="/contact?subject=${encodeURIComponent(`咨询 ${product.name}`)}">咨询这台设备</a>
+        <a class="btn btn-ghost btn-lg" href="/about?subject=${encodeURIComponent(`咨询 ${product.name}`)}#contact">咨询这台设备</a>
       </div>
       <p class="microcopy">先提交申请，不会立即扣款。我们确认档期后再安排签约与付款。</p>
     </div>

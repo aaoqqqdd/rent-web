@@ -22,7 +22,7 @@ import { renderProducts } from './pages/products'
 import { renderProductDetail } from './pages/product-detail'
 import { renderApply, renderCartPage } from './pages/apply'
 import { renderLogin } from './pages/login'
-import { renderAbout, renderContact, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
+import { renderAbout, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
 import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
@@ -205,7 +205,7 @@ app.get('/robots.txt', (c) =>
 app.get('/sitemap.xml', async (c) => {
   const base = siteUrl(c.req.url)
   const products = await listProducts(c.env)
-  const paths = ['/', '/products', '/rental-guide', '/about', '/contact', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
+  const paths = ['/', '/products', '/rental-guide', '/about', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
   const productPaths = products.filter((product) => product.id).map((product) => `/products/${encodeURIComponent(product.id)}`)
   const urls = [...paths, ...productPaths].map((path) => `<url><loc>${xmlEsc(base + path)}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
@@ -580,8 +580,8 @@ app.get('/about', (c) =>
     ])
     return renderPage({
       title: `关于 ${contact.name}｜墨尔本电脑租赁与本地支持`,
-      description: `${contact.name} 为墨尔本学习、工作和创作项目提供透明、灵活的电脑租赁与本地支持。`,
-      body: renderAbout(contact, config),
+      description: `${contact.name} 为墨尔本学习、工作和创作项目提供透明、灵活的电脑租赁与本地支持，可在线咨询设备配置与档期。`,
+      body: renderAbout(contact, config, appUrl(c.env), c.req.query('subject') || ''),
       contact,
       appUrl: appUrl(c.env),
       path: '/about',
@@ -599,31 +599,10 @@ app.get('/about', (c) =>
   }),
 )
 
-app.get('/contact', (c) =>
-  cachedHtml(c, HTML_TTL, async (user) => {
-    const [contact, config] = await Promise.all([
-      getSiteContact(c.env),
-      getRentalConfig(c.env),
-    ])
-    return renderPage({
-      title: `联系 ${contact.name}｜墨尔本电脑租赁咨询`,
-      description: '咨询设备配置、租期、墨尔本配送范围或已有租赁申请。',
-      body: renderContact(contact, config, appUrl(c.env), c.req.query('subject') || ''),
-      contact,
-      appUrl: appUrl(c.env),
-      path: '/contact',
-      siteUrl: siteUrl(c.req.url),
-      structuredData: {
-        '@type': 'ContactPage',
-        '@id': `${siteUrl(c.req.url)}/contact#webpage`,
-        url: `${siteUrl(c.req.url)}/contact`,
-        name: `联系 ${contact.name}`,
-        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
-      },
-      user,
-    })
-  }),
-)
+app.get('/contact', (c) => {
+  const search = new URL(c.req.url).search
+  return c.redirect(`/about${search}#contact`, 301)
+})
 
 app.get('/order-lookup', (c) =>
   cachedHtml(c, HTML_TTL, async (user) => {

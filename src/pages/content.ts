@@ -101,7 +101,7 @@ export function renderRentalGuide(config: RentalConfig): string {
 
 <section class="section" id="faq">
   <div class="wrap faq-layout">
-    <div class="faq-intro"><div class="kicker">FAQ</div><h2>常见问题</h2><p>还有具体问题？带上设备名称、日期和 suburb 联系我们，会更快得到准确答复。</p><a href="/contact" class="btn btn-ghost">联系我们</a></div>
+    <div class="faq-intro"><div class="kicker">FAQ</div><h2>常见问题</h2><p>还有具体问题？带上设备名称、日期和 suburb 联系我们，会更快得到准确答复。</p><a href="/about#contact" class="btn btn-ghost">联系我们</a></div>
     <div class="faq-list">
       <details open><summary>最短可以租多久？</summary><p>当前最短租期为 ${esc(config.minimumRentalDays)} 天。设备周转和不可用日期会由租赁系统继续校验。</p></details>
       <details><summary>租赁天数怎么计算？</summary><p>按取货日期、归还日期以及上午 / 下午时段折算，半天部分会计入预计租期。最终天数以审核后的订单和合同为准。</p></details>
@@ -119,14 +119,14 @@ export function renderRentalGuide(config: RentalConfig): string {
   </div>
 </section>
 
-<section class="section closing"><div class="wrap"><div class="kicker">下一步</div><h2>规则看明白了，就去选一台。</h2><p>申请前请同时阅读<a href="/service-terms" class="inline-link">服务条款</a>和<a href="/refund-policy" class="inline-link">退款政策</a>。不确定配置、档期或配送范围时，可以先问顾问。</p><div class="hero-actions"><a class="btn btn-primary btn-lg" href="/products">浏览设备</a><a class="btn btn-ghost btn-lg" href="/contact">先咨询</a></div></div></section>`
+<section class="section closing"><div class="wrap"><div class="kicker">下一步</div><h2>规则看明白了，就去选一台。</h2><p>申请前请同时阅读<a href="/service-terms" class="inline-link">服务条款</a>和<a href="/refund-policy" class="inline-link">退款政策</a>。不确定配置、档期或配送范围时，可以先问顾问。</p><div class="hero-actions"><a class="btn btn-primary btn-lg" href="/products">浏览设备</a><a class="btn btn-ghost btn-lg" href="/about#contact">先咨询</a></div></div></section>`
 }
 
-export function renderAbout(contact: SiteContact, config: RentalConfig): string {
+export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: string, initialSubject: string): string {
   const phoneHref = contact.phone.replace(/[^+\d]/g, '')
   return /* html */ `
 <section class="page-hero compact about-hero"><div class="wrap about-hero-grid">
-  <div><span class="eyebrow">MELBOURNE · 关于 ${esc(contact.name)}</span><h1>好设备不该成为，<em>创造力的门槛。</em></h1><strong class="about-brand-subtitle">GeekSlope</strong><p>需要性能时用得上，项目结束后不必长期持有。我们让学习、工作和创作所需的设备更容易获得。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="/rental-guide">了解租赁流程</a></div></div>
+  <div><span class="eyebrow">MELBOURNE · 关于 ${esc(contact.name)}</span><h1>好设备不该成为，<em>创造力的门槛。</em></h1><strong class="about-brand-subtitle">GeekSlope</strong><p>需要性能时用得上，项目结束后不必长期持有。我们让学习、工作和创作所需的设备更容易获得。</p><div class="hero-actions"><a class="btn btn-primary" href="/products">查看实时设备</a><a class="btn btn-ghost" href="#contact">联系我们</a></div></div>
   <div class="about-signal" aria-label="墨尔本本地电脑租赁"><div class="signal-grid"></div><span>MEL / LOCAL</span><strong>COMPUTE<br>ON DEMAND</strong><small>实时库存 · 先审核后付款</small></div>
 </div></section>
 
@@ -151,21 +151,9 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
   <article><span>06</span><h3>责任说清楚</h3><p>正常损耗、人为损坏、缺件和逾期处理以已签合同为准。</p></article>
 </div></div></section>
 
-<section class="section" id="contact"><div class="wrap about-contact">
-  <div><div class="kicker">和我们聊聊</div><h2>告诉我们，你准备拿电脑做什么。</h2><p>带上用途、开始与结束日期、所在 suburb 和必须运行的软件，我们可以更快帮你判断配置。</p><a class="btn btn-primary" href="/products">浏览产品目录</a></div>
-  <div class="contact-options">
-    <a class="contact-option" href="tel:${esc(phoneHref)}"><span>电话</span><strong>${esc(contact.phone)}</strong><small>适合紧急档期与当天取还咨询</small></a>
-    <a class="contact-option" href="mailto:${esc(contact.email)}"><span>邮箱</span><strong>${esc(contact.email)}</strong><small>适合发送配置清单和项目说明</small></a>
-    <div class="contact-option"><span>服务区域</span><strong>Melbourne, VIC</strong><small>CBD 及周边可配送，其他郊区可到店自取</small></div>
-    <a class="contact-option" href="/contact"><span>本地取还</span><strong>${esc(contact.address)}</strong><small>${esc(pickupSummary(config))}</small></a>
-  </div>
-</div></section>`
-}
-
-export function renderContact(contact: SiteContact, config: RentalConfig, appUrl: string, initialSubject: string): string {
-  const phoneHref = contact.phone.replace(/[^+\d]/g, '')
-  return /* html */ `
-<section class="page-hero compact contact-hero"><div class="wrap"><div class="kicker">联系我们</div><h1>把用途说给我们，配置交给我们一起判断</h1><p>咨询设备、配送范围、档期或已有申请。附上日期、常用软件和预算，会更容易一次答清。</p></div></section>
+<section class="section" id="contact"><div class="wrap">
+  <div class="section-head tight"><div><div class="kicker">联系我们</div><h2>把用途说给我们，配置交给我们一起判断</h2></div><p>咨询设备、配送范围、档期或已有申请。附上日期、常用软件和预算，会更容易一次答清。</p></div>
+</div></section>
 <section class="section"><div class="wrap contact-layout">
   <div class="contact-options">
     <a class="contact-option" href="tel:${esc(phoneHref)}"><span>电话</span><strong>${esc(contact.phone)}</strong><small>适合紧急档期与当天取还咨询</small></a>
