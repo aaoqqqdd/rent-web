@@ -21,6 +21,10 @@ function depositPaymentModeForRental(rentalPeriod: number, cardPayment: boolean,
   return rentalPeriod >= LONG_TERM_RENTAL_DAYS || rentalPeriod > depositAuthorizationWindowDays(cardBrand) ? 'SETUP_INTENT' : 'PREAUTH'
 }
 
+function cents(value: number): number {
+  return Math.round(Number(value) * 100)
+}
+
 function json(c: RentalContext, status: number, payload: Record<string, unknown>): Response {
   return c.json(payload, status as never)
 }
@@ -110,6 +114,57 @@ async function checkCouponCustomerEligibility(c: RentalContext, coupon: Record<s
     // 兼容尚未部署优惠码扩展表的旧数据库。
   }
   return null
+}
+
+/** 官网申请提交时立即为押金做预授权（PREAUTH 模式），审核通过后只扣租金，不再动押金。
+ * 与主站 src/actions/stripePayments.ts 的 createDepositAuthorization 保持一致的窗口 / 降级规则。 */
+async function authorizeDepositForOrder(c: RentalContext, orderId: string, userId: string, depositAmount: number, paymentMethodId: string, cardBrand: string, rentalPeriodDays: number): Promise<void> {
+  const authorizationWindowDays = depositAuthorizationWindowDays(cardBrand)
+  const params = new URLSearchParams({
+    amount: String(cents(depositAmount)),
+    currency: 'aud',
+    payment_method: paymentMethodId,
+    capture_method: 'manual',
+    confirm: 'true',
+    off_session: 'true',
+    'expand[]': 'latest_charge',
+    'metadata[order_id]': orderId,
+    'metadata[type]': 'deposit_authorization',
+    'metadata[deposit_amount]': String(cents(depositAmount)),
+    'metadata[card_brand]': cardBrand || 'unknown',
+    'metadata[authorization_window_days]': String(authorizationWindowDays),
+  })
+  if (authorizationWindowDays === 30) params.set('payment_method_options[card][request_extended_authorization]', 'if_available')
+  let intent: Record<string, any>
+  try {
+    intent = await stripeRequest(c, 'payment_intents', params, `web-deposit-auth-${orderId}`)
+  } catch (error) {
+    if (authorizationWindowDays !== 30) throw new Error(error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。')
+    params.delete('payment_method_options[card][request_extended_authorization]')
+    intent = await stripeRequest(c, 'payment_intents', params, `web-deposit-auth-standard-${orderId}`)
+  }
+  if (!['requires_capture', 'succeeded'].includes(String(intent.status))) throw new Error('押金预授权未完成，请更换信用卡后重试。')
+
+  const requiresExtendedWindow = authorizationWindowDays === 30 && rentalPeriodDays > 7
+  if (requiresExtendedWindow) {
+    const cardDetails = intent.latest_charge?.payment_method_details?.card
+    const captureBefore = Number(cardDetails?.capture_before || 0)
+    const extendedEnabled = String(cardDetails?.extended_authorization?.status || '').toLowerCase() === 'enabled'
+    const requiredCaptureBefore = Math.floor(Date.now() / 1000) + rentalPeriodDays * 86400
+    if (!extendedEnabled || captureBefore < requiredCaptureBefore) {
+      if (intent.status === 'requires_capture') await stripeRequest(c, `payment_intents/${intent.id}/cancel`, new URLSearchParams())
+      await c.env.RENT.prepare("UPDATE orders SET deposit_payment_mode = 'SETUP_INTENT', stripe_deposit_payment_intent_id = NULL, deposit_status = 'NOT_REQUIRED', deposit_held_amount = 0 WHERE id = ?").bind(orderId).run()
+      return
+    }
+  }
+
+  await c.env.RENT.batch([
+    c.env.RENT.prepare(`INSERT OR IGNORE INTO payments (id, rental_id, customer_id, payment_method, amount, deposit_amount, rental_amount, currency, status, stripe_payment_intent_id)
+      VALUES (?, ?, ?, 'card', ?, ?, 0, 'AUD', 'pending', ?)`)
+      .bind(id('p'), orderId, userId, depositAmount, depositAmount, intent.id),
+    c.env.RENT.prepare("UPDATE orders SET deposit_payment_mode = 'PREAUTH', stripe_deposit_payment_intent_id = ?, deposit_status = 'HELD', deposit_paid_at = COALESCE(deposit_paid_at, CURRENT_TIMESTAMP), deposit_held_amount = ? WHERE id = ?")
+      .bind(intent.id, depositAmount, orderId),
+  ])
 }
 
 async function verifyTurnstile(c: RentalContext, token: string): Promise<boolean> {
@@ -372,6 +427,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
 
   const batch = id('web')
   const orderIds: string[] = []
+  let depositAuthError = ''
   try {
     for (let index = 0; index < devices.length; index += 1) {
       const device = devices[index]
@@ -384,20 +440,41 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
         `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
       ).bind(orderId, orderNo, user.id, device.id, startDate, endDate, startPeriod, endPeriod, period.days, paymentMethod === 'balance' ? 'balance' : 'bank_transfer', total, deposit, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
+      const depositMode = depositPaymentModeForRental(period.days, paymentMethod === 'card', stripeCardBrand)
       await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
-        .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(period.days, paymentMethod === 'card', stripeCardBrand), orderId).run()
+        .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositMode, orderId).run()
       orderIds.push(orderId)
+      // 短租：提交申请时就用已验证的卡对押金做预授权，审核通过后只需要扣租金。
+      // 长租（SetupIntent 模式）不在这里扣款，损坏或逾期时才按实际费用从保存的卡扣。
+      if (depositMode === 'PREAUTH' && deposit > 0) {
+        try {
+          await authorizeDepositForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, period.days)
+        } catch (error) {
+          depositAuthError = error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。'
+          break
+        }
+      }
     }
   } catch (error) {
     if (orderIds.length) await c.env.RENT.batch(orderIds.map((orderId) => c.env.RENT.prepare('DELETE FROM orders WHERE id = ?').bind(orderId)))
     console.error('Website rental order insertion failed:', error)
     return json(c, 500, { ok: false, message: '订单创建失败，请稍后重试。' })
   }
+  if (depositAuthError) {
+    if (orderIds.length) await c.env.RENT.batch(orderIds.map((orderId) => c.env.RENT.prepare('DELETE FROM orders WHERE id = ?').bind(orderId)))
+    return json(c, 402, { ok: false, message: depositAuthError })
+  }
   const totalRent = fees.reduce((sum, fee) => sum + fee, 0)
+  const totalDeposit = devices.reduce((sum, device) => sum + numberValue(device.depositAmount, device.deposit_amount), 0)
   const totalDiscount = discounts.reduce((sum, discount) => sum + discount, 0)
   await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，${startDate} ${startPeriod} 至 ${endDate} ${endPeriod}。租金 AUD$${totalRent.toFixed(2)}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
-  const firstOrder = await c.env.RENT.prepare('SELECT orderNo FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string }>()
-  return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, orderNo: firstOrder?.orderNo || null, rentalPeriod: period.days, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。管理员确认后会联系你安排签约与付款。` })
+  const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
+  const paymentBreakdown = paymentMethod === 'card'
+    ? firstOrder?.deposit_payment_mode === 'PREAUTH'
+      ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权（不会立即入账）；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
+      : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片（不预扣，仅在损坏或逾期时按实际费用扣款）；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
+    : ''
+  return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, orderNo: firstOrder?.orderNo || null, rentalPeriod: period.days, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
 }
 
 export async function parseRequestBody(c: RentalContext): Promise<Record<string, unknown> | null> {
