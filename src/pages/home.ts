@@ -1,7 +1,7 @@
 // 首页。结构还原参考稿：Hero → 四大保障 → 为你精选（实时读库）→ 三步流程 → 收尾 CTA。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
+import { bestDiscountedDailyOffer, monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
 
 const FEATURES = [
   { t: '交付前检测', d: '基础功能、外观与配件逐项确认，拿到手即可开工', ic: 'M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z' },
@@ -19,7 +19,14 @@ const STEPS = [
 const CARD_TAGS = ['热门', '推荐', '专业']
 
 function productCard(p: Product, index: number): string {
-  const daily = p.pricePerDay > 0 ? `$${p.pricePerDay}/day` : '询价'
+  const dailyOffer = bestDiscountedDailyOffer(p.pricePerDay, p.weeklyDiscountPercent, p.monthlyDiscountPercent)
+  const daily = p.pricePerDay > 0
+    ? dailyOffer
+      ? `<del class="price-original">$${p.pricePerDay.toFixed(2)}/day</del><strong>$${dailyOffer.rate.toFixed(2)}/day</strong><small>${dailyOffer.label}</small>`
+      : `$${p.pricePerDay}/day`
+    : '询价'
+  const weeklyOriginal = p.pricePerDay * 7
+  const monthlyOriginal = p.pricePerDay * 30
   const weekly = p.pricePerDay > 0 ? `$${weeklyRentalRate(p.pricePerDay, p.weeklyDiscountPercent)}/week` : '—'
   const monthly = p.pricePerDay > 0 ? `$${monthlyRentalRate(p.pricePerDay, p.monthlyDiscountPercent)}/month` : '—'
   const chips = p.specs.slice(0, 4).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
@@ -32,9 +39,9 @@ function productCard(p: Product, index: number): string {
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">
-      <div><div class="lbl">日租</div><div class="val">${esc(daily)}</div></div>
-      <div><div class="lbl">周租</div><div class="val">${esc(weekly)} <small>${p.weeklyDiscountPercent > 0 ? `折后${p.weeklyDiscountPercent}%` : '7 天参考'}</small></div></div>
-      <div><div class="lbl">月租</div><div class="val">${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
+      <div><div class="lbl">日租</div><div class="val">${typeof daily === 'string' && daily.startsWith('<') ? daily : esc(daily)}</div></div>
+      <div><div class="lbl">周租</div><div class="val">${p.weeklyDiscountPercent > 0 ? `<del class="price-original">$${weeklyOriginal.toFixed(2)}/week</del>` : ''}${esc(weekly)} <small>${p.weeklyDiscountPercent > 0 ? `折后${p.weeklyDiscountPercent}%` : '7 天参考'}</small></div></div>
+      <div><div class="lbl">月租</div><div class="val">${p.monthlyDiscountPercent > 0 ? `<del class="price-original">$${monthlyOriginal.toFixed(2)}/month</del>` : ''}${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}（可退）</div>` : ''}
     <div class="card-actions"><a class="btn btn-ghost" href="${detailHref}">详情</a><a class="btn btn-primary" href="${detailHref}">选择租期</a></div>

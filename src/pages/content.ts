@@ -130,7 +130,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig): string 
 </div></section>
 
 <section class="about-stats"><div class="wrap">
-  <div><strong>${esc(config.minimumRentalDays)}</strong><span>天起租</span></div>
+  <div><strong>1</strong><span>天起租</span></div>
   <div><strong>2</strong><span>种取还方式</span></div>
   <div><strong>3</strong><span>类核心设备</span></div>
   <div><strong>7×12</strong><span>小时技术支持</span></div>

@@ -23,6 +23,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     model: product.model,
     categoryLabel: product.categoryLabel,
     day: product.pricePerDay,
+    weeklyDiscountPercent: product.weeklyDiscountPercent,
+    monthlyDiscountPercent: product.monthlyDiscountPercent,
     deposit: product.depositAmount,
   }))
   return /* html */ `
@@ -123,7 +125,17 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       price.append(daily, depositText, remove); row.append(detail, price);
       items.appendChild(row);
     });
-    total.textContent = ids.length ? ids.length + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + (rentalDays * ids.reduce(function (sum, id) { return sum + Number(map.get(id).day || 0); }, 0)).toFixed(2) + ' · 押金 $' + deposit.toFixed(2) : '';
+    var rent = ids.reduce(function (sum, id) { return sum + rentalFee(map.get(id), rentalDays); }, 0);
+    total.textContent = ids.length ? ids.length + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rent.toFixed(2) + ' · 押金 $' + deposit.toFixed(2) : '';
+  }
+  function rentalFee(product, days) {
+    var monthlyDays = Math.floor(days / 30) * 30;
+    var weeklyDays = Math.floor((days - monthlyDays) / 7) * 7;
+    var dailyDays = days - monthlyDays - weeklyDays;
+    var day = Number(product.day || 0);
+    var weeklyRate = day * (1 - Math.min(100, Math.max(0, Number(product.weeklyDiscountPercent || 0))) / 100);
+    var monthlyRate = day * (1 - Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0))) / 100);
+    return monthlyDays * monthlyRate + weeklyDays * weeklyRate + dailyDays * day;
   }
   function saveTerm() {
     var minimumEnd = addDays(startInput.value || today(), Math.max(1, minimumDays));
@@ -175,6 +187,8 @@ export function renderApply(data: ApplyData): string {
     name: product.name,
     model: product.model,
     day: product.pricePerDay,
+    weeklyDiscountPercent: product.weeklyDiscountPercent,
+    monthlyDiscountPercent: product.monthlyDiscountPercent,
     deposit: product.depositAmount,
   }))
   const turnstile = turnstileSiteKey
@@ -531,7 +545,7 @@ export function renderApply(data: ApplyData): string {
     var rentalDays = days();
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
-    var rentTotal = rentalDays ? dailyTotal * rentalDays : 0;
+    var rentTotal = rentalDays ? cartIds.reduce(function (total, id) { return total + rentalFee(productMap.get(id), rentalDays); }, 0) : 0;
     var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(total * stripeFeeRate * 100) / 100;
@@ -564,6 +578,15 @@ export function renderApply(data: ApplyData): string {
     submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
     refreshSummary();
   }
+  function rentalFee(product, days) {
+    var monthlyDays = Math.floor(days / 30) * 30;
+    var weeklyDays = Math.floor((days - monthlyDays) / 7) * 7;
+    var dailyDays = days - monthlyDays - weeklyDays;
+    var day = Number(product.day || 0);
+    var weeklyRate = day * (1 - Math.min(100, Math.max(0, Number(product.weeklyDiscountPercent || 0))) / 100);
+    var monthlyRate = day * (1 - Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0))) / 100);
+    return monthlyDays * monthlyRate + weeklyDays * weeklyRate + dailyDays * day;
+  }
   itemsBox.addEventListener('click', function (event) {
     var remove = event.target.closest('[data-cart-remove]');
     if (!remove) return;
@@ -584,6 +607,12 @@ export function renderApply(data: ApplyData): string {
       }
       return { ok: response.ok, json: json };
     });
+  }
+  function paymentError(error, fallback) {
+    var message = error && error.message ? String(error.message) : '';
+    return /failed to fetch|network ?error|load failed/i.test(message)
+      ? '无法连接支付服务，请检查网络后刷新页面重试。'
+      : (message || fallback);
   }
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
@@ -618,7 +647,7 @@ export function renderApply(data: ApplyData): string {
   });
   paymentMethodInputs.forEach(function (input) { input.addEventListener('change', function () { updatePaymentMethodVisibility(); refreshSummary(); }); });
   updatePaymentMethodVisibility();
-  fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' } })
+  fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
     .then(readJsonResponse)
     .then(function (result) {
       if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error((result.json && result.json.message) || '安全付款组件暂不可用。');
@@ -654,14 +683,14 @@ export function renderApply(data: ApplyData): string {
         walletMessage.textContent = '正在验证快捷支付方式…';
         stripe.confirmSetup({ elements: walletElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
           .then(function (result) {
-            if (result.error) throw new Error(result.error.message || '快捷支付验证失败，请重试。');
+            if (result.error) throw new Error(paymentError(result.error, '快捷支付验证失败，请重试。'));
             setupIntent = result.setupIntent;
             if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('快捷支付验证尚未完成，请重试。');
             setupIntentInput.value = setupIntent.id;
             cardReady = true; walletMessage.textContent = '快捷支付已验证。'; walletMessage.style.color = 'var(--secondary)'; clearCheckoutError();
           })
           .catch(function (error) {
-            var message = error.message || 'Apple Pay 验证失败，请重试。';
+            var message = paymentError(error, 'Apple Pay 验证失败，请重试。');
             walletMessage.textContent = message; showFormError(message);
           });
       });
@@ -686,20 +715,20 @@ export function renderApply(data: ApplyData): string {
         cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
         stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: document.getElementById('contactName').value, email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
           .then(function (result) {
-            if (result.error) throw new Error(result.error.message || '卡片验证失败，请检查信息。');
+            if (result.error) throw new Error(paymentError(result.error, '卡片验证失败，请检查信息。'));
             setupIntent = result.setupIntent;
             if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('卡片验证尚未完成，请重试。');
             setupIntentInput.value = setupIntent.id;
             cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证。', true); clearCheckoutError();
           })
           .catch(function (error) {
-            var message = error.message || '卡片验证失败，请重试。';
+            var message = paymentError(error, '卡片验证失败，请重试。');
             cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(message); showFormError(message);
           });
       });
     })
     .catch(function (error) {
-      var message = error.message || '安全付款组件暂不可用，请联系客服。';
+      var message = paymentError(error, '安全付款组件暂不可用，请联系客服。');
       setCardMessage(message); showFormError(message);
     });
   ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });

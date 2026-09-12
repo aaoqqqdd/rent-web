@@ -149,7 +149,7 @@ ${renderSiteFooter(opts.contact)}
   }
   var translations = {
     skip: ['跳到主要内容', 'Skip to main content'], menuOpen: ['打开菜单', 'Open menu'], language: ['语言', 'Language'],
-    navProducts: ['产品目录', 'Products'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系我们', 'Contact us'], navLookup: ['订单详情', 'Order Details'],
+    navProducts: ['产品目录', 'Products'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系我们', 'Contact us'], navLookup: ['订单查询', 'Order Details'],
     cart: ['购物车', 'Cart'], account: ['账号中心', 'Account'], footerIntro: ['为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。', 'Reliable computer rentals for study, work, creative projects and short-term needs. Browse live inventory and apply for the time you need.'],
     footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'],
     footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help']

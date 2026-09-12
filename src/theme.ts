@@ -166,6 +166,8 @@ p { margin: 0; }
 .price-row .lbl { font-size: 11px; color: var(--muted-fg); text-transform: uppercase; letter-spacing: .06em; }
 .price-row .val { font-size: 18px; font-weight: 700; margin-top: 2px; }
 .price-row .val small { font-size: 12px; font-weight: 500; color: var(--muted-fg); }
+.price-original { display: block; color: #737b91; font-size: .65em; font-weight: 500; line-height: 1.25; text-decoration-thickness: 1px; white-space: nowrap; }
+.price-row .val > strong { display: inline-block; }
 .card .btn { width: 100%; margin-top: 18px; }
 .deposit { font-size: 12px; color: var(--muted-fg); margin-top: 10px; }
 
@@ -646,6 +648,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .detail-price { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 30px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .detail-price > div { padding: 17px 12px 17px 0; }.detail-price span, .detail-price strong, .detail-price small { display: block; }
 .detail-price span { color: var(--muted-fg); font-size: 10px; }.detail-price strong { margin-top: 5px; font-family: var(--mono); font-size: 21px; }.detail-price small { margin-top: 2px; color: #71798d; font-size: 9px; }
+.detail-price .price-original { margin-top: 5px; font-family: var(--mono); font-size: 11px; }
 .detail-rental-term { margin-top: 28px; padding: 18px; border: 1px solid rgba(124,108,255,.28); border-radius: 10px; background: rgba(124,108,255,.06); }.detail-rental-term p { margin-top: 6px; color: var(--muted-fg); font-size: 12px; }.detail-rental-term .row2 { margin-top: 16px; }
 .detail-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }.microcopy { margin-top: 13px; color: var(--muted-fg); font-size: 11px; }
 .spec-table { border-top: 1px solid var(--border); }.spec-row { display: grid; grid-template-columns: .7fr 1.3fr; gap: 20px; padding: 15px 0; border-bottom: 1px solid var(--border); font-size: 13px; }.spec-row span { color: var(--muted-fg); }.spec-row strong { font-weight: 600; }

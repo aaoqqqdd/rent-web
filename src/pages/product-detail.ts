@@ -1,7 +1,7 @@
 // 单台设备详情页。数据直接来自设备表，提供完整配置、费用口径与下单入口。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
+import { bestDiscountedDailyOffer, monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
 
 interface ProductDetailData {
   product: Product
@@ -19,6 +19,7 @@ function specRow(label: string, value: string): string {
 export function renderProductDetail({ product, config }: ProductDetailData): string {
   const weekly = weeklyRentalRate(product.pricePerDay, product.weeklyDiscountPercent)
   const monthly = monthlyRentalRate(product.pricePerDay, product.monthlyDiscountPercent)
+  const dailyOffer = bestDiscountedDailyOffer(product.pricePerDay, product.weeklyDiscountPercent, product.monthlyDiscountPercent)
   const applyHref = `/apply?device=${encodeURIComponent(product.id)}`
   const description = product.description.trim() || '这台设备已经过基础功能检查，适合短期项目、学习、创作或临时替代使用。具体外观与随机配件以交付前确认为准。'
   const pickupText = config.pickupLocations.length
@@ -46,9 +47,9 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       ${product.model ? `<p class="detail-model">型号 ${esc(product.model)}</p>` : ''}
       <p class="detail-description">${esc(description)}</p>
       <div class="detail-price">
-        <div><span>按日</span><strong>${product.pricePerDay > 0 ? `$${esc(product.pricePerDay)}` : '询价'}</strong><small>${product.pricePerDay > 0 ? '/ day' : '联系客服'}</small></div>
-        <div><span>周租</span><strong>${product.pricePerDay > 0 ? `$${esc(weekly)}` : '—'}</strong><small>${product.weeklyDiscountPercent > 0 ? `折扣 ${esc(product.weeklyDiscountPercent)}%` : '/ week'}</small></div>
-        <div><span>月租参考</span><strong>${product.pricePerDay > 0 ? `$${esc(monthly)}` : '—'}</strong><small>${product.pricePerDay > 0 ? '/ month' : ''}</small></div>
+        <div><span>按日</span>${product.pricePerDay > 0 && dailyOffer ? `<del class="price-original">$${product.pricePerDay.toFixed(2)}/ day</del><strong>$${dailyOffer.rate.toFixed(2)}</strong><small>${dailyOffer.label} / day</small>` : `<strong>${product.pricePerDay > 0 ? `$${esc(product.pricePerDay)}` : '询价'}</strong><small>${product.pricePerDay > 0 ? '/ day' : '联系客服'}</small>`}</div>
+        <div><span>周租</span>${product.pricePerDay > 0 && product.weeklyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 7).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(weekly)}` : '—'}</strong><small>${product.weeklyDiscountPercent > 0 ? `折扣 ${esc(product.weeklyDiscountPercent)}%` : '/ week'}</small></div>
+        <div><span>月租参考</span>${product.pricePerDay > 0 && product.monthlyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 30).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(monthly)}` : '—'}</strong><small>${product.monthlyDiscountPercent > 0 ? `折扣 ${esc(product.monthlyDiscountPercent)}%` : product.pricePerDay > 0 ? '/ month' : ''}</small></div>
         <div><span>可退押金</span><strong>${product.depositAmount > 0 ? `$${esc(product.depositAmount)}` : '待确认'}</strong><small>验收后退还</small></div>
       </div>
       <div class="detail-rental-term">
