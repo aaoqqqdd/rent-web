@@ -94,7 +94,7 @@ async function underRateLimit(env: Env, clientKey: string, limit: number, window
   }
 }
 
-async function verifyTurnstile(env: Env, token: string, ip: string): Promise<boolean> {
+export async function verifyTurnstile(env: Env, token: string, ip: string): Promise<boolean> {
   const secret = env.TURNSTILE_SECRET_KEY || ''
   if (!secret) return true // 未配置 secret 时放行（与 rent 公开接口一致）
   if (!token) return false

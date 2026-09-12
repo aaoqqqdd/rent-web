@@ -27,6 +27,7 @@ import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
 import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
 import { autocompleteMelbourneAddresses } from './address'
+import { listOrdersForUser, lookupOrderByCredentials } from './orders'
 import {
   clearedSessionCookie,
   createSession,
@@ -37,6 +38,7 @@ import {
   issueHandoffToken,
   sessionCookie,
   verifyCredentials,
+  verifyTurnstile,
   type SessionUser,
   registerCustomer,
 } from './auth'
@@ -626,9 +628,31 @@ app.get('/contact', (c) =>
 app.get('/order-lookup', (c) =>
   cachedHtml(c, HTML_TTL, async (user) => {
     const contact = await getSiteContact(c.env)
-    return renderPage({ title: `订单查询 — ${contact.name}`, description: '使用订单编号和申请邮箱查询电脑租赁申请。', body: renderOrderLookup(appUrl(c.env)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow', user })
+    const orders = user ? await listOrdersForUser(c.env, user.id, appUrl(c.env)) : []
+    return renderPage({ title: `订单查询 — ${contact.name}`, description: '查看电脑租赁订单当前状态、合同、密码和取还详情。', body: renderOrderLookup(appUrl(c.env), orders, c.env.TURNSTILE_SITE_KEY || ''), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow', user })
   }),
 )
+
+app.post('/api/order-lookup', async (c) => {
+  const origin = c.req.header('Origin')
+  if (origin && new URL(origin).host !== new URL(c.req.url).host) return c.json({ ok: false, message: '请求来源无效。' }, 403)
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-order-lookup', ip, 6, 900))) return c.json({ ok: false, message: '查询请求过于频繁，请 15 分钟后再试。' }, 429)
+  let body: Record<string, unknown> = {}
+  try { body = (await c.req.json()) as Record<string, unknown> } catch { return c.json({ ok: false, message: '请求格式无效。' }, 400) }
+  const orderNo = String(body.orderNo || '').trim()
+  const email = String(body.email || '').trim()
+  if (!orderNo || !email) return c.json({ ok: false, message: '请输入订单编号和申请邮箱。' }, 400)
+  if (!(await verifyTurnstile(c.env, String(body.turnstileToken || body['cf-turnstile-response'] || ''), ip))) return c.json({ ok: false, message: '人机验证未通过，请重试。' }, 400)
+  try {
+    const result = await lookupOrderByCredentials(c.env, orderNo, email, appUrl(c.env))
+    if (!result) return c.json({ ok: false, message: '没有找到匹配的订单，请检查订单编号和邮箱。' }, 404)
+    return c.json({ ok: true, ...result }, 200, { 'Cache-Control': 'no-store' })
+  } catch (error) {
+    console.error('web public order lookup failed:', error instanceof Error ? error.message : String(error))
+    return c.json({ ok: false, message: '订单查询暂不可用，请稍后重试。' }, 503)
+  }
+})
 
 // ---------- 账户 / 单点登录（官网登录后，rent 同步为已登录） ----------
 

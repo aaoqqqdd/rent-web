@@ -228,6 +228,7 @@ p { margin: 0; }
 .cart-page-price { display: flex; align-items: center; gap: 18px; flex: none; }
 .cart-page-price strong { font-size: 20px; }
 .cart-page-price strong small { color: var(--muted-fg); font-size: 12px; font-weight: 500; }
+.cart-page-price > div > small { display: block; margin-top: 2px; color: var(--muted-fg); font-size: 11px; }
 .cart-page-price > span { color: var(--muted-fg); font-size: 12px; }
 .cart-page-price .cart-remove { margin: 0; }
 .cart-page-summary { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-top: 18px; }
@@ -687,6 +688,11 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .temporary-credentials strong { font-size: 14px; }.temporary-credentials b { color: var(--secondary); font-family: var(--mono); letter-spacing: .04em; }
 .temporary-credentials p { color: var(--muted-fg); font-size: 12px; }
 .lookup-wrap { max-width: 620px; }.lookup-result { margin-top: 18px; }.lookup-result h2 { font-size: 24px; }.lookup-order-info { display: grid; gap: 8px; margin-top: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted-fg); font-size: 13px; }.lookup-order-info strong { color: var(--fg); font-size: 16px; }.lookup-login { margin-top: 18px; }
+.lookup-orders { margin-bottom: 36px; }.lookup-orders .section-head { margin-bottom: 18px; }.lookup-orders .section-head > p { max-width: 260px; }
+.order-record { overflow: hidden; margin-top: 18px; border: 1px solid var(--border-bright); border-radius: 14px; background: var(--card); }
+.order-record-head { display: flex; justify-content: space-between; gap: 20px; align-items: start; padding: 24px; border-bottom: 1px solid var(--border); background: linear-gradient(110deg, rgba(124,108,255,.10), rgba(89,229,193,.035)); }
+.order-record-head h2 { margin-top: 8px; font-size: clamp(20px, 3vw, 28px); }.order-status { flex: none; padding: 7px 11px; border: 1px solid rgba(89,229,193,.3); border-radius: 999px; color: var(--secondary); background: rgba(89,229,193,.08); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.order-record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); }.order-record-section { min-width: 0; padding: 24px; background: var(--card); }.order-record-section h3 { margin-top: 9px; font-size: 18px; }.lookup-data-list { display: grid; gap: 0; margin-top: 16px; }.lookup-data-list > div { display: grid; grid-template-columns: minmax(90px, .42fr) minmax(0, 1fr); gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); font-size: 12px; }.lookup-data-list dt { color: var(--muted-fg); }.lookup-data-list dd { min-width: 0; overflow-wrap: anywhere; }.contract-status-row, .credential-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 16px; padding: 12px 0; border-top: 1px solid var(--border); font-size: 12px; }.contract-status-row strong, .credential-row strong { color: var(--secondary); font-family: var(--mono); overflow-wrap: anywhere; text-align: right; }.order-record-section > .btn { margin-top: 14px; }.credential-section { background: linear-gradient(145deg, rgba(89,229,193,.055), var(--card)); }
 .order-lookup-hero .wrap { padding-top: 58px; padding-bottom: 48px; }
 .order-lookup-hero { min-height: 280px; }
 .order-lookup-hero h1 { max-width: 620px; margin-top: 10px; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; }
@@ -788,6 +794,11 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .lookup-wrap { padding-left: 14px; padding-right: 14px; }
   .lookup-wrap .form-card { padding: 20px 18px; }
   .lookup-wrap .btn { width: 100%; }
+  .order-record-head { flex-direction: column; gap: 12px; padding: 20px 18px; }
+  .order-record-section { padding: 20px 18px; }
+  .lookup-data-list > div { grid-template-columns: 1fr; gap: 4px; }
+  .credential-row, .contract-status-row { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .contract-status-row strong, .credential-row strong { text-align: left; }
   .guide-facts { grid-template-columns: 1fr; }
   .guide-facts div { border-right: 0; border-bottom: 1px solid var(--border); }
   .guide-facts div:last-child { border-bottom: 0; }
