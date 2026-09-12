@@ -322,7 +322,7 @@ export function renderApply(data: ApplyData): string {
       <div class="form-card">
         <div class="form-card-head"><span>04</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
         <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
-          <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证，不会在提交申请时扣款。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
+          <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
           <div id="stripe-wallet-element"></div>
           <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
         </div>
@@ -331,25 +331,20 @@ export function renderApply(data: ApplyData): string {
           <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
         </div>
         <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
-        <div class="row2">
-          <div class="field"><label for="password">设置 / 输入密码</label><input type="password" id="password" name="password" minlength="8" autocomplete="new-password" required></div>
-          <div class="field"><label for="passwordConfirm">确认密码</label><input type="password" id="passwordConfirm" name="passwordConfirm" minlength="8" autocomplete="new-password" required></div>
-        </div>
-        <p class="hint">已有账号请填写原密码；新账号密码至少 8 位，并包含字母、数字和符号。</p>
+        <p class="hint">无需填写密码。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号请先登录账号中心。</p>
         <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
         <div class="payment-method-options" id="payment-method-options" hidden>
           <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
         </div>
         <div class="stripe-setup-box">
-          <div class="stripe-setup-head"><div><label>信用卡资料</label><p>仅验证支付方式，不会在提交申请时扣款。</p></div><span>SECURE / STRIPE</span></div>
+          <div class="stripe-setup-head"><div><label>信用卡资料</label><p>验证支付方式。</p></div><span>SECURE / STRIPE</span></div>
           <div id="stripe-card-element" class="stripe-card-element"></div>
           <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
-          <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证信用卡</button>
+          <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
           <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
         </div>
         <div class="refund-choice">
           <label>押金处理方式</label>
-          <p class="hint">短期租赁优先使用押金预授权：Visa/Mastercard 请求延长保留最多 30 天，其他卡按 7 天普通预授权；租期超过对应窗口时改用 SetupIntent 保存卡片，不预扣押金。归还无损坏时直接释放预授权；仅在损坏或逾期时按实际费用扣款。</p>
           <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
           <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
         </div>
@@ -375,7 +370,7 @@ export function renderApply(data: ApplyData): string {
     <div class="form-card" id="apply-done" hidden style="margin-top:18px">
       <h3 class="success-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 2.5 2.5L16.5 9"></path></svg><span>申请已提交</span></h3>
       <p id="apply-done-msg" style="color:var(--muted-fg);font-size:14px"></p>
-      <div class="temporary-credentials" id="temporary-credentials" hidden><span>申请已提交</span><strong>订单编号：<b id="done-order-no"></b></strong><p>请使用刚才设置的密码，进入账号中心查看申请进度。</p></div>
+      <div class="temporary-credentials" id="temporary-credentials" hidden><span>申请已提交</span><strong>订单编号：<b id="done-order-no"></b></strong><strong>临时密码：<b id="done-password"></b></strong><p>请保存临时密码，进入账号中心查看申请进度。</p></div>
       <p style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px"><a class="btn btn-primary" href="${esc(appUrl)}/login">进入账号中心查看申请</a><a class="btn btn-ghost" href="/products">继续浏览产品</a></p>
     </div>
   </div>
@@ -443,8 +438,6 @@ export function renderApply(data: ApplyData): string {
   var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
   var refundBalanceInput = document.getElementById('refund-balance');
   var contactEmail = document.getElementById('contactEmail');
-  var passwordInput = document.getElementById('password');
-  var passwordConfirmInput = document.getElementById('passwordConfirm');
   var balanceEndpoint = '/api/account-balance';
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
@@ -761,7 +754,7 @@ export function renderApply(data: ApplyData): string {
         var available = event.availablePaymentMethods ? Object.keys(labels).filter(function (method) { return event.availablePaymentMethods[method]; }).map(function (method) { return labels[method]; }) : [];
         if (!available.length) { walletElement.unmount(); return; }
         document.getElementById('stripe-wallet-title').textContent = available.length === 1 ? available[0] : '快捷支付';
-        document.getElementById('stripe-wallet-description').textContent = '使用 ' + available.join('、') + ' 快速验证支付方式，不会在提交申请时扣款。';
+        document.getElementById('stripe-wallet-description').textContent = '使用 ' + available.join('、') + ' 快速验证支付方式。';
         document.getElementById('stripe-wallet-badge').textContent = available.join(' / ').toUpperCase();
         walletBox.setAttribute('data-available', 'true');
         updatePaymentMethodVisibility();
@@ -797,7 +790,7 @@ export function renderApply(data: ApplyData): string {
         },
       });
       cardElement.mount('#stripe-card-element');
-      cardElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage('信用卡资料已加载，请填写后点击验证。'); });
+      cardElement.on('ready', function () { cardConfirm.disabled = false; });
       cardConfirm.addEventListener('click', function () {
         cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
         stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: document.getElementById('contactName').value, email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
@@ -839,20 +832,11 @@ export function renderApply(data: ApplyData): string {
     if (message && showError) showFormError(message);
     return !message;
   }
-  function validateContactFields(showError) {
-    var message = passwordInput.value && passwordConfirmInput.value && passwordInput.value !== passwordConfirmInput.value
-      ? '两次输入的密码不一致。' : '';
-    passwordConfirmInput.setCustomValidity(message);
-    if (message && showError) showFormError(message);
-    return !message;
-  }
+  function validateContactFields(showError) { return true; }
   ['input', 'change'].forEach(function (eventName) {
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) {
       document.getElementById(id).addEventListener(eventName, function () { validateDeliveryAddress(true); });
     });
-  });
-  [passwordInput, passwordConfirmInput].forEach(function (input) {
-    input.addEventListener('input', function () { validateContactFields(true); });
   });
   method.dispatchEvent(new Event('change'));
   document.getElementById('coupon-check').addEventListener('click', function () {
@@ -937,7 +921,7 @@ export function renderApply(data: ApplyData): string {
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
           saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
-          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; credentialBox.hidden = false; }
+          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = result.json.temporaryPassword || '请进入账号中心使用忘记密码功能设置'; credentialBox.hidden = false; }
           doneBox.hidden = false;
           if (!reduceMotion) doneBox.classList.add('is-in');
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;

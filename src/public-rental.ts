@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import { getRentalConfig } from './db'
-import { isStrongPassword, registerCustomer, verifyPassword } from './auth'
+import { generateTemporaryPassword, registerCustomer } from './auth'
 import { isMelbourneAddress } from './address'
 import type { Env } from './index'
 
@@ -313,8 +313,6 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const contactName = String(body.contactName || '').trim().slice(0, 120)
   const contactEmail = String(body.contactEmail || '').trim().toLowerCase().slice(0, 200)
   const contactPhone = String(body.contactPhone || '').trim().slice(0, 40)
-  const password = String(body.password || '')
-  const passwordConfirm = String(body.passwordConfirm || '')
   const couponCode = String(body.couponCode || '').trim().toUpperCase().slice(0, 40)
   const paymentMethod = body.paymentMethod === 'balance' ? 'balance' : 'card'
   const refundMethod = body.refundMethod === 'balance' ? 'balance' : 'original'
@@ -322,7 +320,6 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (!validDate(startDate) || !validDate(endDate)) return json(c, 400, { ok: false, message: '请填写有效的开始日期和结束日期。' })
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
   if (!contactName || !contactPhone) return json(c, 400, { ok: false, message: '请填写姓名和联系电话。' })
-  if (!password || password !== passwordConfirm || !isStrongPassword(password)) return json(c, 400, { ok: false, message: '请填写一致的密码（至少 8 位，且包含字母、数字和符号）。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
   let stripePaymentMethodId = ''
   let stripeCardBrand = ''
@@ -405,12 +402,12 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
 
   let user = await c.env.RENT.prepare('SELECT * FROM users WHERE lower(email) = lower(?) LIMIT 1').bind(contactEmail).first<Record<string, unknown>>()
   let accountCreated = false
+  let temporaryPassword = ''
   if (user) {
-    const storedHash = String(user.password_hash || user.passwordHash || user.password || '')
-    if (!await verifyPassword(password, storedHash)) return json(c, 409, { ok: false, message: '该邮箱已注册，请使用注册时的密码。' })
-    if (String(user.role || 'CUSTOMER') !== 'CUSTOMER' || String(user.status || 'active') !== 'active' || String(user.account_type || 'formal') !== 'formal') return json(c, 403, { ok: false, message: '该账号当前无法下单，请联系客服。' })
+    return json(c, 409, { ok: false, message: '该邮箱已注册，请先登录账号中心后提交申请。' })
   } else {
-    const result = await registerCustomer(c.env, { name: contactName, email: contactEmail, phone: contactPhone, password, passwordConfirm, agree: '1', turnstileToken: body['cf-turnstile-response'] }, ip)
+    temporaryPassword = generateTemporaryPassword()
+    const result = await registerCustomer(c.env, { name: contactName, email: contactEmail, phone: contactPhone, password: temporaryPassword, passwordConfirm: temporaryPassword, agree: '1', turnstileToken: body['cf-turnstile-response'] }, ip)
     if (!result.ok) return json(c, result.code === 'rate_limited' ? 429 : 400, { ok: false, message: result.message })
     user = await c.env.RENT.prepare('SELECT * FROM users WHERE lower(email) = lower(?) LIMIT 1').bind(contactEmail).first<Record<string, unknown>>()
     accountCreated = true
@@ -474,7 +471,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权（不会立即入账）；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
       : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片（不预扣，仅在损坏或逾期时按实际费用扣款）；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
     : ''
-  return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, orderNo: firstOrder?.orderNo || null, rentalPeriod: period.days, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
+  return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: period.days, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
 }
 
 export async function parseRequestBody(c: RentalContext): Promise<Record<string, unknown> | null> {

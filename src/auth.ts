@@ -40,6 +40,14 @@ export function isStrongPassword(password: unknown): boolean {
   return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,}$/.test(String(password ?? ''))
 }
 
+/** 申请页不再要求用户现场设置密码；为新账号生成一次性展示的临时密码。 */
+export function generateTemporaryPassword(): string {
+  const bytes = new Uint8Array(14)
+  crypto.getRandomValues(bytes)
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  return `Gs-${bytes[0] % 10}${letters[bytes[1] % letters.length]}${Array.from(bytes.slice(2), (byte) => letters[byte % letters.length]).join('')}`
+}
+
 /**
  * 纯文本字段清洗：直接删除尖括号与控制字符（单遍、幂等），再 trim + 截断。
  * 这些值只入库、不作 HTML 渲染；删字符而非匹配标签，避免 `<sc<script>ript>`
