@@ -163,20 +163,29 @@ function decodeNoticeEntities(value: string): string {
     .replace(/&amp;/gi, '&')
 }
 
-function publicUpdateMessage(value: string): string {
-  return decodeNoticeEntities(value)
+/**
+ * 协议更新通知在后台是按客户来信生成的模板（含收件人称呼、公司签名行等），
+ * 直接展示在公开通告页会露出 "PC Rental | |" 这类占位符残留。这里从原始
+ * 模板中只提取被更新的协议名称，重新拼出面向全体访客的公告文案。
+ */
+function buildPolicyUpdateNotice(raw: string): { title: string; message: string } {
+  const decoded = decodeNoticeEntities(raw)
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n')
     .replace(/<[^>]*>/g, '')
-    // Public notices are not addressed to a particular customer.
-    .replace(/^您好(?:\s+[^，,:：\n]{1,30})?[，,:：]\s*/i, '您好：')
-    .replace(/\{customer_name\}/gi, '客户')
-    .replace(/\{customer_email\}/gi, '')
-    .replace(/\{company_address\}|\{company_email\}/gi, '')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n[ \t]+/g, '\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim()
+  const match = decoded.match(/协议内容[：:]\s*([^。\n]+)/)
+  const policyName = (match?.[1] || '相关条款').trim()
+  const title = `${policyName}协议内容已更新`
+  const message = [
+    `**${title}**`,
+    '',
+    `我们已更新《${policyName}》。`,
+    '',
+    `最新版本已发布于本网站的相关页面，并自公布之日起生效。继续使用我们的服务，即表示您已阅读并同意更新后的《${policyName}》。`,
+    '',
+    '如果您不同意更新后的内容，请停止使用相关服务，并可通过联系我们获取进一步协助。',
+  ].join('\n')
+  return { title, message }
 }
 
 export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNotice[]> {
@@ -212,8 +221,9 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     for (const row of result.results ?? []) {
       const type = String(row.type ?? 'announcement')
       const isPublicUpdate = PUBLIC_UPDATE_TYPES.has(type)
-      const title = isPublicUpdate ? '协议内容已更新' : String(row.title ?? '最新通告')
-      const message = isPublicUpdate ? publicUpdateMessage(String(row.message ?? '')) : String(row.message ?? '')
+      const policyInfo = isPublicUpdate ? buildPolicyUpdateNotice(String(row.message ?? '')) : null
+      const title = policyInfo ? policyInfo.title : String(row.title ?? '最新通告')
+      const message = policyInfo ? policyInfo.message : String(row.message ?? '')
       // Notifications are stored once per recipient. Collapse the normalized
       // copies so the public site shows one update instead of one card per user.
       const timeKey = String(row.created_at ?? '').replace('T', ' ').slice(0, 16)

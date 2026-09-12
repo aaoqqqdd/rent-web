@@ -110,6 +110,9 @@ ${renderSiteFooter(opts.contact)}
       if (englishPatterns[i][0].test(lookup)) translated = lookup.replace(englishPatterns[i][0], englishPatterns[i][1]);
     }
     if (!translated) return value;
+    // A pattern's captured group (eg. a policy name inside a dynamic notice) is
+    // copied into the replacement as-is; translate any Chinese it still carries.
+    translated = translated.replace(/\\p{Script=Han}+/gu, function (segment) { return englishCopy[segment] || segment; });
     return translated
       .replaceAll('墨尔本 CBD 及周边地区', 'Melbourne CBD and nearby areas')
       .replaceAll('墨尔本 CBD', 'Melbourne CBD')

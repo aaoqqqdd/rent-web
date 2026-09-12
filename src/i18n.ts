@@ -405,4 +405,8 @@ export const ENGLISH_PATTERNS: Array<[string, string]> = [
   ['^租期不能少于 (\\d+) 天，请调整归还日期。$', 'The rental term must be at least $1 day(s). Adjust the return date.'],
   ['^已优惠 AUD\\$(.+)$', 'Discount applied: AUD$$$1'],
   ['^支付服务返回了无法识别的响应（HTTP (.+)），请稍后重试或联系客服。$', 'The payment service returned an unreadable response (HTTP $1). Try again later or contact us.'],
+  ['^(.+)协议内容已更新$', '$1 has been updated'],
+  ['^我们已更新《(.+)》。$', 'We have updated the $1.'],
+  ['^最新版本已发布于本网站的相关页面，并自公布之日起生效。继续使用我们的服务，即表示您已阅读并同意更新后的《(.+)》。$', 'The latest version has been published on the relevant page of our website and takes effect from the date of publication. By continuing to use our services, you confirm that you have read and agree to the updated $1.'],
+  ['^如果您不同意更新后的内容，请停止使用相关服务，并可通过联系我们获取进一步协助。$', 'If you do not agree with the updated content, please stop using the relevant services. Contact us for further assistance.'],
 ]
