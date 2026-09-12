@@ -269,7 +269,7 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
     <form class="form-card" id="order-lookup-form">
       <div class="form-card-head"><span>LOOKUP</span><div><h3>查询一笔订单</h3><p>订单号和申请邮箱需要与提交时一致。</p></div></div>
       <div class="form-alert" id="lookup-error" hidden></div>
-      <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="例如 ORD-20260101-ABC123" autocomplete="off" required></div>
+      <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="OD-20260101-ABC123" autocomplete="off" required></div>
       <div class="field"><label for="lookup-email">申请邮箱</label><input id="lookup-email" name="email" type="email" autocomplete="email" required></div>
       ${turnstileSiteKey ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>` : ''}
       <button class="btn btn-primary btn-lg" type="submit" id="lookup-submit">查询订单</button>
