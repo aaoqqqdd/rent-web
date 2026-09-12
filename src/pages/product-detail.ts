@@ -128,6 +128,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var globalUnavailableDates = ${scriptJson(config.unavailableDates)};
   var availability = {};
   var availabilityReady = false;
+  var openPickerState = null;
   var today = new Date();
   var dateString = function (date) { return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); };
   var formatDate = function (value) {
@@ -185,8 +186,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var title = document.createElement('strong'); title.textContent = year + '年' + (monthIndex + 1) + '月';
     var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'date-picker-nav'; previous.textContent = '‹';
     var next = document.createElement('button'); next.type = 'button'; next.className = 'date-picker-nav'; next.textContent = '›';
-    previous.addEventListener('click', function () { renderPicker(picker, input, toggle, role, new Date(year, monthIndex - 1, 1)); });
-    next.addEventListener('click', function () { renderPicker(picker, input, toggle, role, new Date(year, monthIndex + 1, 1)); });
+    previous.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); var month = new Date(year, monthIndex - 1, 1); if (openPickerState) openPickerState.month = month; renderPicker(picker, input, toggle, role, month); });
+    next.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); var month = new Date(year, monthIndex + 1, 1); if (openPickerState) openPickerState.month = month; renderPicker(picker, input, toggle, role, month); });
     head.append(previous, title, next); picker.appendChild(head);
     var week = document.createElement('div'); week.className = 'date-picker-week';
     ['一', '二', '三', '四', '五', '六', '日'].forEach(function (label) { var cell = document.createElement('span'); cell.textContent = label; week.appendChild(cell); });
@@ -202,7 +203,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       day.addEventListener('click', function (event) {
         setDateValue(input, event.currentTarget.dataset.date);
         input.dispatchEvent(new Event('change', { bubbles: true }));
-        picker.hidden = true; toggle.setAttribute('aria-expanded', 'false');
+        picker.hidden = true; toggle.setAttribute('aria-expanded', 'false'); openPickerState = null;
       });
       grid.appendChild(day);
     }
@@ -211,8 +212,16 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var openPicker = function (picker, input, toggle, role) {
     var value = readDateValue(input) || input.min || start.min;
     var date = new Date(value + 'T00:00:00');
-    renderPicker(picker, input, toggle, role, new Date(date.getFullYear(), date.getMonth(), 1));
+    openPickerState = { picker: picker, input: input, toggle: toggle, role: role, month: new Date(date.getFullYear(), date.getMonth(), 1) };
+    renderPicker(picker, input, toggle, role, openPickerState.month);
     picker.hidden = false; toggle.setAttribute('aria-expanded', 'true');
+  };
+  var refreshOpenPicker = function () {
+    if (!openPickerState || openPickerState.picker.hidden) return;
+    var value = readDateValue(openPickerState.input) || start.min;
+    var date = new Date(value + 'T00:00:00');
+    openPickerState.month = new Date(date.getFullYear(), date.getMonth(), 1);
+    renderPicker(openPickerState.picker, openPickerState.input, openPickerState.toggle, openPickerState.role, openPickerState.month);
   };
   var applyDateRules = function (initial) {
     if (!availabilityReady) return;
@@ -245,8 +254,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   start.disabled = true; end.disabled = true; startToggle.disabled = false; endToggle.disabled = false; button.disabled = true;
   fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify([${JSON.stringify(product.id)}])), { headers: { Accept: 'application/json' } })
     .then(function (response) { return response.json(); })
-    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); })
-    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); });
+    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); refreshOpenPicker(); })
+    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); refreshOpenPicker(); });
   start.addEventListener('input', function () { start.value = maskDate(start.value); applyDateRules(false); });
   end.addEventListener('input', function () { end.value = maskDate(end.value); applyDateRules(false); });
   start.addEventListener('change', function () { applyDateRules(false); });
@@ -260,7 +269,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       [startPicker, startToggle],
       [endPicker, endToggle],
     ].forEach(function (entry) {
-      if (!entry[0].parentElement.contains(event.target)) { entry[0].hidden = true; entry[1].setAttribute('aria-expanded', 'false'); }
+      if (!entry[0].parentElement.contains(event.target)) { entry[0].hidden = true; entry[1].setAttribute('aria-expanded', 'false'); if (openPickerState && openPickerState.picker === entry[0]) openPickerState = null; }
     });
   });
   button.addEventListener('click', function () {

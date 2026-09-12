@@ -694,7 +694,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .apply-section .section-head h2 { margin-top: 10px; }
 .apply-grid { display: grid; grid-template-columns: 1fr 380px; align-items: start; gap: 18px; }
 .apply-grid-main, .apply-grid-payment { min-width: 0; }
-.apply-grid-payment #wallet-step-card { position: sticky; top: 88px; align-self: start; }
+.apply-grid-payment { position: sticky; top: 88px; align-self: start; }
 .apply-grid-main .form-card + .form-card, .apply-grid-payment .form-card + .form-card { margin-top: 18px; }
 .apply-grid-main > .field { margin-top: 18px; }
 .form-card { border-radius: 14px; padding: 30px; }.form-card-head { display: flex; gap: 13px; align-items: center; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }.form-card-head > span { color: var(--primary); font-family: var(--mono); font-size: 10px; }.form-card-head h3 { font-size: 17px; }.form-card-head p { margin-top: 3px; color: var(--muted-fg); font-size: 11px; }
@@ -790,7 +790,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .principle-grid.about-values { grid-template-columns: repeat(2, 1fr); }
   .service-standard-grid { grid-template-columns: repeat(2, 1fr); }
   .apply-grid { grid-template-columns: 1fr; }
-  .apply-grid-payment #wallet-step-card { position: static; }
+  .apply-grid-payment { position: static; }
 }
 @media (max-width: 620px) {
   .nav { display: none; }
