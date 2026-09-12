@@ -256,7 +256,7 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
     ? `<section class="lookup-orders"><div class="section-head tight"><div><div class="kicker">我的订单</div><h2>当前订单状态</h2></div><p>登录状态下只显示属于你的订单。</p></div>${orders.map(renderOrderCard).join('')}</section>`
     : ''
   return /* html */ `
-<section class="page-hero compact order-lookup-hero"><div class="wrap"><div class="kicker">订单查询</div><h1>订单进度与交付信息，一页看清。</h1><p>输入订单编号和申请邮箱，可查看审核、签约、取货、租赁和退款状态。合同链接、临时账户密码和 Windows 密码仅在对应信息已生成时显示。</p></div></section>
+<section class="page-hero compact order-lookup-hero"><div class="wrap"><div class="kicker">订单查询</div><h1>订单进度与交付信息</h1><p>输入订单编号和申请邮箱，可查看审核、签约、取货、租赁和退款状态。</p></div></section>
 <section class="section"><div class="wrap form-wrap lookup-wrap">
   ${orderList}
   <form class="form-card" id="order-lookup-form">
