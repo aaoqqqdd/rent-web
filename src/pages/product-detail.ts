@@ -56,11 +56,11 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <div class="kicker">先选租期</div>
         <p>选择后加入购物车，之后仍可在购物车中修改。</p>
         <div class="row2">
-          <div class="field"><label for="detail-start-date">取货日期</label><input type="text" id="detail-start-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required></div>
+          <div class="field detail-date-field"><label for="detail-start-date">取货日期</label><div class="detail-date-control"><input type="text" id="detail-start-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required><button type="button" class="detail-date-picker-toggle" id="detail-start-date-toggle" aria-label="打开取货日期日历" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg></button><div class="date-picker detail-date-picker" id="detail-start-date-picker" hidden></div></div></div>
           <div class="field"><label for="detail-start-period">取货时段</label><select id="detail-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="detail-end-date">归还日期</label><input type="text" id="detail-end-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required></div>
+          <div class="field detail-date-field"><label for="detail-end-date">归还日期</label><div class="detail-date-control"><input type="text" id="detail-end-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required><button type="button" class="detail-date-picker-toggle" id="detail-end-date-toggle" aria-label="打开归还日期日历" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></button><div class="date-picker detail-date-picker" id="detail-end-date-picker" hidden></div></div></div>
           <div class="field"><label for="detail-end-period">归还时段</label><select id="detail-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
@@ -118,6 +118,10 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
 (() => {
   var start = document.getElementById('detail-start-date');
   var end = document.getElementById('detail-end-date');
+  var startToggle = document.getElementById('detail-start-date-toggle');
+  var endToggle = document.getElementById('detail-end-date-toggle');
+  var startPicker = document.getElementById('detail-start-date-picker');
+  var endPicker = document.getElementById('detail-end-date-picker');
   var startPeriod = document.getElementById('detail-start-period');
   var endPeriod = document.getElementById('detail-end-period');
   var button = document.getElementById('detail-add-cart');
@@ -147,6 +151,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var invalidDateMessage = '请输入有效日期（格式：dd/mm/yyyy）。';
   var unavailableDateMessage = '该设备在此日期不可用，请选择其他日期。';
   var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
+  var clearChildren = function (node) { while (node && node.firstChild) node.removeChild(node.firstChild); };
   var isUnavailable = function (value) {
     if (!value || globalUnavailableDates.indexOf(value) >= 0) return Boolean(value);
     var item = availability[${JSON.stringify(product.id)}] || {};
@@ -154,6 +159,53 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       || (item.rentalRanges || []).some(function (range) { return range.startDate <= value && value < range.endDate; });
   };
   var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
+  var pickerDateDisabled = function (role, value) {
+    if (!availabilityReady || value < start.min || isUnavailable(value)) return true;
+    if (role !== 'end') return false;
+    var startValue = readDateValue(start);
+    return !startValue || value < end.min || periodUnavailable(startValue, value);
+  };
+  var periodUnavailable = function (from, to) {
+    for (var value = from; value && value < to; value = addDays(value, 1)) if (isUnavailable(value)) return true;
+    return false;
+  };
+  var renderPicker = function (picker, input, toggle, role, month) {
+    var year = month.getFullYear();
+    var monthIndex = month.getMonth();
+    clearChildren(picker);
+    var head = document.createElement('div'); head.className = 'date-picker-head';
+    var title = document.createElement('strong'); title.textContent = year + '年' + (monthIndex + 1) + '月';
+    var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'date-picker-nav'; previous.textContent = '‹';
+    var next = document.createElement('button'); next.type = 'button'; next.className = 'date-picker-nav'; next.textContent = '›';
+    previous.addEventListener('click', function () { renderPicker(picker, input, toggle, role, new Date(year, monthIndex - 1, 1)); });
+    next.addEventListener('click', function () { renderPicker(picker, input, toggle, role, new Date(year, monthIndex + 1, 1)); });
+    head.append(previous, title, next); picker.appendChild(head);
+    var week = document.createElement('div'); week.className = 'date-picker-week';
+    ['一', '二', '三', '四', '五', '六', '日'].forEach(function (label) { var cell = document.createElement('span'); cell.textContent = label; week.appendChild(cell); });
+    picker.appendChild(week);
+    var grid = document.createElement('div'); grid.className = 'date-picker-grid';
+    var first = new Date(year, monthIndex, 1); var offset = (first.getDay() + 6) % 7;
+    for (var index = 0; index < 42; index += 1) {
+      var date = new Date(year, monthIndex, index - offset + 1); var value = dateString(date);
+      var day = document.createElement('button'); day.type = 'button'; day.textContent = String(date.getDate()); day.dataset.date = value;
+      if (date.getMonth() !== monthIndex) day.className = 'is-outside';
+      day.disabled = pickerDateDisabled(role, value);
+      if (value === readDateValue(input)) day.classList.add('is-selected');
+      day.addEventListener('click', function (event) {
+        setDateValue(input, event.currentTarget.dataset.date);
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        picker.hidden = true; toggle.setAttribute('aria-expanded', 'false');
+      });
+      grid.appendChild(day);
+    }
+    picker.appendChild(grid);
+  };
+  var openPicker = function (picker, input, toggle, role) {
+    var value = readDateValue(input) || input.min || start.min;
+    var date = new Date(value + 'T00:00:00');
+    renderPicker(picker, input, toggle, role, new Date(date.getFullYear(), date.getMonth(), 1));
+    picker.hidden = false; toggle.setAttribute('aria-expanded', 'true');
+  };
   var applyDateRules = function (initial) {
     if (!availabilityReady) return;
     var startValue = readDateValue(start);
@@ -182,15 +234,27 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   };
   start.min = dateString(today); setDateValue(start, start.min);
   end.min = addDays(start.min, minimumDays); setDateValue(end, end.min);
-  start.disabled = true; end.disabled = true; button.disabled = true;
+  start.disabled = true; end.disabled = true; startToggle.disabled = true; endToggle.disabled = true; button.disabled = true;
   fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify([${JSON.stringify(product.id)}])), { headers: { Accept: 'application/json' } })
     .then(function (response) { return response.json(); })
-    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; applyDateRules(true); })
-    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; applyDateRules(true); });
+    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); })
+    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); });
   start.addEventListener('input', function () { applyDateRules(false); });
   end.addEventListener('input', function () { applyDateRules(false); });
   start.addEventListener('change', function () { applyDateRules(false); });
   end.addEventListener('change', function () { applyDateRules(false); });
+  startToggle.addEventListener('click', function () { openPicker(startPicker, start, startToggle, 'start'); });
+  endToggle.addEventListener('click', function () { openPicker(endPicker, end, endToggle, 'end'); });
+  start.addEventListener('focus', function () { openPicker(startPicker, start, startToggle, 'start'); });
+  end.addEventListener('focus', function () { openPicker(endPicker, end, endToggle, 'end'); });
+  document.addEventListener('click', function (event) {
+    [
+      [startPicker, startToggle],
+      [endPicker, endToggle],
+    ].forEach(function (entry) {
+      if (!entry[0].parentElement.contains(event.target)) { entry[0].hidden = true; entry[1].setAttribute('aria-expanded', 'false'); }
+    });
+  });
   button.addEventListener('click', function () {
     applyDateRules(false);
     var startValue = readDateValue(start);

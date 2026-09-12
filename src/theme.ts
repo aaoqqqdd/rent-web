@@ -211,6 +211,12 @@ p { margin: 0; }
 }
 .field input[type="date"] { color-scheme: dark; cursor: pointer; }
 .field input[type="date"]::-webkit-calendar-picker-indicator { opacity: .9; cursor: pointer; filter: invert(72%) sepia(72%) saturate(700%) hue-rotate(145deg); }
+.detail-date-control { position: relative; }
+.detail-date-control input { padding-right: 44px; }
+.detail-date-picker-toggle { position: absolute; top: 50%; right: 8px; display: grid; width: 30px; height: 30px; place-items: center; padding: 5px; border: 0; border-radius: 6px; color: var(--secondary); background: transparent; cursor: pointer; transform: translateY(-50%); }
+.detail-date-picker-toggle:hover, .detail-date-picker-toggle:focus-visible { background: rgba(89,229,193,.1); color: var(--fg); }
+.detail-date-picker-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.detail-date-picker { top: calc(100% + 6px); left: 0; width: min(280px, 100%); }
 .field textarea { resize: vertical; min-height: 68px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .row3 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }

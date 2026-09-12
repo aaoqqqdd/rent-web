@@ -34,8 +34,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   <div class="form-card cart-empty" id="cart-page-empty" hidden><h3>购物车还是空的</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
   <div id="cart-page-content" hidden>
     <div class="form-card cart-term-card">
-      <div class="form-card-head"><span>01</span><div><h3>分别设置每台设备租期</h3><p>每台设备独立校验档期和不可用日期</p></div></div>
-      <p class="hint">请在下方每台设备卡片中选择取货和归还日期。日历会禁用不可用日期，手动输入不可用日期也无法继续结账。</p>
+      <p class="hint">请在下方每台设备卡片中选择取货和归还日期</p>
     </div>
     <div class="cart-page-list" id="cart-page-items"></div>
     <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong><p>租金会根据实际日期计算，押金在归还验收后按规则处理。</p></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
@@ -90,6 +89,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       .then(function (result) { if (requestKey !== availabilityKey) return; availability = result.availability || {}; availabilityReady = true; render(); })
       .catch(function () { if (requestKey === availabilityKey) { availabilityFailed = true; availabilityReady = true; render(); } });
   }
+  function clearChildren(node) { while (node && node.firstChild) node.removeChild(node.firstChild); }
   function formatDate(value) { return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
   function parseDate(value) {
     var text = String(value || '').trim(); var match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
@@ -125,7 +125,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function persist(ids, terms) {
     try { localStorage.setItem(key, JSON.stringify({ items: ids, terms: terms })); } catch (_) {}
-    if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids);
+    try { if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids); } catch (_) {}
   }
   function write(ids, terms) { persist(ids, terms); render(); }
   function legacySharedRender() {
@@ -159,7 +159,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
         return;
       }
     }
-    items.replaceChildren();
+    clearChildren(items);
     var deposit = 0;
     var rentalDays = ids.length && startInput.value && endInput.value ? Math.max(0, Math.ceil((new Date(endInput.value + 'T00:00:00Z') - new Date(startInput.value + 'T00:00:00Z')) / 86400000)) : 0;
     ids.forEach(function (id) {
@@ -206,7 +206,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     return role === 'end' && (date <= term.startDate || date < addDays(term.startDate, Math.max(1, minimumDays)) || periodUnavailable(id, term.startDate, date));
   }
   function renderPicker(picker, id, role, term, month) {
-    var year = month.getFullYear(); var monthIndex = month.getMonth(); picker.replaceChildren();
+    var year = month.getFullYear(); var monthIndex = month.getMonth(); clearChildren(picker);
     var head = document.createElement('div'); head.className = 'date-picker-head'; var title = document.createElement('strong'); title.textContent = year + '年' + (monthIndex + 1) + '月';
     var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'date-picker-nav'; previous.textContent = '‹'; var next = document.createElement('button'); next.type = 'button'; next.className = 'date-picker-nav'; next.textContent = '›';
     previous.addEventListener('click', function () { renderPicker(picker, id, role, term, new Date(year, monthIndex - 1, 1)); }); next.addEventListener('click', function () { renderPicker(picker, id, role, term, new Date(year, monthIndex + 1, 1)); }); head.append(previous, title, next); picker.appendChild(head);
@@ -237,8 +237,10 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     var status = document.createElement('p'); status.className = 'term-status'; var error = availabilityReady && !availabilityFailed ? termError(id, term) : ''; status.textContent = availabilityFailed ? '设备档期检查失败，请刷新后重试。' : (availabilityReady ? (error || '该设备档期可用。') : '正在检查该设备档期…'); if (error || availabilityFailed) status.dataset.state = 'error'; wrap.append(fields, periods, status); return wrap;
   }
   function render() {
-    var state = read(); var ids = state.ids; if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) { ids.push(selectedId); state.terms[selectedId] = normalizeTerm(selectedId, null); persist(ids, state.terms); }
-    empty.hidden = ids.length > 0; content.hidden = ids.length === 0; if (!ids.length) { items.replaceChildren(); total.textContent = ''; return; } loadAvailability(ids); items.replaceChildren(); var deposit = 0; var rent = 0; var valid = true;
+    var state = read(); var ids = state.ids;
+    empty.hidden = ids.length > 0; content.hidden = ids.length === 0;
+    if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) { ids.push(selectedId); state.terms[selectedId] = normalizeTerm(selectedId, null); persist(ids, state.terms); }
+    if (!ids.length) { clearChildren(items); total.textContent = ''; return; } loadAvailability(ids); clearChildren(items); var deposit = 0; var rent = 0; var valid = true;
     ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; deposit += Number(product.deposit || 0); rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || '配置详情见设备页'; detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); daily.textContent = '$' + Number(product.day || 0).toFixed(2); var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); var depositText = document.createElement('span'); depositText.textContent = '押金 $' + Number(product.deposit || 0).toFixed(2); var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除'; price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
     total.textContent = ids.length + ' 台设备｜租金 $' + rent.toFixed(2) + '｜押金 $' + deposit.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (valid ? '' : '｜请先修正不可用租期');
     var checkout = content.querySelector('a[href="/checkout"], a[data-checkout-link]');
