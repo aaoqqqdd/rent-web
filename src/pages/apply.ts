@@ -348,8 +348,8 @@ export function renderApply(data: ApplyData): string {
           <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
         </div>
         <div class="refund-choice">
-          <label>押金退还方式</label>
-          <p class="hint">设备归还并完成验收后，押金会按你选择的方式处理。退回账号余额仅限已存在的正式账户；新注册或临时账户请选原路退回。</p>
+          <label>押金处理方式</label>
+          <p class="hint">短期租赁使用预授权，归还无损坏时直接释放；30 天及以上长期租赁不预扣押金，仅在损坏或逾期时按实际费用扣款。</p>
           <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
           <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
         </div>
@@ -389,6 +389,7 @@ export function renderApply(data: ApplyData): string {
   var ENDPOINT = '/api/rental-request';
   var SETUP_ENDPOINT = '/api/rental-setup-intent';
   var MIN_DAYS = ${config.minimumRentalDays};
+  var LONG_TERM_DAYS = 30;
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
   var DEVICE_AVAILABILITY = {};
@@ -613,7 +614,7 @@ export function renderApply(data: ApplyData): string {
     var rentTotal = rentalDays ? cartIds.reduce(function (total, id) { return total + rentalFee(productMap.get(id), rentalDays); }, 0) : 0;
     var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(total * stripeFeeRate * 100) / 100;
+    var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100;
     var payableTotal = total + paymentFee;
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
@@ -622,8 +623,9 @@ export function renderApply(data: ApplyData): string {
         ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
         : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，余额不足';
     }
+    var depositNote = rentalDays >= LONG_TERM_DAYS ? '长期租赁押金不预扣，仅在损坏或逾期时按实际费用扣款' : '短期租赁押金采用预授权，归还无损坏时释放';
     summary.textContent = rentalDays
-      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + ' · 支付手续费 $' + paymentFee.toFixed(2) + ' = 应付 $' + payableTotal.toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
+      ? count + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? ' · 优惠 -$' + appliedDiscount.toFixed(2) : '') + ' + 押金 $' + depositTotal.toFixed(2) + '（' + depositNote + '） · 租金支付手续费 $' + paymentFee.toFixed(2) + ' = 租金付款参考 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + (rentalDays < MIN_DAYS ? '（低于最短租期）' : '')
       : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2);
     validateAvailability();
   }

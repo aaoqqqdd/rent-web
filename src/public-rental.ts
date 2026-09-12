@@ -9,6 +9,7 @@ type RentalContext = Context<{ Bindings: Env }>
 const MAX_CART_ITEMS = 10
 const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const LONG_TERM_RENTAL_DAYS = 30
 
 function json(c: RentalContext, status: number, payload: Record<string, unknown>): Response {
   return c.json(payload, status as never)
@@ -369,8 +370,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
         `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
       ).bind(orderId, orderNo, user.id, device.id, startDate, endDate, startPeriod, endPeriod, period.days, paymentMethod === 'balance' ? 'balance' : 'bank_transfer', total, deposit, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
-      await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ? WHERE id = ?')
-        .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, orderId).run()
+      await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
+        .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, paymentMethod === 'card' ? (period.days >= LONG_TERM_RENTAL_DAYS ? 'SETUP_INTENT' : 'PREAUTH') : 'PAID', orderId).run()
       orderIds.push(orderId)
     }
   } catch (error) {
