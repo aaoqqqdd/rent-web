@@ -36,11 +36,11 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     <div class="form-card cart-term-card">
       <div class="form-card-head"><span>01</span><div><h3>租赁日期</h3><p>购物车中的设备共用这一租期</p></div></div>
       <div class="row2">
-        <div class="field"><label for="cart-start-date">取货日期</label><input type="date" id="cart-start-date" required></div>
+        <div class="field"><label for="cart-start-date">取货日期</label><input type="date" id="cart-start-date" lang="en-AU" required></div>
         <div class="field"><label for="cart-start-period">取货时段</label><select id="cart-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
       </div>
       <div class="row2">
-        <div class="field"><label for="cart-end-date">归还日期</label><input type="date" id="cart-end-date" required></div>
+        <div class="field"><label for="cart-end-date">归还日期</label><input type="date" id="cart-end-date" lang="en-AU" required></div>
         <div class="field"><label for="cart-end-period">归还时段</label><select id="cart-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
       </div>
       <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。租期可在提交前继续修改。</p>

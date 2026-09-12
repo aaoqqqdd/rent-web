@@ -56,11 +56,11 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <div class="kicker">先选租期</div>
         <p>选择后加入购物车，之后仍可在购物车中修改。</p>
         <div class="row2">
-          <div class="field"><label for="detail-start-date">取货日期</label><input type="date" id="detail-start-date" required></div>
+          <div class="field"><label for="detail-start-date">取货日期</label><input type="date" id="detail-start-date" lang="en-AU" required></div>
           <div class="field"><label for="detail-start-period">取货时段</label><select id="detail-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="detail-end-date">归还日期</label><input type="date" id="detail-end-date" required></div>
+          <div class="field"><label for="detail-end-date">归还日期</label><input type="date" id="detail-end-date" lang="en-AU" required></div>
           <div class="field"><label for="detail-end-period">归还时段</label><select id="detail-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
