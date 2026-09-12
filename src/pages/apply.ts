@@ -116,7 +116,11 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       var value = JSON.parse(localStorage.getItem(key) || '[]'); var ids = Array.isArray(value) ? value : value.items;
       var savedTerms = !Array.isArray(value) && value.terms && typeof value.terms === 'object' ? value.terms : {}; var legacy = !Array.isArray(value) ? value.term : null;
       ids = Array.isArray(ids) ? ids.filter(function (id, index) { return map.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
-      var terms = {}; ids.forEach(function (id) { terms[id] = normalizeTerm(id, savedTerms[id] || legacy); }); return { ids: ids, terms: terms };
+      var terms = {}; ids.forEach(function (id) { terms[id] = normalizeTerm(id, savedTerms[id] || legacy); });
+      // 产品下架后，旧购物车 ID 仍可能留在 localStorage。立即写回清理后的状态，
+      // 让页面空状态与顶栏角标使用同一份有效购物车数据。
+      try { localStorage.setItem(key, JSON.stringify({ items: ids, terms: terms })); } catch (_) {}
+      return { ids: ids, terms: terms };
     } catch (_) { return { ids: [], terms: {} }; }
   }
   function persist(ids, terms) {
@@ -442,6 +446,8 @@ export function renderApply(data: ApplyData): string {
       ids = Array.isArray(ids) ? ids.filter(function (id, index) { return productMap.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
       var terms = !Array.isArray(value) && value.terms && typeof value.terms === 'object' ? value.terms : {};
       var legacy = !Array.isArray(value) ? value.term : null;
+      // 清理已下架或不存在的设备，避免结账页为空但顶栏仍显示旧角标。
+      try { localStorage.setItem(CART_KEY, JSON.stringify({ items: ids, term: legacy, terms: terms })); } catch (_) {}
       return { ids: ids, terms: terms, legacy: legacy };
     } catch (_) { return { ids: [], terms: {}, legacy: null }; }
   }

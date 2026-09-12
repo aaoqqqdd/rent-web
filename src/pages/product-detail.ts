@@ -56,11 +56,11 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <div class="kicker">先选租期</div>
         <p>选择后加入购物车，之后仍可在购物车中修改。</p>
         <div class="row2">
-          <div class="field"><label for="detail-start-date">取货日期</label><input type="date" id="detail-start-date" lang="en-AU" required></div>
+          <div class="field"><label for="detail-start-date">取货日期</label><input type="text" id="detail-start-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required></div>
           <div class="field"><label for="detail-start-period">取货时段</label><select id="detail-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <div class="row2">
-          <div class="field"><label for="detail-end-date">归还日期</label><input type="date" id="detail-end-date" lang="en-AU" required></div>
+          <div class="field"><label for="detail-end-date">归还日期</label><input type="text" id="detail-end-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required></div>
           <div class="field"><label for="detail-end-period">归还时段</label><select id="detail-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
@@ -127,6 +127,25 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var availabilityReady = false;
   var today = new Date();
   var dateString = function (date) { return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); };
+  var formatDate = function (value) {
+    var parts = String(value || '').split('-');
+    return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : '';
+  };
+  var parseDate = function (value) {
+    var match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value || '').trim());
+    if (!match) return '';
+    var iso = match[3] + '-' + match[2] + '-' + match[1];
+    var date = new Date(iso + 'T00:00:00Z');
+    return date.getUTCFullYear() === Number(match[3]) && date.getUTCMonth() + 1 === Number(match[2]) && date.getUTCDate() === Number(match[1]) ? iso : '';
+  };
+  var setDateValue = function (input, value) { input.value = formatDate(value); input.dataset.iso = value; };
+  var readDateValue = function (input) {
+    var value = parseDate(input.value);
+    if (value) input.dataset.iso = value;
+    return value;
+  };
+  var invalidDateMessage = '请输入有效日期（格式：dd/mm/yyyy）。';
+  var unavailableDateMessage = '该设备在此日期不可用，请选择其他日期。';
   var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
   var isUnavailable = function (value) {
     if (!value || globalUnavailableDates.indexOf(value) >= 0) return Boolean(value);
@@ -135,27 +154,49 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       || (item.rentalRanges || []).some(function (range) { return range.startDate <= value && value < range.endDate; });
   };
   var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
-  var applyDateRules = function () {
+  var applyDateRules = function (initial) {
     if (!availabilityReady) return;
-    start.value = nextAvailable(start.value || start.min);
-    start.setCustomValidity(isUnavailable(start.value) ? '该设备在此日期不可用，请选择其他日期。' : '');
-    end.min = nextAvailable(addDays(start.value, minimumDays));
-    if (!end.value || end.value < end.min || isUnavailable(end.value)) end.value = end.min;
-    end.setCustomValidity(isUnavailable(end.value) ? '该设备在此日期不可用，请选择其他日期。' : '');
+    var startValue = readDateValue(start);
+    if (!startValue && initial) {
+      startValue = nextAvailable(start.min);
+      setDateValue(start, startValue);
+    }
+    if (!startValue) {
+      start.setCustomValidity(invalidDateMessage);
+      end.setCustomValidity(invalidDateMessage);
+      return;
+    }
+    if (initial && isUnavailable(startValue)) {
+      startValue = nextAvailable(startValue);
+      setDateValue(start, startValue);
+    }
+    start.setCustomValidity(isUnavailable(startValue) ? unavailableDateMessage : '');
+    end.min = nextAvailable(addDays(startValue, minimumDays));
+    end.dataset.minIso = end.min;
+    var endValue = readDateValue(end);
+    if (!endValue && initial) {
+      endValue = end.min;
+      setDateValue(end, endValue);
+    }
+    end.setCustomValidity(!endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期。' : isUnavailable(endValue) ? unavailableDateMessage : '');
   };
-  start.min = dateString(today); start.value = start.min;
-  end.min = addDays(start.value, minimumDays); end.value = end.min;
+  start.min = dateString(today); setDateValue(start, start.min);
+  end.min = addDays(start.min, minimumDays); setDateValue(end, end.min);
   start.disabled = true; end.disabled = true; button.disabled = true;
   fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify([${JSON.stringify(product.id)}])), { headers: { Accept: 'application/json' } })
     .then(function (response) { return response.json(); })
-    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; applyDateRules(); })
-    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; });
-  start.addEventListener('change', function () { applyDateRules(); });
-  end.addEventListener('change', function () { applyDateRules(); });
+    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; applyDateRules(true); })
+    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; button.disabled = false; applyDateRules(true); });
+  start.addEventListener('input', function () { applyDateRules(false); });
+  end.addEventListener('input', function () { applyDateRules(false); });
+  start.addEventListener('change', function () { applyDateRules(false); });
+  end.addEventListener('change', function () { applyDateRules(false); });
   button.addEventListener('click', function () {
-    applyDateRules();
-    if (!start.value || !end.value || end.value < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
-    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: start.value, endDate: end.value, startPeriod: startPeriod.value, endPeriod: endPeriod.value });
+    applyDateRules(false);
+    var startValue = readDateValue(start);
+    var endValue = readDateValue(end);
+    if (!startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
+    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: startValue, endDate: endValue, startPeriod: startPeriod.value, endPeriod: endPeriod.value });
     location.href = ${JSON.stringify(applyHref)};
   });
 })();
