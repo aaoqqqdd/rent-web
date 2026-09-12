@@ -404,7 +404,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   let accountCreated = false
   let temporaryPassword = ''
   if (user) {
-    return json(c, 409, { ok: false, message: '该邮箱已注册，请先登录账号中心后提交申请。' })
+    if (String(user.role || 'CUSTOMER') !== 'CUSTOMER' || String(user.status || 'active') !== 'active' || String(user.account_type || 'formal') !== 'formal') return json(c, 403, { ok: false, message: '该账号当前无法下单，请联系客服。' })
   } else {
     temporaryPassword = generateTemporaryPassword()
     const result = await registerCustomer(c.env, { name: contactName, email: contactEmail, phone: contactPhone, password: temporaryPassword, passwordConfirm: temporaryPassword, agree: '1', turnstileToken: body['cf-turnstile-response'] }, ip)

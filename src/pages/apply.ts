@@ -331,7 +331,7 @@ export function renderApply(data: ApplyData): string {
           <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
         </div>
         <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
-        <p class="hint">无需填写密码。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号请先登录账号中心。</p>
+        <p class="hint">无需填写密码或登录。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号可直接提交申请。</p>
         <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
         <div class="payment-method-options" id="payment-method-options" hidden>
           <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
@@ -921,7 +921,7 @@ export function renderApply(data: ApplyData): string {
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
           saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
-          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = result.json.temporaryPassword || '请进入账号中心使用忘记密码功能设置'; credentialBox.hidden = false; }
+          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = result.json.temporaryPassword || '已有账号，请使用原密码'; credentialBox.hidden = false; }
           doneBox.hidden = false;
           if (!reduceMotion) doneBox.classList.add('is-in');
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;

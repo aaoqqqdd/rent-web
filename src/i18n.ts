@@ -146,7 +146,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '搜索墨尔本地址': 'Search Melbourne address', '例如 123 Collins Street, Melbourne': 'e.g. 123 Collins Street, Melbourne', '输入至少 3 个字符开始联想。': 'Enter at least 3 characters to search.',
   '正在查找墨尔本地址…': 'Searching Melbourne addresses…', '请选择地址以自动填写。': 'Select an address to fill in the form.', '没有找到匹配的墨尔本地址，请继续输入。': 'No matching Melbourne address found. Keep typing.', '地址联想暂时不可用。': 'Address search is temporarily unavailable.', '地址联想暂时不可用，请手工填写。': 'Address search is temporarily unavailable. Please enter the address manually.', '地址已自动填写，请核对后提交。': 'Address filled in. Check it before submitting.', '地址数据 © OpenStreetMap contributors': 'Address data © OpenStreetMap contributors',
   '我们尚未配置公开自取点': 'No public pickup location is currently configured', '街道地址': 'Street address', '州': 'State', '邮编': 'Postcode', '4 位数字': '4 digits',
-  '联系与账号': 'Contact and account', '用于接收审核结果、后续签约与付款': 'Used for review updates, signing and payment', '无需填写密码。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号请先登录账号中心。': 'No password is required. New accounts receive a temporary password shown after submission; existing users should log in first.',
+  '联系与账号': 'Contact and account', '用于接收审核结果、后续签约与付款': 'Used for review updates, signing and payment', '无需填写密码或登录。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号可直接提交申请。': 'No password or login is required. New accounts receive a temporary password shown after submission; existing users can submit directly.',
   '姓名': 'Name', '联系电话': 'Phone', '邮箱': 'Email', '保存我的信息，以便下次更快结账': 'Save my details for faster checkout next time',
   '账户余额支付': 'Pay with account balance', '混合支付（优先扣除余额，再支付剩余金额）': 'Split payment (use balance first, then pay the remainder)',
   '信用卡资料': 'Card details', '仅验证支付方式。': 'This only verifies the payment method.',
@@ -158,7 +158,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '我已阅读并同意': 'I have read and agree to', '与': 'and', '提交时': 'On submission', '不会立即扣款': 'No immediate charge',
   '审核时': 'During review', '确认后': 'After confirmation', '签约再付款': 'Sign, then pay',
   '注册并提交申请': 'Register and submit application', '申请已提交': 'Application submitted', '请立即保存': 'Save this now',
-  '订单编号：': 'Order number:', '临时账户密码：': 'Temporary account password:', '请保存临时密码，进入账号中心查看申请进度。': 'Save the temporary password and use it to view your application in your account.', '请进入账号中心使用忘记密码功能设置': 'Open your account and use Forgot password to set one', '进入账号中心查看申请': 'View application in your account',
+  '订单编号：': 'Order number:', '临时账户密码：': 'Temporary account password:', '请保存临时密码，进入账号中心查看申请进度。': 'Save the temporary password and use it to view your application in your account.', '已有账号，请使用原密码': 'Existing account — use your current password', '请进入账号中心使用忘记密码功能设置': 'Open your account and use Forgot password to set one', '进入账号中心查看申请': 'View application in your account',
   '继续浏览产品': 'Continue browsing', '暂无可租设备': 'No rentable devices available',
   '产品目录正在更新，请稍后再试，或直接联系客服。': 'The catalogue is being updated. Please try again later or contact us.',
 
