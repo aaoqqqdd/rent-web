@@ -234,7 +234,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   };
   start.min = dateString(today); setDateValue(start, start.min);
   end.min = addDays(start.min, minimumDays); setDateValue(end, end.min);
-  start.disabled = true; end.disabled = true; startToggle.disabled = true; endToggle.disabled = true; button.disabled = true;
+  start.disabled = true; end.disabled = true; startToggle.disabled = false; endToggle.disabled = false; button.disabled = true;
   fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify([${JSON.stringify(product.id)}])), { headers: { Accept: 'application/json' } })
     .then(function (response) { return response.json(); })
     .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); })

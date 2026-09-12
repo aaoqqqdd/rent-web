@@ -236,6 +236,11 @@ p { margin: 0; }
 .device-term-editor-head { display: flex; justify-content: space-between; align-items: center; color: var(--fg); font-size: 13px; }
 .term-date-grid, .term-period-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .term-date-field, .term-period-field { position: relative; display: grid; gap: 6px; color: var(--muted-fg); font-size: 11px; }
+.term-date-control { position: relative; }
+.term-date-field .term-date-control input { padding-right: 44px; }
+.date-picker-toggle { position: absolute; top: 50%; right: 8px; display: grid; width: 30px; height: 30px; place-items: center; padding: 5px; border: 0; border-radius: 6px; color: var(--secondary); background: transparent; cursor: pointer; transform: translateY(-50%); }
+.date-picker-toggle:hover, .date-picker-toggle:focus-visible { background: rgba(89,229,193,.1); color: var(--fg); }
+.date-picker-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .term-date-field input, .term-period-field select { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--border-bright); border-radius: 8px; color: var(--fg); background: #0b0e15; font: inherit; }
 .term-date-field input:focus, .term-period-field select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,.13); }
 .date-picker { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: 280px; padding: 12px; border: 1px solid var(--border-bright); border-radius: 10px; background: #111520; box-shadow: 0 18px 45px rgba(0,0,0,.42); }
