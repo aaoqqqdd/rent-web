@@ -139,7 +139,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: 
 
 <section class="section"><div class="wrap story-grid">
   <div class="story-lead"><span>品牌故事</span><h2>从一个简单的困惑开始</h2></div>
-  <div class="story-copy"><p>一次课程项目、几周的剪辑工作、临时出差，往往都需要一台更合适的电脑，却不一定值得长期持有。${esc(contact.name)} 把设备采购、检查、周转和支持放在后台，让用户按真正需要的时间使用设备。</p><p>我们专注墨尔本本地服务，提供游戏笔记本、轻薄商务本和台式工作站。租期可从 ${esc(config.minimumRentalDays)} 天起，也可覆盖更长项目；每份申请都会在付款前核对档期、价格和交付安排。</p><p>我们想解决的不只是“哪里能租到电脑”，而是让配置、费用、押金、取还和售后都有明确的下一步。</p></div>
+  <div class="story-copy"><p><strong>需要电脑，不代表一定要买一台。</strong><br>无论是课程项目、视频剪辑、短期工作还是临时出差，${esc(contact.name)} 都希望让你在需要的时候，用到合适的设备，而不必为短期需求承担长期持有的成本。</p><p>我们提供墨尔本本地电脑租赁，<strong>${esc(config.minimumRentalDays)} 天起租包括</strong>游戏笔记本、轻薄商务本和台式工作站，提交申请后，我们会在付款前确认设备档期、最终价格以及取还安排。</p><p>从设备配置、租金和押金，到取还设备和租后支持，我们希望每一步都<strong>简单、透明、清楚</strong>。</p></div>
 </div></section>
 
 <section class="section alt"><div class="wrap"><div class="section-head"><div><div class="kicker">服务承诺</div><h2>我们对每位用户的承诺</h2></div><p>不用夸大的数字讲故事，用每个订单都能验证的流程建立信任。</p></div><div class="principle-grid about-values">
