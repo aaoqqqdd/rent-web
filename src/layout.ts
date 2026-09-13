@@ -82,11 +82,11 @@ export function renderPage(opts: PageOptions): string {
 </head>
 <body>
 ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, opts.contact)}
-<aside class="site-announcement" data-site-announcement hidden data-no-translate aria-label="最新通告">
+<aside class="site-announcement" data-site-announcement hidden aria-label="最新消息">
   <div class="wrap site-announcement-inner">
     <span class="site-announcement-label">最新消息</span>
     <a class="site-announcement-link" data-site-announcement-link href="/announcements">
-      <strong data-site-announcement-title></strong><span>查看详情 <span aria-hidden="true">→</span></span>
+      <strong data-site-announcement-title></strong><span data-site-announcement-action>查看详情 <span aria-hidden="true">→</span></span>
     </a>
   </div>
 </aside>
@@ -103,6 +103,7 @@ ${renderSiteFooter(opts.contact)}
   var originalTitle = document.title;
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
+  var activeAnnouncementNotice = null;
   function cleanChinesePunctuation(value) { return String(value || '').replace(/[。；]/g, ''); }
   function englishFor(value) {
     var lookup = String(value || '').replace(/\\s+/g, ' ').trim();
@@ -159,6 +160,36 @@ ${renderSiteFooter(opts.contact)}
     footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'],
     footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help']
   };
+  function renderCouponCallouts() {
+    document.querySelectorAll('[data-coupon-callout]').forEach(function (callout) {
+      var english = currentLanguage === 'en';
+      var prefix = callout.querySelector('[data-coupon-prefix]');
+      var benefit = callout.querySelector('[data-coupon-benefit]');
+      var cta = callout.querySelector('[data-coupon-cta]');
+      if (prefix) prefix.textContent = callout.getAttribute(english ? 'data-coupon-prefix-en' : 'data-coupon-prefix-zh') || '';
+      if (benefit) benefit.textContent = callout.getAttribute(english ? 'data-coupon-benefit-en' : 'data-coupon-benefit-zh') || '';
+      if (cta) cta.textContent = callout.getAttribute(english ? 'data-coupon-cta-en' : 'data-coupon-cta-zh') || '';
+    });
+  }
+  function renderAnnouncementNotice(notice) {
+    var announcement = document.querySelector('[data-site-announcement]');
+    if (!announcement || !notice) return;
+    var title = announcement.querySelector('[data-site-announcement-title]');
+    var link = announcement.querySelector('[data-site-announcement-link]');
+    var action = announcement.querySelector('[data-site-announcement-action]');
+    if (!title || !link) return;
+    var english = currentLanguage === 'en';
+    var isCoupon = notice.kind === 'coupon' && notice.couponCode;
+    var benefit = english ? (notice.couponBenefitEn || notice.couponBenefitZh || '') : (notice.couponBenefitZh || '');
+    title.textContent = isCoupon
+      ? (english ? '🎉 New offer live! Enter promo code ' : '🎉 新优惠上线！使用优惠码 ') + notice.couponCode + (benefit ? ' ' + benefit : '')
+      : (!notice.isAdminAnnouncement && english ? englishFor(notice.title || '最新通告') : (notice.title || '最新通告'));
+    link.href = isCoupon
+      ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
+      : '/announcements/' + encodeURIComponent(notice.id);
+    if (action) action.firstChild.textContent = (isCoupon ? (english ? 'Browse devices ' : '去挑选设备 ') : (english ? 'View details ' : '查看详情 '));
+    announcement.hidden = false;
+  }
   function setLanguage(language) {
     var english = language === 'en';
     currentLanguage = english ? 'en' : 'zh';
@@ -172,6 +203,8 @@ ${renderSiteFooter(opts.contact)}
     });
     document.querySelectorAll('[data-language]').forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-language') === (english ? 'en' : 'zh')); });
     translateTree(document.body);
+    renderAnnouncementNotice(activeAnnouncementNotice);
+    renderCouponCallouts();
     document.title = english ? englishFor(originalTitle) : originalTitle;
     var descriptionMeta = document.querySelector('meta[name="description"]');
     if (descriptionMeta) descriptionMeta.setAttribute('content', english ? englishFor(originalDescription) : originalDescription);
@@ -226,19 +259,8 @@ ${renderSiteFooter(opts.contact)}
       .then(function (data) {
         var notice = data && data.notices && data.notices[0];
         if (!notice) return;
-        var title = announcement.querySelector('[data-site-announcement-title]');
-        var link = announcement.querySelector('[data-site-announcement-link]');
-        if (!title || !link) return;
-        var isCoupon = notice.kind === 'coupon' && notice.couponCode;
-        title.textContent = isCoupon
-          ? '🎉 新优惠上线！使用优惠码 ' + notice.couponCode + ' ' + (notice.couponBenefitZh || '')
-          : (notice.title || '最新通告');
-        link.href = isCoupon
-          ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
-          : '/announcements/' + encodeURIComponent(notice.id);
-        var action = link.querySelector('span');
-        if (action) action.firstChild.textContent = isCoupon ? '去挑选设备 ' : '查看详情 ';
-        announcement.hidden = false;
+        activeAnnouncementNotice = notice;
+        renderAnnouncementNotice(notice);
       })
       .catch(function () {});
   }

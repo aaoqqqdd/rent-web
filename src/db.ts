@@ -63,6 +63,7 @@ export interface LegalDocumentData {
 export interface PublicNotice {
   id: string
   kind: 'announcement' | 'coupon'
+  isAdminAnnouncement?: boolean
   title: string
   message: string
   createdAt: string
@@ -285,6 +286,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       notices.push({
         id: `announcement:${String(row.id ?? '')}`,
         kind: 'announcement',
+        isAdminAnnouncement: type === 'announcement',
         title,
         message,
         createdAt: String(row.created_at ?? ''),
