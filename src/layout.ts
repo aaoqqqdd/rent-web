@@ -104,7 +104,12 @@ ${renderSiteFooter(opts.contact)}
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
   var activeAnnouncementNotice = null;
-  function cleanChinesePunctuation(value) { return String(value || '').replace(/[。；]/g, ''); }
+  function cleanChinesePunctuation(value) { return String(value || '').replace(/。/g, ''); }
+  function formatSentenceBreaks(value, node) {
+    var text = String(value || '');
+    if (/[；;]/.test(text) && node && node.parentElement) node.parentElement.classList.add('has-sentence-break');
+    return text.replace(/[；;]/g, '\\n');
+  }
   function englishFor(value) {
     var lookup = String(value || '').replace(/\\s+/g, ' ').trim();
     var translated = englishCopy[lookup] || '';
@@ -129,7 +134,7 @@ ${renderSiteFooter(opts.contact)}
     if (!trimmed) return;
     var translated = currentLanguage === 'en' ? englishFor(trimmed) : trimmed;
     var next = source.slice(0, source.indexOf(trimmed)) + translated + source.slice(source.indexOf(trimmed) + trimmed.length);
-    next = cleanChinesePunctuation(next);
+    next = formatSentenceBreaks(cleanChinesePunctuation(next), node);
     if (node.nodeValue !== next) node.nodeValue = next;
   }
   function translateElement(element) {

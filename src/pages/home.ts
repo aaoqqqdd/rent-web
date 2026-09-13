@@ -70,7 +70,7 @@ export function renderHome(data: HomeData): string {
     <div class="hero-copy">
       <span class="eyebrow">MELBOURNE · 设备租赁</span>
       <h1>设备不用拥有，<em>进度照样向前。</em></h1>
-      <p>给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，${esc(fromLine)}；提交申请后再确认档期、签约与付款。</p>
+      <p>给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，${esc(fromLine)}<br>提交申请后再确认档期、签约与付款。</p>
       <div class="hero-actions">
         <a class="btn btn-primary btn-lg" href="/products">打开设备库 <span>→</span></a>
         <a class="btn btn-ghost btn-lg" href="/rental-guide">先了解怎么租</a>
