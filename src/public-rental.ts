@@ -10,6 +10,7 @@ const MAX_CART_ITEMS = 10
 const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const LONG_TERM_RENTAL_DAYS = 30
+const SQUARE_GIFT_CARD_FEE_RATE = 0.022
 const PICKUP_TIME_SLOTS = ['morning_service', 'morning', 'afternoon', 'evening_service'] as const
 type PickupTimeSlot = typeof PICKUP_TIME_SLOTS[number]
 
@@ -289,14 +290,15 @@ async function stripeConfig(c: RentalContext): Promise<{ publishableKey: string;
   return { publishableKey: stored.publishableKey, secretKey }
 }
 
-async function paymentSettings(c: RentalContext): Promise<{ stripe: boolean; balancePayment: boolean; processingFeeRate: number }> {
-  const fallback = { stripe: true, balancePayment: true, processingFeeRate: 0.025 }
+async function paymentSettings(c: RentalContext): Promise<{ stripe: boolean; square: boolean; balancePayment: boolean; processingFeeRate: number }> {
+  const fallback = { stripe: true, square: false, balancePayment: true, processingFeeRate: 0.025 }
   try {
     const row = await c.env.RENT.prepare("SELECT value FROM systemSettings WHERE key = 'paymentMethods'").first<{ value: string }>()
     if (!row?.value) return fallback
     const value = JSON.parse(row.value) as Record<string, unknown>
     return {
       stripe: value.stripe !== false,
+      square: value.square === true,
       balancePayment: value.balancePayment !== false,
       processingFeeRate: Number.isFinite(Number(value.processingFeeRate))
         ? Math.min(1, Math.max(0, Number(value.processingFeeRate)))
@@ -305,6 +307,12 @@ async function paymentSettings(c: RentalContext): Promise<{ stripe: boolean; bal
   } catch {
     return fallback
   }
+}
+
+/** 只返回结账页需要的公开支付方式状态，不暴露任何支付凭据。 */
+export async function getPublicPaymentMethods(c: RentalContext): Promise<{ square: boolean; squareFeeRate: number }> {
+  const settings = await paymentSettings(c)
+  return { square: settings.square, squareFeeRate: SQUARE_GIFT_CARD_FEE_RATE }
 }
 
 async function stripeRequest(c: RentalContext, path: string, params?: URLSearchParams, idempotencyKey?: string): Promise<Record<string, any>> {
@@ -444,7 +452,9 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const contactEmail = String(body.contactEmail || '').trim().toLowerCase().slice(0, 200)
   const contactPhone = String(body.contactPhone || '').trim().slice(0, 40)
   const couponCode = String(body.couponCode || '').trim().toUpperCase().slice(0, 40)
-  const paymentMethod = body.paymentMethod === 'balance' ? 'balance' : 'card'
+  const requestedPaymentMethod = String(body.paymentMethod || '').trim()
+  const paymentMethod = requestedPaymentMethod === 'balance' ? 'balance' : 'card'
+  const paymentProvider = requestedPaymentMethod === 'square' ? 'square' : paymentMethod === 'card' ? 'stripe' : 'internal'
   const refundMethod = 'original'
   const agreed = ['1', 'on', 'true', 'yes'].includes(String(body.agree || '').toLowerCase())
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
@@ -453,7 +463,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   let stripePaymentMethodId = ''
   let stripeCardBrand = ''
   const setupIntentId = String(body.stripeSetupIntentId || '').trim()
-  if (paymentMethod === 'card') {
+  if (paymentProvider === 'stripe') {
     if (!setupIntentId) return json(c, 400, { ok: false, message: '请先填写并验证信用卡信息。' })
     try {
       const verified = await verifySetupIntent(c, setupIntentId)
@@ -466,6 +476,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
 
   const config = await getRentalConfig(c.env)
   const settings = await paymentSettings(c)
+  if (paymentProvider === 'square' && !settings.square) return json(c, 400, { ok: false, message: 'Square 礼品卡支付当前未启用。' })
   if (paymentMethod === 'balance' && !settings.balancePayment) return json(c, 400, { ok: false, message: '账户余额支付当前未启用。' })
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const unavailableDates = new Set(config.unavailableDates)
@@ -602,7 +613,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], 0)
   if (paymentMethod === 'balance' && (!accountEligible || numberValue(user.balance) < totalBeforePayment)) return json(c, 400, { ok: false, message: '账户余额不足以支付这笔申请。' })
   let stripeCustomerId = ''
-  if (paymentMethod === 'card') {
+  if (paymentProvider === 'stripe') {
     try {
       stripeCustomerId = await ensurePaymentMethodCustomer(c, stripePaymentMethodId, {
         id: user.id,
@@ -632,10 +643,18 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
         `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupTimeSlot, returnTimeSlot, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
       ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
-      const depositMode = depositPaymentModeForRental(rentalPlan.period.days, paymentMethod === 'card', stripeCardBrand)
-      await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
-        .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositMode, orderId).run()
       orderIds.push(orderId)
+      // payment_provider 在共享主站中区分 Stripe 卡与 Square 礼品卡；旧数据库没有该列时，
+      // 保留 card / balance 的历史兼容路径，但不能静默丢弃客户明确选择的 Square。
+      try {
+        await c.env.RENT.prepare('UPDATE orders SET payment_provider = ?, refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
+          .bind(paymentProvider, refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, paymentProvider === 'stripe', stripeCardBrand), orderId).run()
+      } catch (error) {
+        if (paymentProvider === 'square') throw error
+        await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
+          .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, paymentProvider === 'stripe', stripeCardBrand), orderId).run()
+      }
+      const depositMode = depositPaymentModeForRental(rentalPlan.period.days, paymentProvider === 'stripe', stripeCardBrand)
       // 短租：提交申请时就用已验证的卡对押金做预授权，审核通过后只需要扣租金。
       // 长租（SetupIntent 模式）不在这里扣款，损坏或逾期时才按实际费用从保存的卡扣。
       if (depositMode === 'PREAUTH' && deposit > 0) {
@@ -661,11 +680,13 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const totalDiscount = discounts.reduce((sum, discount) => sum + discount, 0)
   await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
   const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
-  const paymentBreakdown = paymentMethod === 'card'
+  const paymentBreakdown = paymentProvider === 'stripe'
     ? firstOrder?.deposit_payment_mode === 'PREAUTH'
       ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
       : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
-    : ''
+    : paymentProvider === 'square'
+      ? `Square 礼品卡将在审核通过并签约后用于支付租金及服务费；押金按订单约定单独处理。`
+      : ''
   return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: rentalPlans.get(deviceIds[0])?.period.days || 0, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
 }
 

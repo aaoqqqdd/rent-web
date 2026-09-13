@@ -10,6 +10,8 @@ interface ApplyData {
   config: RentalConfig
   appUrl: string
   turnstileSiteKey: string
+  squareGiftCardEnabled: boolean
+  squareGiftCardFeeRate: number
 }
 
 function scriptJson(value: unknown): string {
@@ -268,7 +270,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
 }
 
 export function renderApply(data: ApplyData): string {
-  const { products, selectedId, config, appUrl, turnstileSiteKey } = data
+  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardEnabled, squareGiftCardFeeRate } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
   const deliveryAreas = config.deliveryAreas.join('、')
@@ -386,6 +388,22 @@ export function renderApply(data: ApplyData): string {
           <div class="form-summary" id="summary"></div>
           <div class="form-card">
             <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>可使用快捷支付或信用卡验证，押金归还时使用</p></div></div>
+            <div class="payment-method-options" id="payment-method-options">
+              <label class="payment-method-option choice-line">
+                <input type="radio" name="paymentMethod" value="card" checked>
+                <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small>审核通过后按确认金额付款，信用卡由 Stripe 安全处理。</small></span>
+              </label>
+              ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
+                <input type="radio" name="paymentMethod" value="square">
+                <span class="payment-method-copy"><strong>Square 礼品卡</strong><small>审核通过并签约后，用 Square 礼品卡支付租金及服务费；收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 手续费，押金按订单约定单独处理。</small></span>
+              </label>` : ''}
+              <div id="balance-payment-option" hidden>
+                <label class="balance-payment-option choice-line">
+                  <input type="radio" name="paymentMethod" value="balance">
+                  <span class="balance-payment-copy"><strong>账户余额支付</strong><span id="balance-payment-insufficient" class="balance-payment-badge" hidden>余额不足</span><small id="balance-payment-note">当前可用余额： AUD $0.00</small></span>
+                </label>
+              </div>
+            </div>
             <div class="stripe-payment-box">
               <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
                 <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
@@ -399,12 +417,6 @@ export function renderApply(data: ApplyData): string {
                 <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
                 <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
               </div>
-            </div>
-            <div class="payment-method-options" id="payment-method-options" hidden>
-              <label class="balance-payment-option choice-line">
-                <input type="radio" name="paymentMethod" value="balance">
-                <span class="balance-payment-copy"><strong>账户余额支付</strong><span id="balance-payment-insufficient" class="balance-payment-badge" hidden>余额不足</span><small id="balance-payment-note">当前可用余额： AUD $0.00</small></span>
-              </label>
             </div>
             <div class="refund-method-fixed">
               <input type="hidden" name="refundMethod" value="original">
@@ -502,11 +514,12 @@ export function renderApply(data: ApplyData): string {
   var setupIntent = null;
   var cardReady = false;
   var stripeFeeRate = 0.025;
+  var squareGiftCardFeeRate = ${squareGiftCardFeeRate};
   var accountBalance = null;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
   var setupIntentInput = document.getElementById('stripeSetupIntentId');
-  var balanceOption = document.getElementById('payment-method-options');
+  var balanceOption = document.getElementById('balance-payment-option');
   var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
   var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
   var contactEmail = document.getElementById('contactEmail');
@@ -759,7 +772,11 @@ export function renderApply(data: ApplyData): string {
     var serviceFee = serviceFeeFor(rentTotal);
     var total = Math.max(0, rentTotal + serviceFee + depositTotal - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * stripeFeeRate * 100) / 100;
+    var paymentFee = selectedPaymentMethod === 'card'
+      ? Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * stripeFeeRate * 100) / 100
+      : selectedPaymentMethod === 'square'
+        ? Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * squareGiftCardFeeRate * 100) / 100
+        : 0;
     var payableTotal = Math.max(0, rentTotal + serviceFee - appliedDiscount) + paymentFee;
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
@@ -851,9 +868,10 @@ export function renderApply(data: ApplyData): string {
   }
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
-    stripePaymentBox.hidden = useBalance;
-    stripeSetupBox.hidden = useBalance;
-    walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
+    var useSquare = form.querySelector('input[name="paymentMethod"]:checked')?.value === 'square';
+    stripePaymentBox.hidden = useBalance || useSquare;
+    stripeSetupBox.hidden = useBalance || useSquare;
+    walletBox.hidden = useBalance || useSquare || walletBox.getAttribute('data-available') !== 'true';
   }
   function lookupBalance() {
     var email = contactEmail.value.trim();
@@ -1100,7 +1118,7 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    if (selectedPaymentMethod !== 'balance' && (!cardReady || !setupIntentInput.value)) {
+    if (selectedPaymentMethod === 'card' && (!cardReady || !setupIntentInput.value)) {
       showFormError(uiCopy('请先填写并验证信用卡信息。验证过程不会扣款。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     var termValidationError = validateTerms();
