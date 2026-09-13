@@ -707,7 +707,9 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .apply-expectations span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .apply-expectations strong { display: block; margin-top: 18px; font-family: var(--display); font-size: 17px; }
 .apply-expectations p { margin-top: 8px; color: var(--muted-fg); font-size: 12px; line-height: 1.7; }
-.stripe-wallet-box, .stripe-setup-box { margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }
+.stripe-payment-box { margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }
+.stripe-wallet-box, .stripe-setup-box { padding: 0; }
+.stripe-wallet-box + .stripe-setup-box { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
 .stripe-setup-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
 .stripe-setup-head label { display: block; font-size: 13px; font-weight: 600; }
 .stripe-setup-head p { margin-top: 5px; color: var(--muted-fg); font-size: 12px; }
@@ -719,6 +721,14 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .apply-submit-note { margin-top: 8px; font-size: 11px; }
 .choice-line { display: block; margin-top: 11px; color: var(--fg); font-size: 13px; font-weight: 400 !important; }
 .choice-line input { width: auto; min-height: auto; margin-right: 7px; accent-color: var(--primary); }
+.payment-method-options { margin-top: 14px; }
+.balance-payment-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 8px; margin-top: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); }
+.balance-payment-option:hover { border-color: rgba(124,108,255,.55); }
+.balance-payment-option input { margin-top: 4px; }
+.balance-payment-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-width: 0; }
+.balance-payment-copy strong { font-size: 16px; line-height: 1.35; }
+.balance-payment-copy small { flex-basis: 100%; margin-top: 5px; color: var(--muted-fg); font-size: 13px; }
+.balance-payment-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.1); color: var(--muted-fg); font-size: 12px; line-height: 1.25; }
 .legal-agreement { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }
 .legal-agreement input { width: 18px !important; min-height: 18px; margin: 3px 0 0; }
 .legal-agreement label { min-width: 0; line-height: 1.6; }
