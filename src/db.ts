@@ -208,7 +208,8 @@ export async function getDeviceAvailability(
 
 /** 公开展示的最新通告与有效优惠码，不包含收件人、使用次数等内部字段。 */
 const PUBLIC_UPDATE_TYPES = new Set(['agreement_update', 'policy_update', 'legal_update'])
-const PUBLIC_NOTICE_DAYS = 7
+const PUBLIC_ANNOUNCEMENT_DAYS = 7
+const PUBLIC_AGREEMENT_UPDATE_DAYS = 3
 
 function decodeNoticeEntities(value: string): string {
   return value
@@ -252,14 +253,22 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     try {
       result = await env.RENT.prepare(
         `SELECT MIN(id) AS id, type, title, message, created_at,
-                MIN(CASE WHEN expires_at IS NULL OR expires_at > datetime(created_at, '+${PUBLIC_NOTICE_DAYS} days')
-                         THEN datetime(created_at, '+${PUBLIC_NOTICE_DAYS} days') ELSE expires_at END) AS expires_at
+                MIN(CASE
+                      WHEN expires_at IS NULL OR expires_at > CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
+                                                                    THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
+                                                                    ELSE datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') END
+                        THEN CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
+                                  THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
+                                  ELSE datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') END
+                        ELSE expires_at
+                    END) AS expires_at
          FROM notifications
          WHERE ((type = 'announcement' AND sender_id IS NOT NULL)
                 OR type IN ('agreement_update', 'policy_update', 'legal_update'))
            AND deleted_at IS NULL
            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-           AND datetime(created_at, '+${PUBLIC_NOTICE_DAYS} days') > CURRENT_TIMESTAMP
+           AND ((type IN ('agreement_update', 'policy_update', 'legal_update') AND datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days') > CURRENT_TIMESTAMP)
+                OR (type = 'announcement' AND datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') > CURRENT_TIMESTAMP))
          GROUP BY type, title, message, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
@@ -268,11 +277,14 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       // 0125 尚未应用时，回退到没有 expires_at 的旧通知表结构。
       result = await env.RENT.prepare(
         `SELECT MIN(id) AS id, type, title, message, created_at,
-                datetime(created_at, '+${PUBLIC_NOTICE_DAYS} days') AS expires_at
+                CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
+                     THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
+                     ELSE datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') END AS expires_at
          FROM notifications
            WHERE type IN ('announcement', 'agreement_update', 'policy_update', 'legal_update')
              AND deleted_at IS NULL
-             AND datetime(created_at, '+${PUBLIC_NOTICE_DAYS} days') > CURRENT_TIMESTAMP
+             AND ((type IN ('agreement_update', 'policy_update', 'legal_update') AND datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days') > CURRENT_TIMESTAMP)
+                  OR (type = 'announcement' AND datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') > CURRENT_TIMESTAMP))
          GROUP BY type, title, message, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
