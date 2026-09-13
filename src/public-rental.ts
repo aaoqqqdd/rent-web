@@ -158,6 +158,9 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
     currency: 'aud',
     customer: customerId,
     payment_method: paymentMethodId,
+    // 手动扣款（预授权）不是所有账户默认启用的自动支付方式（Klarna / Afterpay / Link 等）都支持，
+    // 不显式限定为 card 会导致 Stripe 报 "not eligible for the requested card features"。
+    'payment_method_types[0]': 'card',
     capture_method: 'manual',
     confirm: 'true',
     off_session: 'true',
@@ -173,7 +176,7 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
   try {
     intent = await stripeRequest(c, 'payment_intents', params, `web-deposit-auth-${orderId}`)
   } catch (error) {
-    if (authorizationWindowDays !== 30) throw new Error(error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。')
+    if (!params.has('payment_method_options[card][request_extended_authorization]')) throw new Error(error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。')
     params.delete('payment_method_options[card][request_extended_authorization]')
     intent = await stripeRequest(c, 'payment_intents', params, `web-deposit-auth-standard-${orderId}`)
   }
