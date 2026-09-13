@@ -423,7 +423,7 @@ export function renderApply(data: ApplyData): string {
       </div>
 
       <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">提交申请</button>
-      <p class="form-note apply-submit-note">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁</p>
+      <p class="form-note apply-submit-note">提交后，我们将审核你的订单，并在审核通过后联系你完成签约与付款。<br>个人信息仅用于处理本次租赁及相关服务。</p>
       <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">设备库</a> 或联系客服。</p>
     </form>
 
@@ -519,6 +519,17 @@ export function renderApply(data: ApplyData): string {
   var addressRequest = null;
   var activeAddressSuggestion = -1;
 
+  function isEnglish() {
+    return (window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en') || document.documentElement.lang === 'en-AU';
+  }
+  function uiText(chinese, english) {
+    if (isEnglish()) return english;
+    return chinese;
+  }
+  function uiCopy(value) {
+    return window.GeekSlopeI18n ? window.GeekSlopeI18n.t(value) : value;
+  }
+
   function splitContactName(value) {
     var name = String(value || '').trim();
     var parts = name.split(/\s+/).filter(Boolean);
@@ -553,7 +564,7 @@ export function renderApply(data: ApplyData): string {
   }
   function showFormError(message) {
     checkoutBlocked = true;
-    errBox.textContent = message;
+    errBox.textContent = uiCopy(message);
     errBox.hidden = false;
   }
   function clearCheckoutError() {
@@ -566,7 +577,7 @@ export function renderApply(data: ApplyData): string {
     appliedDiscount = 0;
   }
   function setAddressStatus(message, state) {
-    if (addressStatus) { addressStatus.textContent = message; addressStatus.dataset.state = state || ''; }
+    if (addressStatus) { addressStatus.textContent = uiCopy(message); addressStatus.dataset.state = state || ''; }
   }
   function closeAddressSuggestions() {
     if (!addressSuggestions) return;
@@ -685,14 +696,14 @@ export function renderApply(data: ApplyData): string {
     return false;
   }
   function termError(id, term) {
-    if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return '请为每台设备填写有效租期。';
-    if (term.startDate < today || termDays(term) < MIN_DAYS) return '每台设备的租期不能少于 ' + MIN_DAYS + ' 天。';
-    if (termRangeUnavailable(id, term)) return '该设备在所选租期或时段不可用。';
+    if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return uiCopy('请为每台设备填写有效租期。');
+    if (term.startDate < today || termDays(term) < MIN_DAYS) return uiText('每台设备的租期不能少于 ' + MIN_DAYS + ' 天。', 'Each device must be rented for at least ' + MIN_DAYS + ' day(s).');
+    if (termRangeUnavailable(id, term)) return uiCopy('该设备在所选租期或时段不可用。');
     return '';
   }
   function validateTerms() {
-    if (!AVAILABILITY_READY) return '正在检查设备档期，请稍候再提交。';
-    if (AVAILABILITY_FAILED) return '设备档期检查失败，请刷新页面后重试。';
+    if (!AVAILABILITY_READY) return uiCopy('正在检查设备档期，请稍候再提交。');
+    if (AVAILABILITY_FAILED) return uiCopy('设备档期检查失败，请刷新页面后重试。');
     for (var index = 0; index < cartIds.length; index += 1) { var error = termError(cartIds[index], termFor(cartIds[index])); if (error) return error; }
     return '';
   }
@@ -747,23 +758,23 @@ export function renderApply(data: ApplyData): string {
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
-      document.getElementById('balance-payment-note').textContent = '当前可用余额： AUD $' + accountBalance.toFixed(2);
+      document.getElementById('balance-payment-note').textContent = uiText('当前可用余额： AUD $' + accountBalance.toFixed(2), 'Available balance: AUD $' + accountBalance.toFixed(2));
       document.getElementById('balance-payment-insufficient').hidden = accountBalance >= total;
     }
     if (!count) {
-      summary.textContent = count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2);
+      summary.textContent = uiText(count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2), count + ' device(s) · Total $' + dailyTotal.toFixed(2) + '/day · Deposit $' + depositTotal.toFixed(2));
       return;
     }
-    var rows = summaryRow('租金', '$' + rentTotal.toFixed(2))
-      + (serviceFee ? summaryRow('服务费', '$' + serviceFee.toFixed(2)) : '')
-      + summaryRow('支付手续费', '$' + paymentFee.toFixed(2))
-      + (appliedDiscount ? summaryRow('优惠', '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '');
-    summary.innerHTML = '<div class="summary-title">订单金额</div>'
-      + '<div class="summary-count">' + count + ' 台设备</div>'
+    var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
+      + (serviceFee ? summaryRow(uiText('服务费', 'Service fee'), '$' + serviceFee.toFixed(2)) : '')
+      + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
+      + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '');
+    summary.innerHTML = '<div class="summary-title">' + uiText('订单金额', 'Order total') + '</div>'
+      + '<div class="summary-count">' + count + uiText(' 台设备', ' device(s)') + '</div>'
       + '<div class="summary-rows">' + rows + '</div>'
       + '<div class="summary-divider"></div>'
-      + summaryRow('本次应付', '$' + payableTotal.toFixed(2), 'summary-total')
-      + summaryRow('押金', '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit');
+      + summaryRow(uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
+      + summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit');
   }
   function renderCart() {
     form.hidden = cartIds.length === 0;
@@ -778,12 +789,12 @@ export function renderApply(data: ApplyData): string {
       var name = document.createElement('strong'); name.textContent = product.name;
       var meta = document.createElement('span');
       var rawDaily = Number(product.day || 0);
-      var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + ' · ' + rentalDays + ' 天 · ';
-      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : '询价') + '/day · 押金 $' + product.deposit;
-      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
+      var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + ' · ' + rentalDays + uiText(' 天 · ', ' day(s) · ');
+      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : uiText('询价', 'Enquire')) + uiText('/天', '/day') + uiText(' · 押金 $', ' · Deposit $') + product.deposit;
+      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = uiText('移除', 'Remove');
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
     });
-    submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
+    submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application');
     deviceTermsInput.value = JSON.stringify(Object.fromEntries(cartIds.map(function (id) { return [id, termFor(id)]; })));
     updatePickupTimeOptions();
     refreshSummary();
@@ -866,7 +877,7 @@ export function renderApply(data: ApplyData): string {
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
     .then(readJsonResponse)
     .then(function (result) {
-      if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error((result.json && result.json.message) || '安全付款组件暂不可用。');
+      if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error(uiCopy((result.json && result.json.message) || '安全付款组件暂不可用。'));
       if (Number.isFinite(Number(result.json.feeRate))) stripeFeeRate = Math.min(1, Math.max(0, Number(result.json.feeRate)));
       refreshSummary();
       stripe = window.Stripe(result.json.publishableKey);
@@ -894,9 +905,10 @@ export function renderApply(data: ApplyData): string {
         var labels = { applePay: 'Apple Pay', googlePay: 'Google Pay', link: 'Link', paypal: 'PayPal' };
         var available = event.availablePaymentMethods ? Object.keys(labels).filter(function (method) { return event.availablePaymentMethods[method]; }).map(function (method) { return labels[method]; }) : [];
         if (!available.length) { walletElement.unmount(); return; }
-        document.getElementById('stripe-wallet-title').textContent = available.length === 1 ? available[0] : '快捷支付';
-        document.getElementById('stripe-wallet-description').textContent = '使用 ' + available.join('、') + ' 快速验证支付方式。';
+        document.getElementById('stripe-wallet-title').textContent = available.length === 1 ? available[0] : uiText('快捷支付', 'Express checkout');
+        document.getElementById('stripe-wallet-description').textContent = uiText('使用 ' + available.join('、') + ' 快速验证支付方式。', 'Use ' + available.join(' / ') + ' to verify your payment method quickly.');
         document.getElementById('stripe-wallet-badge').textContent = available.join(' / ').toUpperCase();
+        walletBox.dataset.methods = available.join(' / ');
         walletBox.setAttribute('data-available', 'true');
         updatePaymentMethodVisibility();
       });
@@ -921,17 +933,17 @@ export function renderApply(data: ApplyData): string {
       }
       walletElement.on('confirm', function (event) {
         applyWalletContact(event);
-        walletMessage.textContent = '正在验证快捷支付方式…';
+        walletMessage.textContent = uiCopy('正在验证快捷支付方式…');
         stripe.confirmSetup({ elements: walletElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
           .then(function (result) {
-            if (result.error) throw new Error(paymentError(result.error, '快捷支付验证失败，请重试。'));
+            if (result.error) throw new Error(paymentError(result.error, uiCopy('快捷支付验证失败，请重试。')));
             setupIntent = result.setupIntent;
-            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('快捷支付验证尚未完成，请重试。');
+            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error(uiCopy('快捷支付验证尚未完成，请重试。'));
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; walletMessage.textContent = '快捷支付已验证。'; walletMessage.style.color = 'var(--secondary)'; clearCheckoutError();
+            cardReady = true; walletMessage.textContent = uiCopy('快捷支付已验证。'); walletMessage.style.color = 'var(--secondary)'; clearCheckoutError();
           })
           .catch(function (error) {
-            var message = paymentError(error, 'Apple Pay 验证失败，请重试。');
+            var message = paymentError(error, uiCopy('Apple Pay 验证失败，请重试。'));
             walletMessage.textContent = ''; showFormError(message);
           });
       });
@@ -953,23 +965,23 @@ export function renderApply(data: ApplyData): string {
       cardElement.mount('#stripe-card-element');
       cardElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage(''); });
       cardConfirm.addEventListener('click', function () {
-        cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
+        cardConfirm.disabled = true; cardConfirm.textContent = uiText('验证中…', 'Verifying…'); setCardMessage(uiText('正在向 Stripe 验证支付方式…', 'Verifying your payment method with Stripe…'));
         stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: fullContactName(), email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
           .then(function (result) {
-            if (result.error) throw new Error(paymentError(result.error, '卡片验证失败，请检查信息。'));
+            if (result.error) throw new Error(paymentError(result.error, uiCopy('卡片验证失败，请检查信息。')));
             setupIntent = result.setupIntent;
-            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('卡片验证尚未完成，请重试。');
+            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error(uiCopy('卡片验证尚未完成，请重试。'));
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证。', true); clearCheckoutError();
+            cardReady = true; cardConfirm.textContent = uiText('信用卡已验证', 'Card verified'); setCardMessage(uiCopy('信用卡已验证。'), true); clearCheckoutError();
           })
           .catch(function (error) {
-            var message = paymentError(error, '卡片验证失败，请重试。');
-            cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(''); showFormError(message);
+            var message = paymentError(error, uiCopy('卡片验证失败，请重试。'));
+            cardConfirm.disabled = false; cardConfirm.textContent = uiText('验证信用卡', 'Verify card'); setCardMessage(''); showFormError(message);
           });
       });
     })
     .catch(function (error) {
-      var message = paymentError(error, '安全付款组件暂不可用，请联系客服。');
+      var message = paymentError(error, uiCopy('安全付款组件暂不可用，请联系客服。'));
       setCardMessage(''); showFormError(message);
     });
   ['change', 'input'].forEach(function (eventName) { [deviceTermsInput].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });
@@ -993,7 +1005,7 @@ export function renderApply(data: ApplyData): string {
     var suburbValue = suburb.value.trim();
     var postcode = document.getElementById('deliveryPostcode').value.trim();
     var message = street && suburbValue && postcode && !isMelbourneDeliveryAddress()
-      ? '送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。' : '';
+      ? uiText('送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。', 'Delivery is limited to Melbourne and the configured service areas. Choose store pickup for other cities or suburbs.') : '';
     suburb.setCustomValidity(message);
     if (message && showError) showFormError(message);
     return !message;
@@ -1008,24 +1020,36 @@ export function renderApply(data: ApplyData): string {
   document.getElementById('coupon-check').addEventListener('click', function () {
     var code = document.getElementById('couponCode').value.trim();
     var hint = document.getElementById('coupon-hint');
-    if (!code) { couponState = 'empty'; appliedDiscount = 0; hint.textContent = '请先输入优惠码。'; return; }
+    if (!code) { couponState = 'empty'; appliedDiscount = 0; hint.textContent = uiCopy('请先输入优惠码。'); return; }
     couponState = 'checking';
-    hint.textContent = '正在校验优惠码…';
+    hint.textContent = uiCopy('正在校验优惠码…');
     var params = new URLSearchParams({ deviceIds: JSON.stringify(cartIds), terms: deviceTermsInput.value, days: '0', code: code });
     fetch(COUPON_ENDPOINT + '?' + params.toString(), { headers: { Accept: 'application/json' } })
       .then(readJsonResponse)
       .then(function (result) {
-        if (!result.ok || !result.json || !result.json.ok) throw new Error((result.json && result.json.message) || '优惠码无效。');
-        hint.textContent = result.json.message || ('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2));
+        if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '优惠码无效。'));
+        hint.textContent = result.json.message ? uiCopy(result.json.message) : uiText('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2), 'Discount applied: AUD$' + Number(result.json.discount || 0).toFixed(2));
         appliedDiscount = Number(result.json.discount || 0);
         couponState = 'valid';
         clearCheckoutError();
         refreshSummary();
       })
-      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || '优惠码校验失败，请稍后重试。'); });
+      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || uiCopy('优惠码校验失败，请稍后重试。')); });
   });
   document.getElementById('couponCode').addEventListener('input', markCouponDirty);
-  renderCart();
+  window.addEventListener('geekslope:language-change', function () {
+    renderCart();
+    if (walletBox.dataset.methods) {
+      var methods = walletBox.dataset.methods;
+      document.getElementById('stripe-wallet-title').textContent = methods.indexOf(' / ') >= 0 ? uiText('快捷支付', 'Express checkout') : methods;
+      document.getElementById('stripe-wallet-description').textContent = uiText('使用 ' + methods.replace(/ \/ /g, '、') + ' 快速验证支付方式。', 'Use ' + methods + ' to verify your payment method quickly.');
+    }
+    if (cardReady) {
+      cardConfirm.textContent = uiText('信用卡已验证', 'Card verified');
+      setCardMessage(uiCopy('信用卡已验证。'), true);
+    }
+  });
+  window.setTimeout(renderCart, 0);
 
   var doneBox = document.getElementById('apply-done');
   var doneMsg = document.getElementById('apply-done-msg');
@@ -1047,8 +1071,8 @@ export function renderApply(data: ApplyData): string {
   form.addEventListener('invalid', function (event) {
     var field = event.target;
     if (field && field.validationMessage) {
-      var message = field.id === 'agree' ? '请先勾选同意服务条款与隐私政策。'
-        : field.id === 'deliveryPostcode' && field.validity.patternMismatch ? '请输入 4 位澳洲邮编。'
+      var message = field.id === 'agree' ? uiCopy('请先勾选同意服务条款与隐私政策。')
+        : field.id === 'deliveryPostcode' && field.validity.patternMismatch ? uiCopy('请输入 4 位澳洲邮编。')
         : field.validationMessage;
       showFormError(message);
     }
@@ -1065,13 +1089,13 @@ export function renderApply(data: ApplyData): string {
     if (!validateDeliveryAddress(true) || !validateContactFields(true) || !form.reportValidity()) return;
     var enteredCoupon = document.getElementById('couponCode').value.trim();
     if (enteredCoupon && couponState !== 'valid') {
-      showFormError('请先点击“使用优惠码”完成校验，确认优惠码有效后再提交。');
+      showFormError(uiCopy('请先点击“使用优惠码”完成校验，确认优惠码有效后再提交。'));
       errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     if (selectedPaymentMethod !== 'balance' && (!cardReady || !setupIntentInput.value)) {
-      showFormError('请先填写并验证信用卡信息。验证过程不会扣款。'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      showFormError(uiCopy('请先填写并验证信用卡信息。验证过程不会扣款。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     var termValidationError = validateTerms();
     if (termValidationError) { showFormError(termValidationError); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
@@ -1084,21 +1108,21 @@ export function renderApply(data: ApplyData): string {
     payload.deviceTerms = deviceTermsInput.value;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
-    submitBtn.disabled = true; submitBtn.textContent = '提交中…';
+    submitBtn.disabled = true; submitBtn.textContent = uiText('提交中…', 'Submitting…');
     fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(readJsonResponse)
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
-          saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
-          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = result.json.temporaryPassword || '已有账号，请使用原密码'; credentialBox.hidden = false; }
+          saveCart([]); form.hidden = true; doneMsg.textContent = uiCopy(result.json.message || '申请已提交，我们确认后会联系你。');
+          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = uiCopy(result.json.temporaryPassword || '已有账号，请使用原密码'); credentialBox.hidden = false; }
           doneBox.hidden = false;
           if (!reduceMotion) doneBox.classList.add('is-in');
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
         }
-        throw new Error((result.json && result.json.message) || '提交失败，请稍后重试。');
+        throw new Error(uiCopy((result.json && result.json.message) || '提交失败，请稍后重试。'));
       })
       .catch(function (error) {
-        showFormError(error.message || '提交失败，请稍后重试。'); submitBtn.disabled = false; submitBtn.textContent = '提交 ' + cartIds.length + ' 台设备申请'; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showFormError(error.message || uiCopy('提交失败，请稍后重试。')); submitBtn.disabled = false; submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
   });
 })();
