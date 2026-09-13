@@ -333,7 +333,6 @@ export function renderApply(data: ApplyData): string {
               <div class="cart-checkout-list" id="cart-items"></div>
             </div>
             <p class="hint"><a href="/apply" style="color:var(--primary)">返回购物车修改设备</a> · 每台库存设备只能加入一次，单次最多 10 台。</p>
-            <div class="form-summary" id="summary"></div>
             <div class="coupon-row">
               <div class="field">
                 <label for="couponCode">优惠码（选填）</label>
@@ -384,6 +383,7 @@ export function renderApply(data: ApplyData): string {
         </div>
 
         <div class="apply-grid-payment">
+          <div class="form-summary" id="summary"></div>
           <div class="form-card">
             <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>可使用快捷支付或信用卡验证，押金归还时使用</p></div></div>
             <div class="stripe-payment-box">
@@ -734,27 +734,47 @@ export function renderApply(data: ApplyData): string {
     });
     try { localStorage.setItem(CART_KEY, JSON.stringify({ items: cartIds, terms: cartTerms })); } catch (_) {}
   }
+  var SERVICE_SLOTS = ['morning_service', 'evening_service'];
+  function serviceFeeFor(rentTotal) {
+    if (method.value !== 'Pickup') return 0;
+    var pickupIsService = pickupTimeSlot && SERVICE_SLOTS.indexOf(pickupTimeSlot.value) >= 0;
+    var returnIsService = returnTimeSlot && SERVICE_SLOTS.indexOf(returnTimeSlot.value) >= 0;
+    var rate = (pickupIsService ? 0.1 : 0) + (returnIsService ? 0.1 : 0);
+    return Math.round(rentTotal * rate * 100) / 100;
+  }
+  function summaryRow(label, amount, className) {
+    return '<div class="summary-row' + (className ? ' ' + className : '') + '"><span>' + label + '</span><span>' + amount + '</span></div>';
+  }
   function refreshSummary() {
     var count = cartIds.length;
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
-    var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
+    var serviceFee = serviceFeeFor(rentTotal);
+    var total = Math.max(0, rentTotal + serviceFee + depositTotal - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100;
-    var payableTotal = total + paymentFee;
+    var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * stripeFeeRate * 100) / 100;
+    var payableTotal = Math.max(0, rentTotal + serviceFee - appliedDiscount) + paymentFee;
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
       document.getElementById('balance-payment-note').textContent = uiText('当前可用余额： AUD $' + accountBalance.toFixed(2), 'Available balance: AUD $' + accountBalance.toFixed(2));
       document.getElementById('balance-payment-insufficient').hidden = accountBalance >= total;
     }
-    summary.textContent = count
-      ? uiText(
-        count + ' 台设备｜租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? '｜优惠 -$' + appliedDiscount.toFixed(2) : '') + '｜手续费 $' + paymentFee.toFixed(2) + '｜本次应付 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + '｜押金 $' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        count + ' device(s) | Rental $' + rentTotal.toFixed(2) + (appliedDiscount ? ' | Discount -$' + appliedDiscount.toFixed(2) : '') + ' | Fee $' + paymentFee.toFixed(2) + ' | Due $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + ' | Deposit $' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      )
-      : uiText(count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2), count + ' device(s) · Total $' + dailyTotal.toFixed(2) + '/day · Deposit $' + depositTotal.toFixed(2));
+    if (!count) {
+      summary.textContent = uiText(count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2), count + ' device(s) · Total $' + dailyTotal.toFixed(2) + '/day · Deposit $' + depositTotal.toFixed(2));
+      return;
+    }
+    var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
+      + (serviceFee ? summaryRow(uiText('服务费', 'Service fee'), '$' + serviceFee.toFixed(2)) : '')
+      + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
+      + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '');
+    summary.innerHTML = '<div class="summary-title">' + uiText('订单金额', 'Order total') + '</div>'
+      + '<div class="summary-count">' + count + uiText(' 台设备', ' device(s)') + '</div>'
+      + '<div class="summary-rows">' + rows + '</div>'
+      + '<div class="summary-divider"></div>'
+      + summaryRow(uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
+      + summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit');
   }
   function renderCart() {
     form.hidden = cartIds.length === 0;

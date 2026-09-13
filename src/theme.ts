@@ -225,6 +225,14 @@ p { margin: 0; }
   padding: 14px 16px; font-size: 14px; margin-bottom: 18px;
 }
 .form-summary strong { color: var(--primary); }
+.summary-title { font-weight: 600; margin-bottom: 10px; }
+.summary-count { color: var(--muted-fg); margin-bottom: 10px; }
+.summary-rows { display: grid; gap: 6px; }
+.summary-row { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.summary-row.summary-discount { color: var(--secondary); }
+.summary-divider { border-top: 1px solid var(--border); margin: 10px 0; }
+.summary-row.summary-total { font-weight: 600; font-size: 16px; }
+.summary-row.summary-deposit { margin-top: 8px; color: var(--muted-fg); }
 .cart-checkout-list { display: grid; gap: 10px; }
 .cart-page-list { display: grid; gap: 12px; }
 .cart-page-item { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding: 22px 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
