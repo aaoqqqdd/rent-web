@@ -32,6 +32,7 @@ body {
 }
 a { color: inherit; text-decoration: none; }
 img { max-width: 100%; display: block; }
+.has-sentence-break { white-space: pre-line; }
 h1, h2, h3 { margin: 0; font-family: var(--display); line-height: 1.1; font-weight: 600; letter-spacing: -0.035em; }
 p { margin: 0; }
 
