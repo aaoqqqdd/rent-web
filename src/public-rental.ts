@@ -153,7 +153,8 @@ async function checkCouponCustomerEligibility(c: RentalContext, coupon: Record<s
  * 与主站 src/actions/stripePayments.ts 的 createDepositAuthorization 保持一致的窗口 / 降级规则。 */
 async function authorizeDepositForOrder(c: RentalContext, orderId: string, userId: string, depositAmount: number, paymentMethodId: string, cardBrand: string, rentalPeriodDays: number, customerId: string): Promise<void> {
   const authorizationWindowDays = depositAuthorizationWindowDays(cardBrand)
-  const params = new URLSearchParams({
+  const requiresExtendedWindow = authorizationWindowDays === 30 && rentalPeriodDays > 7
+  const createParams = new URLSearchParams({
     amount: String(cents(depositAmount)),
     currency: 'aud',
     customer: customerId,
@@ -162,27 +163,36 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
     // 不显式限定为 card 会导致 Stripe 报 "not eligible for the requested card features"。
     'payment_method_types[0]': 'card',
     capture_method: 'manual',
-    confirm: 'true',
-    off_session: 'true',
-    'expand[]': 'latest_charge',
+    description: `订单 ${orderId} 押金预授权`,
     'metadata[order_id]': orderId,
     'metadata[type]': 'deposit_authorization',
     'metadata[deposit_amount]': String(cents(depositAmount)),
     'metadata[card_brand]': cardBrand || 'unknown',
     'metadata[authorization_window_days]': String(authorizationWindowDays),
   })
-  if (authorizationWindowDays === 30) params.set('payment_method_options[card][request_extended_authorization]', 'if_available')
+  // 先创建（不 confirm），再单独 confirm——这样"先尝试延长授权、失败后退回标准授权"这两次
+  // 尝试落在同一个 PaymentIntent 上，不会在 Stripe 后台留下一个作废的重复对象。
+  const created = await stripeRequest(c, 'payment_intents', createParams, `web-deposit-auth-${orderId}`)
+  const confirmParams = () => new URLSearchParams({ off_session: 'true', 'expand[]': 'latest_charge' })
   let intent: Record<string, any>
   try {
-    intent = await stripeRequest(c, 'payment_intents', params, `web-deposit-auth-${orderId}`)
+    const params = confirmParams()
+    if (requiresExtendedWindow) params.set('payment_method_options[card][request_extended_authorization]', 'if_available')
+    intent = await stripeRequest(c, `payment_intents/${created.id}/confirm`, params, `web-deposit-auth-confirm-${orderId}`)
   } catch (error) {
-    if (!params.has('payment_method_options[card][request_extended_authorization]')) throw new Error(error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。')
-    params.delete('payment_method_options[card][request_extended_authorization]')
-    intent = await stripeRequest(c, 'payment_intents', params, `web-deposit-auth-standard-${orderId}`)
+    if (!requiresExtendedWindow) {
+      await stripeRequest(c, `payment_intents/${created.id}/cancel`, new URLSearchParams()).catch(() => {})
+      throw new Error(error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。')
+    }
+    try {
+      intent = await stripeRequest(c, `payment_intents/${created.id}/confirm`, confirmParams(), `web-deposit-auth-confirm-standard-${orderId}`)
+    } catch (retryError) {
+      await stripeRequest(c, `payment_intents/${created.id}/cancel`, new URLSearchParams()).catch(() => {})
+      throw new Error(retryError instanceof Error ? retryError.message : '押金预授权失败，请更换信用卡后重试。')
+    }
   }
   if (!['requires_capture', 'succeeded'].includes(String(intent.status))) throw new Error('押金预授权未完成，请更换信用卡后重试。')
 
-  const requiresExtendedWindow = authorizationWindowDays === 30 && rentalPeriodDays > 7
   if (requiresExtendedWindow) {
     const cardDetails = intent.latest_charge?.payment_method_details?.card
     const captureBefore = Number(cardDetails?.capture_before || 0)
