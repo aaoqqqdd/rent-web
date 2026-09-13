@@ -423,7 +423,7 @@ export function renderApply(data: ApplyData): string {
       </div>
 
       <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">提交申请</button>
-      <p class="form-note apply-submit-note">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
+      <p class="form-note apply-submit-note">提交后，我们将审核你的订单，并在审核通过后联系你完成签约与付款。<br>个人信息仅用于处理本次租赁及相关服务。</p>
       <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">设备库</a> 或联系客服。</p>
     </form>
 
