@@ -166,7 +166,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '账户余额支付': 'Pay with account balance', '余额不足': 'Insufficient balance', '当前可用余额：': 'Available balance:', '混合支付（优先扣除余额，再支付剩余金额）': 'Split payment (use balance first, then pay the remainder)',
   '信用卡资料': 'Card details', '仅验证支付方式。': 'This only verifies the payment method.',
   '正在加载安全付款组件…': 'Loading secure payment form…', '验证': 'Verify', '验证支付方式。': 'Verify payment method.', '验证信用卡': 'Verify card', '押金处理方式': 'Security deposit handling', '押金退还方式': 'Deposit refund method',
-  '原路退回信用卡': 'Refund to the original card', '退回账号余额（仅正式账户）': 'Refund to account balance (existing accounts only)',
+  '原路退回': 'Refund to the original payment method', '原路退回信用卡': 'Refund to the original card', '退回账号余额（仅正式账户）': 'Refund to account balance (existing accounts only)', '默认方式，提交后不可修改。': 'Default method; it cannot be changed after submission.',
   '备注（选填）': 'Notes (optional)', '例如期望配送时间、用途等': 'For example, preferred delivery time or intended use',
   '我已阅读并同意': 'I have read and agree to', '与': 'and', '提交时': 'On submission', '不会立即扣款': 'No immediate charge',
   '审核时': 'During review', '确认后': 'After confirmation', '签约再付款': 'Sign, then pay',

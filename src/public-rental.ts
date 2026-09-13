@@ -445,7 +445,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const contactPhone = String(body.contactPhone || '').trim().slice(0, 40)
   const couponCode = String(body.couponCode || '').trim().toUpperCase().slice(0, 40)
   const paymentMethod = body.paymentMethod === 'balance' ? 'balance' : 'card'
-  const refundMethod = body.refundMethod === 'balance' ? 'balance' : 'original'
+  const refundMethod = 'original'
   const agreed = ['1', 'on', 'true', 'yes'].includes(String(body.agree || '').toLowerCase())
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
   if (!firstName || !lastName || !contactPhone) return json(c, 400, { ok: false, message: '请填写名、姓和联系电话。' })
@@ -600,7 +600,6 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   }
   const accountEligible = String(user.account_type || 'formal') === 'formal' && String(user.role || 'CUSTOMER') === 'CUSTOMER'
   const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], 0)
-  if (refundMethod === 'balance' && !accountEligible) return json(c, 400, { ok: false, message: '当前账号不可使用余额退还押金，请改选原路退回。' })
   if (paymentMethod === 'balance' && (!accountEligible || numberValue(user.balance) < totalBeforePayment)) return json(c, 400, { ok: false, message: '账户余额不足以支付这笔申请。' })
   let stripeCustomerId = ''
   if (paymentMethod === 'card') {

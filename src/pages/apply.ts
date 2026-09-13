@@ -406,6 +406,12 @@ export function renderApply(data: ApplyData): string {
                 <span class="balance-payment-copy"><strong>账户余额支付</strong><span id="balance-payment-insufficient" class="balance-payment-badge" hidden>余额不足</span><small id="balance-payment-note">当前可用余额： AUD $0.00</small></span>
               </label>
             </div>
+            <div class="refund-method-fixed">
+              <input type="hidden" name="refundMethod" value="original">
+              <span>押金退还方式</span>
+              <strong>原路退回</strong>
+              <small>默认方式，提交后不可修改。</small>
+            </div>
           </div>
         </div>
       </div>

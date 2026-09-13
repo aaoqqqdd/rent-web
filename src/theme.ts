@@ -739,6 +739,10 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .balance-payment-copy strong { font-size: 16px; line-height: 1.35; }
 .balance-payment-copy small { flex-basis: 100%; margin-top: 5px; color: var(--muted-fg); font-size: 13px; }
 .balance-payment-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.1); color: var(--muted-fg); font-size: 12px; line-height: 1.25; }
+.refund-method-fixed { display: grid; gap: 5px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+.refund-method-fixed span { color: var(--muted-fg); font-size: 11px; }
+.refund-method-fixed strong { font-size: 15px; }
+.refund-method-fixed small { color: var(--muted-fg); font-size: 12px; }
 .legal-agreement { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }
 .legal-agreement input { width: 18px !important; min-height: 18px; margin: 3px 0 0; }
 .legal-agreement label { min-width: 0; line-height: 1.6; }
