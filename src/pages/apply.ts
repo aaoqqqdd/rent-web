@@ -386,20 +386,25 @@ export function renderApply(data: ApplyData): string {
         <div class="apply-grid-payment">
           <div class="form-card">
             <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>可使用快捷支付或信用卡验证，押金归还时使用</p></div></div>
-            <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
-              <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
-              <div id="stripe-wallet-element"></div>
-              <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
+            <div class="stripe-payment-box">
+              <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
+                <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
+                <div id="stripe-wallet-element"></div>
+                <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
+              </div>
+              <div class="stripe-setup-box">
+                <div class="stripe-setup-head"><div><label>信用卡资料</label><p>验证支付方式。</p></div><span>SECURE / STRIPE</span></div>
+                <div id="stripe-card-element" class="stripe-card-element"></div>
+                <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
+                <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
+                <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
+              </div>
             </div>
             <div class="payment-method-options" id="payment-method-options" hidden>
-              <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
-            </div>
-            <div class="stripe-setup-box">
-              <div class="stripe-setup-head"><div><label>信用卡资料</label><p>验证支付方式。</p></div><span>SECURE / STRIPE</span></div>
-              <div id="stripe-card-element" class="stripe-card-element"></div>
-              <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
-              <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
-              <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
+              <label class="balance-payment-option choice-line">
+                <input type="radio" name="paymentMethod" value="balance">
+                <span class="balance-payment-copy"><strong>账户余额支付</strong><span id="balance-payment-insufficient" class="balance-payment-badge" hidden>余额不足</span><small id="balance-payment-note">当前可用余额： AUD $0.00</small></span>
+              </label>
             </div>
           </div>
         </div>
@@ -505,6 +510,7 @@ export function renderApply(data: ApplyData): string {
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
   var walletMessage = document.getElementById('stripe-wallet-message');
+  var stripePaymentBox = document.querySelector('.stripe-payment-box');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
@@ -729,9 +735,8 @@ export function renderApply(data: ApplyData): string {
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
-      document.getElementById('balance-payment-note').textContent = accountBalance >= total
-        ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
-        : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，余额不足';
+      document.getElementById('balance-payment-note').textContent = '当前可用余额： AUD $' + accountBalance.toFixed(2);
+      document.getElementById('balance-payment-insufficient').hidden = accountBalance >= total;
     }
     summary.textContent = count
       ? count + ' 台设备｜租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? '｜优惠 -$' + appliedDiscount.toFixed(2) : '') + '｜手续费 $' + paymentFee.toFixed(2) + '｜本次应付 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + '｜押金 $' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -806,6 +811,7 @@ export function renderApply(data: ApplyData): string {
   }
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
+    stripePaymentBox.hidden = useBalance;
     stripeSetupBox.hidden = useBalance;
     walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
   }
