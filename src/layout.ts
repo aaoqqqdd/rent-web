@@ -171,6 +171,11 @@ ${renderSiteFooter(opts.contact)}
       if (cta) cta.textContent = callout.getAttribute(english ? 'data-coupon-cta-en' : 'data-coupon-cta-zh') || '';
     });
   }
+  function renderCouponMessages() {
+    document.querySelectorAll('[data-coupon-message]').forEach(function (message) {
+      message.textContent = message.getAttribute(currentLanguage === 'en' ? 'data-coupon-message-en' : 'data-coupon-message-zh') || '';
+    });
+  }
   function renderAnnouncementNotice(notice) {
     var announcement = document.querySelector('[data-site-announcement]');
     if (!announcement || !notice) return;
@@ -205,6 +210,7 @@ ${renderSiteFooter(opts.contact)}
     translateTree(document.body);
     renderAnnouncementNotice(activeAnnouncementNotice);
     renderCouponCallouts();
+    renderCouponMessages();
     document.title = english ? englishFor(originalTitle) : originalTitle;
     var descriptionMeta = document.querySelector('meta[name="description"]');
     if (descriptionMeta) descriptionMeta.setAttribute('content', english ? englishFor(originalDescription) : originalDescription);

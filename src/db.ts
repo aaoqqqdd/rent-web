@@ -76,6 +76,7 @@ export interface PublicNotice {
   couponConfigKeyword?: string
   couponBenefitZh?: string
   couponBenefitEn?: string
+  couponMessageEn?: string
 }
 
 const CATEGORY_LABEL: Record<Product['category'], string> = {
@@ -333,8 +334,10 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       const code = String(row.code ?? '').trim().toUpperCase()
       if (!code) continue
       const discountType = String(row.discount_type ?? '') === 'percent' ? '百分比折扣' : '固定金额折扣'
+      const discountTypeEn = String(row.discount_type ?? '') === 'percent' ? 'percentage discount' : 'fixed discount'
       const discountValue = Number(row.discount_value ?? 0)
       const discount = discountType === '百分比折扣' ? `${discountValue}%` : `AUD$${discountValue.toFixed(2)}`
+      const discountEn = String(row.discount_type ?? '') === 'percent' ? `${discountValue}%` : `AUD$${discountValue.toFixed(2)}`
       const couponBenefitZh = discountType === '百分比折扣'
         ? `立减 ${discountValue}%`
         : `立减 ${discount}`
@@ -347,6 +350,13 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         row.brand ? `品牌：${String(row.brand)}` : '',
         row.config_keyword ? `配置：${String(row.config_keyword)}` : '',
       ].filter(Boolean)
+      const conditionsEn = [
+        row.minimum_order_amount ? `minimum spend AUD$${Number(row.minimum_order_amount).toFixed(2)}` : '',
+        row.device_id ? 'selected devices only' : '',
+        row.brand ? `brand: ${String(row.brand)}` : '',
+        row.config_keyword ? `configuration: ${String(row.config_keyword)}` : '',
+      ].filter(Boolean)
+      const couponMessageEn = `New promo code: ${code}, ${discountTypeEn} ${discountEn}.${conditionsEn.length ? ` Conditions: ${conditionsEn.join('; ')}.` : ''}${row.expires_at ? ` Valid until ${String(row.expires_at)}.` : ''}`
       notices.push({
         id: `coupon:${String(row.id ?? code)}`,
         kind: 'coupon',
@@ -361,6 +371,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         couponConfigKeyword: row.config_keyword ? String(row.config_keyword) : undefined,
         couponBenefitZh,
         couponBenefitEn,
+        couponMessageEn,
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
       })
     }

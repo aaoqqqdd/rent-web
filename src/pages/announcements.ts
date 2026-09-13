@@ -23,6 +23,11 @@ function noticeMessage(value: string): string {
         .replace(/\n/g, '<br>')
 }
 
+function couponMessageAttrs(notice: PublicNotice): string {
+    if (notice.kind !== 'coupon') return ''
+    return ` data-coupon-message data-coupon-message-zh="${esc(notice.message)}" data-coupon-message-en="${esc(notice.couponMessageEn || notice.message)}"`
+}
+
 function noticeCard(notice: PublicNotice): string {
     const isCoupon = notice.kind === 'coupon' && Boolean(notice.couponCode)
     const noTranslate = notice.isAdminAnnouncement ? ' data-no-translate' : ''
@@ -35,7 +40,7 @@ function noticeCard(notice: PublicNotice): string {
   <span class="notice-card-kind">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</span>
   ${couponTitle}
   <time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time>
-  <p${noTranslate}>${noticeMessage(notice.message)}</p>
+  <p${noTranslate}${couponMessageAttrs(notice)}>${noticeMessage(notice.message)}</p>
   <span class="text-link">${isCoupon ? '去挑选设备' : '查看详情'} <span aria-hidden="true">→</span></span>
 </a>`
 }
@@ -67,7 +72,7 @@ export function renderAnnouncementDetail(notice: PublicNotice | null): string {
 <section class="section">
   <div class="wrap notice-detail-wrap">
     <article class="notice-detail">
-      <div class="notice-detail-message"${notice.isAdminAnnouncement ? ' data-no-translate' : ''}>${noticeMessage(notice.message)}</div>
+      <div class="notice-detail-message"${notice.isAdminAnnouncement ? ' data-no-translate' : ''}${couponMessageAttrs(notice)}>${noticeMessage(notice.message)}</div>
       ${notice.kind === 'coupon' && notice.couponCode ? `<div class="coupon-callout" data-coupon-callout data-coupon-prefix-zh="🎉 新优惠上线！使用优惠码" data-coupon-prefix-en="🎉 New offer live! Enter promo code" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}" data-coupon-cta-zh="去挑选设备" data-coupon-cta-en="Browse devices"><span data-coupon-prefix>🎉 新优惠上线！使用优惠码</span><strong>${esc(notice.couponCode)}</strong><em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em><a class="coupon-callout-link" href="/products?coupon=${encodeURIComponent(notice.couponCode)}"><span data-coupon-cta>去挑选设备</span> <span aria-hidden="true">→</span></a></div>` : ''}
     </article>
     <a class="text-link" href="/announcements">← 返回通告列表</a>
