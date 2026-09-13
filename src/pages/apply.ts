@@ -423,7 +423,7 @@ export function renderApply(data: ApplyData): string {
       </div>
 
       <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">提交申请</button>
-      <p class="form-note apply-submit-note">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁</p>
+      <p class="form-note apply-submit-note">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
       <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">设备库</a> 或联系客服。</p>
     </form>
 
@@ -519,8 +519,11 @@ export function renderApply(data: ApplyData): string {
   var addressRequest = null;
   var activeAddressSuggestion = -1;
 
+  function isEnglish() {
+    return (window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en') || document.documentElement.lang === 'en-AU';
+  }
   function uiText(chinese, english) {
-    if (window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en') return english;
+    if (isEnglish()) return english;
     return chinese;
   }
   function uiCopy(value) {
