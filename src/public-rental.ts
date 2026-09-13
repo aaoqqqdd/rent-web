@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import { getRentalConfig } from './db'
-import { generateTemporaryPassword, registerCustomer } from './auth'
+import { combinePersonName, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import { isMelbourneAddress } from './address'
 import type { Env } from './index'
 
@@ -400,7 +400,9 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (deviceIds.length > MAX_CART_ITEMS) return json(c, 400, { ok: false, message: `单次最多提交 ${MAX_CART_ITEMS} 台设备。` })
   const deviceTerms = parseDeviceTerms(body, deviceIds)
   const deliveryMethod = body.deliveryMethod === 'Delivery' ? 'Delivery' : 'Pickup'
-  const contactName = String(body.contactName || '').trim().slice(0, 120)
+  const firstName = sanitizePlainText(body.firstName, 100)
+  const lastName = sanitizePlainText(body.lastName, 100)
+  const contactName = combinePersonName(firstName, lastName)
   const contactEmail = String(body.contactEmail || '').trim().toLowerCase().slice(0, 200)
   const contactPhone = String(body.contactPhone || '').trim().slice(0, 40)
   const couponCode = String(body.couponCode || '').trim().toUpperCase().slice(0, 40)
@@ -408,7 +410,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const refundMethod = body.refundMethod === 'balance' ? 'balance' : 'original'
   const agreed = ['1', 'on', 'true', 'yes'].includes(String(body.agree || '').toLowerCase())
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
-  if (!contactName || !contactPhone) return json(c, 400, { ok: false, message: '请填写姓名和联系电话。' })
+  if (!firstName || !lastName || !contactPhone) return json(c, 400, { ok: false, message: '请填写名、姓和联系电话。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
   let stripePaymentMethodId = ''
   let stripeCardBrand = ''
@@ -499,12 +501,17 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     if (String(user.role || 'CUSTOMER') !== 'CUSTOMER' || String(user.status || 'active') !== 'active' || String(user.account_type || 'formal') !== 'formal') return json(c, 403, { ok: false, message: '该账号当前无法下单，请联系客服。' })
   } else {
     temporaryPassword = generateTemporaryPassword()
-    const result = await registerCustomer(c.env, { name: contactName, email: contactEmail, phone: contactPhone, password: temporaryPassword, passwordConfirm: temporaryPassword, agree: '1', turnstileToken: body['cf-turnstile-response'] }, ip)
+    const result = await registerCustomer(c.env, { name: contactName, firstName, lastName, email: contactEmail, phone: contactPhone, password: temporaryPassword, passwordConfirm: temporaryPassword, agree: '1', turnstileToken: body['cf-turnstile-response'] }, ip)
     if (!result.ok) return json(c, result.code === 'rate_limited' ? 429 : 400, { ok: false, message: result.message })
     user = await c.env.RENT.prepare('SELECT * FROM users WHERE lower(email) = lower(?) LIMIT 1').bind(contactEmail).first<Record<string, unknown>>()
     accountCreated = true
   }
   if (!user?.id) return json(c, 500, { ok: false, message: '账号创建失败，请稍后重试。' })
+  const personNameColumns = await ensurePersonNameColumns(c.env)
+  if (personNameColumns.firstName && personNameColumns.lastName) {
+    await c.env.RENT.prepare('UPDATE users SET first_name = ?, last_name = ?, name = ? WHERE id = ?')
+      .bind(firstName, lastName, contactName, user.id).run()
+  }
   if (coupon) {
     const eligibilityError = await checkCouponCustomerEligibility(c, coupon, String(user.id))
     if (eligibilityError) return json(c, 400, { ok: false, message: eligibilityError })

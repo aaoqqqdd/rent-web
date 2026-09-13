@@ -365,9 +365,10 @@ export function renderApply(data: ApplyData): string {
           <div class="form-card">
             <div class="form-card-head"><span>03</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
             <div class="row2">
-              <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name" required></div>
-              <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
+              <div class="field"><label for="contactFirstName">名 / Given name</label><input id="contactFirstName" name="firstName" maxlength="100" autocomplete="given-name" required></div>
+              <div class="field"><label for="contactLastName">姓 / Family name</label><input id="contactLastName" name="lastName" maxlength="100" autocomplete="family-name" required></div>
             </div>
+            <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
             <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
               <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
           </div>
@@ -489,6 +490,8 @@ export function renderApply(data: ApplyData): string {
   var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
   var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
   var contactEmail = document.getElementById('contactEmail');
+  var contactFirstName = document.getElementById('contactFirstName');
+  var contactLastName = document.getElementById('contactLastName');
   var balanceEndpoint = '/api/account-balance';
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
@@ -500,6 +503,19 @@ export function renderApply(data: ApplyData): string {
   var addressTimer = null;
   var addressRequest = null;
   var activeAddressSuggestion = -1;
+
+  function splitContactName(value) {
+    var name = String(value || '').trim();
+    var parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length > 1) return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] };
+    if (/^[\u3400-\u9fff]{2,}$/.test(name)) return { firstName: name.slice(1), lastName: name.slice(0, 1) };
+    return { firstName: name, lastName: '' };
+  }
+  function fullContactName() {
+    var first = contactFirstName.value.trim();
+    var last = contactLastName.value.trim();
+    return first && last && /^[\u3400-\u9fff]+$/.test(first + last) ? first + last : [first, last].filter(Boolean).join(' ');
+  }
 
   function todayStr() {
     var date = new Date();
@@ -792,7 +808,7 @@ export function renderApply(data: ApplyData): string {
         var billing = event.billingDetails || {};
         var shipping = event.shippingAddress || {};
         var name = billing.name || shipping.name;
-        if (name) document.getElementById('contactName').value = name;
+        if (name) { var parts = splitContactName(name); contactFirstName.value = parts.firstName; contactLastName.value = parts.lastName; }
         if (billing.phone) document.getElementById('contactPhone').value = billing.phone;
         if (billing.email) {
           contactEmail.value = billing.email;
@@ -842,7 +858,7 @@ export function renderApply(data: ApplyData): string {
       cardElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage(''); });
       cardConfirm.addEventListener('click', function () {
         cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
-        stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: document.getElementById('contactName').value, email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
+        stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: fullContactName(), email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
           .then(function (result) {
             if (result.error) throw new Error(paymentError(result.error, '卡片验证失败，请检查信息。'));
             setupIntent = result.setupIntent;
@@ -917,7 +933,11 @@ export function renderApply(data: ApplyData): string {
   var savedContactInfo;
   try { savedContactInfo = JSON.parse(localStorage.getItem('geekslope-contact-v1') || 'null'); } catch (_) { savedContactInfo = null; }
   if (savedContactInfo && typeof savedContactInfo === 'object') {
-    document.getElementById('contactName').value = typeof savedContactInfo.name === 'string' ? savedContactInfo.name : '';
+    var savedName = typeof savedContactInfo.firstName === 'string' || typeof savedContactInfo.lastName === 'string'
+      ? { firstName: typeof savedContactInfo.firstName === 'string' ? savedContactInfo.firstName : '', lastName: typeof savedContactInfo.lastName === 'string' ? savedContactInfo.lastName : '' }
+      : splitContactName(savedContactInfo.name);
+    contactFirstName.value = savedName.firstName;
+    contactLastName.value = savedName.lastName;
     document.getElementById('contactPhone').value = typeof savedContactInfo.phone === 'string' ? savedContactInfo.phone : '';
     document.getElementById('contactEmail').value = typeof savedContactInfo.email === 'string' ? savedContactInfo.email : '';
     saveContactInfo.checked = true;
@@ -957,7 +977,7 @@ export function renderApply(data: ApplyData): string {
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
     if (saveContactInfo.checked) {
-      try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ name: payload.contactName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
+      try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ firstName: payload.firstName || '', lastName: payload.lastName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
     }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
     payload.deviceTerms = deviceTermsInput.value;
