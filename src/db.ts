@@ -55,6 +55,7 @@ export type LegalDocumentKey =
 
 export interface LegalDocumentData {
   content: string
+  contentEn: string
   metadata: { version: string; lastUpdatedDate: string }
   companyDetails: Record<string, unknown>
   bankDetails: Record<string, unknown>
@@ -572,6 +573,7 @@ export async function getLegalDocument(
 ): Promise<LegalDocumentData> {
   const data: LegalDocumentData = {
     content: '',
+    contentEn: '',
     metadata: { version: '1.0', lastUpdatedDate: '' },
     companyDetails: {},
     bankDetails: {},
@@ -579,14 +581,18 @@ export async function getLegalDocument(
   try {
     const rows = await env.RENT.prepare(
       `SELECT key, value FROM systemSettings
-       WHERE key IN (?, 'legalMetadata', 'companyDetails', 'bankDetails')`,
+       WHERE key IN (?, ?, 'legalMetadata', 'companyDetails', 'bankDetails')`,
     )
-      .bind(documentKey)
+      .bind(documentKey, `${documentKey}En`)
       .all<{ key: string; value: string }>()
 
     for (const row of rows.results ?? []) {
       if (row.key === documentKey) {
         data.content = String(row.value ?? '').trim()
+        continue
+      }
+      if (row.key === `${documentKey}En`) {
+        data.contentEn = String(row.value ?? '').trim()
         continue
       }
       const parsed = JSON.parse(row.value || '{}') as Record<string, unknown>
