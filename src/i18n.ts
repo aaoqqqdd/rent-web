@@ -38,6 +38,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '按合同时间和地点完成归还': 'Return at the time and location stated in the contract',
   '租期内出现故障时，请先停止可能扩大损坏的操作，并联系 7×12 小时技术支持。经确认为设备自身故障且符合租赁条件时，我们会安排排查或免费换机。': 'If a fault occurs, stop any action that may worsen it and contact technical support. We will troubleshoot or provide a free replacement for an eligible confirmed device fault.',
   '快捷支付': 'Express checkout', '使用可用的快捷支付方式验证。': 'Verify with an available express payment method.',
+  '支付方式': 'Payment method', '可使用快捷支付或信用卡验证，押金归还时使用': 'Use express checkout or card verification; the deposit is handled on return.',
   '例如：在 Carlton 使用 7 天，需要运行 Premiere Pro，希望 32GB 内存…': 'For example: 7 days in Carlton, Premiere Pro required, preferably 32GB RAM…',
   '如 Docklands / South Yarra': 'e.g. Docklands / South Yarra', '例如 OD-20260911-ABC123': 'e.g. OD-20260911-ABC123',
   '软件使用协议': 'Software use agreement', '投诉与争议解决政策': 'Complaints and dispute resolution policy', '可接受使用政策': 'Acceptable use policy',
