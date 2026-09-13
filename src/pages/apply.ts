@@ -770,7 +770,7 @@ export function renderApply(data: ApplyData): string {
       var meta = document.createElement('span');
       var rawDaily = Number(product.day || 0);
       var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + ' · ' + rentalDays + uiText(' 天 · ', ' day(s) · ');
-      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : uiText('询价', 'Enquire')) + '/day' + uiText(' · 押金 $', ' · Deposit $') + product.deposit;
+      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : uiText('询价', 'Enquire')) + uiText('/天', '/day') + uiText(' · 押金 $', ' · Deposit $') + product.deposit;
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = uiText('移除', 'Remove');
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
     });
@@ -1029,7 +1029,7 @@ export function renderApply(data: ApplyData): string {
       setCardMessage(uiCopy('信用卡已验证。'), true);
     }
   });
-  renderCart();
+  window.setTimeout(renderCart, 0);
 
   var doneBox = document.getElementById('apply-done');
   var doneMsg = document.getElementById('apply-done-msg');
