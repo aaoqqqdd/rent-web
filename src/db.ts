@@ -29,6 +29,8 @@ export interface Product {
 export interface DeviceAvailability {
   unavailableDates: string[]
   rentalRanges: Array<{ startDate: string; endDate: string }>
+  unavailablePeriods: Record<string, Array<'AM' | 'PM'>>
+  unavailableTimeSlots: Record<string, string[]>
 }
 
 export interface SiteContact {
@@ -172,7 +174,7 @@ export async function getDeviceAvailability(
 ): Promise<Record<string, DeviceAvailability>> {
   const ids = [...new Set(deviceIds.map((id) => String(id).trim()).filter(Boolean))].slice(0, 10)
   const result: Record<string, DeviceAvailability> = Object.fromEntries(
-    ids.map((id) => [id, { unavailableDates: [], rentalRanges: [] }]),
+    ids.map((id) => [id, { unavailableDates: [], rentalRanges: [], unavailablePeriods: {}, unavailableTimeSlots: {} }]),
   )
   await Promise.all(ids.map(async (deviceId) => {
     const availability = result[deviceId]
@@ -200,8 +202,39 @@ export async function getDeviceAvailability(
           startDate: shiftDate(startDate, -Math.max(0, Math.floor(bufferDays))),
           endDate: shiftDate(endDate, Math.max(0, Math.floor(bufferDays))),
         }))
+      const periodRows = await env.RENT.prepare(
+        "SELECT startDate, endDate, startPeriod, endPeriod FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL ORDER BY startDate",
+      ).bind(deviceId).all<{ startDate?: unknown; endDate?: unknown; startPeriod?: unknown; endPeriod?: unknown }>()
+      for (const row of periodRows.results ?? []) {
+        let date = shiftDate(String(row.startDate ?? '').slice(0, 10), -Math.max(0, Math.floor(bufferDays)))
+        const endDate = shiftDate(String(row.endDate ?? '').slice(0, 10), Math.max(0, Math.floor(bufferDays)))
+        const startPeriod = bufferDays ? 'AM' : (String(row.startPeriod || 'AM') === 'PM' ? 'PM' : 'AM')
+        const endPeriod = bufferDays ? 'PM' : (String(row.endPeriod || 'AM') === 'PM' ? 'PM' : 'AM')
+        const startIndex = Date.parse(`${date}T00:00:00Z`) / 86400000 * 2 + (startPeriod === 'PM' ? 1 : 0)
+        const endIndex = Date.parse(`${endDate}T00:00:00Z`) / 86400000 * 2 + (endPeriod === 'PM' ? 1 : 0)
+        for (let index = startIndex; index < endIndex; index += 1) {
+          const periodDate = new Date(Math.floor(index / 2) * 86400000).toISOString().slice(0, 10)
+          const period = index % 2 ? 'PM' : 'AM'
+          const periods = availability.unavailablePeriods[periodDate] || []
+          if (!periods.includes(period)) periods.push(period)
+          availability.unavailablePeriods[periodDate] = periods
+        }
+      }
     } catch {
       // 兼容旧数据库；提交时仍会在可用的表结构上再次校验。
+    }
+    try {
+      const rows = await env.RENT.prepare(
+        'SELECT unavailable_date, time_slot FROM device_unavailable_time_slots WHERE device_id = ? ORDER BY unavailable_date, time_slot',
+      ).bind(deviceId).all<{ unavailable_date?: unknown; time_slot?: unknown }>()
+      for (const row of rows.results ?? []) {
+        const date = String(row.unavailable_date ?? '').slice(0, 10)
+        const slot = String(row.time_slot ?? '')
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !slot) continue
+        availability.unavailableTimeSlots[date] = [...new Set([...(availability.unavailableTimeSlots[date] || []), slot])]
+      }
+    } catch {
+      // 兼容尚未部署设备级时间段表的旧数据库。
     }
   }))
   return result

@@ -10,6 +10,8 @@ const MAX_CART_ITEMS = 10
 const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const LONG_TERM_RENTAL_DAYS = 30
+const PICKUP_TIME_SLOTS = ['morning_service', 'morning', 'afternoon', 'evening_service'] as const
+type PickupTimeSlot = typeof PICKUP_TIME_SLOTS[number]
 
 interface RentalTerm {
   startDate: string
@@ -131,6 +133,40 @@ function shiftDate(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + days)
   return date.toISOString().slice(0, 10)
+}
+
+function halfDayIndex(date: string, period: string): number {
+  return Math.round(Date.parse(`${date}T00:00:00Z`) / 86400000) * 2 + (period === 'PM' ? 1 : 0)
+}
+
+function periodsOverlap(startDate: string, startPeriod: string, endDate: string, endPeriod: string, otherStartDate: string, otherStartPeriod: string, otherEndDate: string, otherEndPeriod: string): boolean {
+  const start = halfDayIndex(startDate, startPeriod)
+  const end = halfDayIndex(endDate, endPeriod)
+  const otherStart = halfDayIndex(otherStartDate, otherStartPeriod)
+  const otherEnd = halfDayIndex(otherEndDate, otherEndPeriod)
+  return start < otherEnd && otherStart < end
+}
+
+function melbourneMinutes(): number {
+  const parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date())
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value || 0)
+  return (hour === 24 ? 0 : hour) * 60 + Number(parts.find((part) => part.type === 'minute')?.value || 0)
+}
+
+function pickupSlotPassed(slot: PickupTimeSlot): boolean {
+  const endMinutes: Record<PickupTimeSlot, number> = { morning_service: 8 * 60, morning: 12 * 60, afternoon: 20 * 60, evening_service: 23 * 60 }
+  return melbourneMinutes() >= endMinutes[slot]
+}
+
+function slotPeriod(slot: PickupTimeSlot): 'AM' | 'PM' {
+  return ['morning_service', 'morning'].includes(slot) ? 'AM' : 'PM'
+}
+
+function termUsesPeriod(term: RentalTerm, date: string, period: 'AM' | 'PM'): boolean {
+  const start = halfDayIndex(term.startDate, term.startPeriod)
+  const end = halfDayIndex(term.endDate, term.endPeriod)
+  const current = halfDayIndex(date, period)
+  return start <= current && current < end
 }
 
 async function checkCouponCustomerEligibility(c: RentalContext, coupon: Record<string, unknown>, customerId: string): Promise<string | null> {
@@ -400,6 +436,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (deviceIds.length > MAX_CART_ITEMS) return json(c, 400, { ok: false, message: `单次最多提交 ${MAX_CART_ITEMS} 台设备。` })
   const deviceTerms = parseDeviceTerms(body, deviceIds)
   const deliveryMethod = body.deliveryMethod === 'Delivery' ? 'Delivery' : 'Pickup'
+  const pickupTimeSlot = PICKUP_TIME_SLOTS.includes(String(body.pickupTimeSlot) as PickupTimeSlot) ? String(body.pickupTimeSlot) as PickupTimeSlot : ''
+  const returnTimeSlot = PICKUP_TIME_SLOTS.includes(String(body.returnTimeSlot) as PickupTimeSlot) ? String(body.returnTimeSlot) as PickupTimeSlot : ''
   const firstName = sanitizePlainText(body.firstName, 100)
   const lastName = sanitizePlainText(body.lastName, 100)
   const contactName = combinePersonName(firstName, lastName)
@@ -431,6 +469,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (paymentMethod === 'balance' && !settings.balancePayment) return json(c, 400, { ok: false, message: '账户余额支付当前未启用。' })
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const unavailableDates = new Set(config.unavailableDates)
+  if (deliveryMethod === 'Pickup' && (!pickupTimeSlot || !returnTimeSlot)) return json(c, 400, { ok: false, message: '请选择取货和归还时间段。' })
 
   let location = ''
   if (deliveryMethod === 'Pickup') {
@@ -458,20 +497,63 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     const lifecycle = String(device?.lifecycle_status || device?.lifecycleStatus || '').toUpperCase()
     const available = device && (String(device.status || '').toLowerCase() === 'available' || lifecycle === 'READY' || lifecycle === 'RESERVED')
     if (!available) return json(c, 409, { ok: false, message: '购物车中有设备当前无法租赁，请移除后重试。' })
+    const deviceUnavailableDates = new Set<string>()
+    const deviceUnavailableSlots = new Set<string>()
     try {
       const unavailable = await c.env.RENT.prepare('SELECT unavailable_date FROM device_unavailable_dates WHERE device_id = ?').bind(deviceId).all<{ unavailable_date?: unknown }>()
-      const unavailableDates = new Set((unavailable.results || []).map((row) => String(row.unavailable_date || '')))
-      for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day < Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
-        if (unavailableDates.has(new Date(day).toISOString().slice(0, 10))) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选日期不可用。` })
-      }
-    } catch { /* older deployments may not have per-device unavailable dates */ }
-    for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day < Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
-      if (unavailableDates.has(new Date(day).toISOString().slice(0, 10))) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选日期不可用。` })
+      for (const row of unavailable.results || []) deviceUnavailableDates.add(String(row.unavailable_date || ''))
+      const slots = await c.env.RENT.prepare('SELECT unavailable_date, time_slot FROM device_unavailable_time_slots WHERE device_id = ?').bind(deviceId).all<{ unavailable_date?: unknown; time_slot?: unknown }>()
+      for (const row of slots.results || []) deviceUnavailableSlots.add(`${String(row.unavailable_date || '').slice(0, 10)}:${String(row.time_slot || '')}`)
+    } catch {
+      // 兼容尚未部署设备级不可用规则表的旧数据库。
     }
-    const conflictStart = shiftDate(term.startDate, -config.bufferDays)
-    const conflictEnd = shiftDate(term.endDate, config.bufferDays)
-    const conflict = await c.env.RENT.prepare("SELECT id FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate < ? AND endDate > ? LIMIT 1").bind(deviceId, conflictEnd, conflictStart).first()
-    if (conflict) return json(c, 409, { ok: false, message: `${String(device?.name || '设备')} 在所选日期已有订单。` })
+    let blockedDate = ''
+    for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day <= Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
+      const date = new Date(day).toISOString().slice(0, 10)
+      if (unavailableDates.has(date) || deviceUnavailableDates.has(date)) { blockedDate = date; break }
+    }
+    const blockedPeriod = (date: string, period: 'AM' | 'PM') => {
+      const globalSlots = config.unavailableTimeSlots[date] || []
+      const group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service']
+      return group.every((slot) => globalSlots.includes(slot) || deviceUnavailableSlots.has(`${date}:${slot}`))
+    }
+    for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day <= Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
+      const date = new Date(day).toISOString().slice(0, 10)
+      for (const period of ['AM', 'PM'] as const) {
+        if (!termUsesPeriod(term, date, period)) continue
+        if (blockedPeriod(date, period)) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选上午/下午时段不可用。` })
+      }
+    }
+    if (deliveryMethod === 'Pickup') {
+      const pickupPeriod = slotPeriod(pickupTimeSlot || 'morning')
+      const returnPeriod = slotPeriod(returnTimeSlot || 'morning')
+      const slotUnavailable = (date: string, slot: PickupTimeSlot) => (config.unavailableTimeSlots[date] || []).includes(slot) || deviceUnavailableSlots.has(`${date}:${slot}`)
+      if (pickupTimeSlot && (slotUnavailable(term.startDate, pickupTimeSlot) || (term.startDate === today && pickupSlotPassed(pickupTimeSlot)))) return json(c, 409, { ok: false, message: '取货时间段已过或不可用，请重新选择。' })
+      if (returnTimeSlot && (slotUnavailable(term.endDate, returnTimeSlot) || (term.endDate === today && pickupSlotPassed(returnTimeSlot)))) return json(c, 409, { ok: false, message: '归还时间段已过或不可用，请重新选择。' })
+      if (pickupPeriod !== term.startPeriod || returnPeriod !== term.endPeriod) return json(c, 400, { ok: false, message: '取还时间段必须与租期的上午/下午选择一致。' })
+    }
+    if (blockedDate) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选日期不可用。` })
+    try {
+      const conflicts = await c.env.RENT.prepare("SELECT startDate, endDate, startPeriod, endPeriod FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL").bind(deviceId).all<{ startDate?: unknown; endDate?: unknown; startPeriod?: unknown; endPeriod?: unknown }>()
+      const conflictStart = shiftDate(term.startDate, -config.bufferDays)
+      const conflictEnd = shiftDate(term.endDate, config.bufferDays)
+      const conflictRows = conflicts.results || []
+      const conflict = conflictRows.some((row) => periodsOverlap(
+        conflictStart, config.bufferDays ? 'AM' : term.startPeriod, conflictEnd, config.bufferDays ? 'PM' : term.endPeriod,
+        String(row.startDate || '').slice(0, 10), String(row.startPeriod || 'AM'), String(row.endDate || '').slice(0, 10), String(row.endPeriod || 'AM'),
+      ))
+      if (conflict) return json(c, 409, { ok: false, message: `${String(device?.name || '设备')} 在所选日期或时段已有订单。` })
+      if (deliveryMethod === 'Pickup' && conflictRows.some((row) => {
+        const other: RentalTerm = { startDate: String(row.startDate || '').slice(0, 10), endDate: String(row.endDate || '').slice(0, 10), startPeriod: String(row.startPeriod || 'AM') === 'PM' ? 'PM' : 'AM', endPeriod: String(row.endPeriod || 'AM') === 'PM' ? 'PM' : 'AM' }
+        return (term.startDate === other.startDate && term.startPeriod === other.startPeriod && termUsesPeriod(other, term.startDate, slotPeriod(pickupTimeSlot || 'morning'))) || (term.endDate === other.startDate && term.endPeriod === other.startPeriod && termUsesPeriod(other, term.endDate, slotPeriod(returnTimeSlot || 'morning')))
+      })) return json(c, 409, { ok: false, message: `${String(device?.name || '设备')} 在所选取还时段已有订单。` })
+    } catch {
+      // 提交时仍保留日期范围校验，兼容旧数据库的订单字段。
+      const conflictStart = shiftDate(term.startDate, -config.bufferDays)
+      const conflictEnd = shiftDate(term.endDate, config.bufferDays)
+      const conflict = await c.env.RENT.prepare("SELECT id FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate < ? AND endDate > ? LIMIT 1").bind(deviceId, conflictEnd, conflictStart).first()
+      if (conflict) return json(c, 409, { ok: false, message: `${String(device?.name || '设备')} 在所选日期已有订单。` })
+    }
     devices.push(device as Record<string, unknown>)
     rentalPlans.set(deviceId, { term, period })
   }
@@ -548,9 +630,9 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       const total = Number((fees[index] + deposit - discounts[index]).toFixed(2))
       const note = `【官网申请 ${batch}】联系人：${contactName} / 电话：${contactPhone} / ${deliveryMethod === 'Delivery' ? '送货至' : '自取点'}：${location}${body.rentalNote ? `\n客户备注：${String(body.rentalNote).trim().slice(0, 350)}` : ''}`.slice(0, 500)
       await c.env.RENT.prepare(
-        `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
-      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
+        `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupTimeSlot, returnTimeSlot, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
+      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
       const depositMode = depositPaymentModeForRental(rentalPlan.period.days, paymentMethod === 'card', stripeCardBrand)
       await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
         .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositMode, orderId).run()

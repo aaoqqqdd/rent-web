@@ -53,6 +53,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var total = document.getElementById('cart-page-total');
   var minimumDays = ${config.minimumRentalDays};
   var unavailableDates = ${scriptJson(config.unavailableDates)};
+  var unavailableTimeSlots = ${scriptJson(config.unavailableTimeSlots)};
   var availability = {};
   var availabilityReady = false;
   var availabilityFailed = false;
@@ -65,14 +66,22 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
+  function periodUnavailable(id, date, period) {
+    var item = availability[id] || {};
+    var globalSlots = unavailableTimeSlots[date] || [];
+    var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
+    var occupied = item.unavailablePeriods ? (item.unavailablePeriods[date] || []) : [];
+    var group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service'];
+    return occupied.indexOf(period) >= 0 || group.every(function (slot) { return globalSlots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
+  }
   function dateUnavailable(id, date) {
     if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
     var item = availability[id] || {};
     return (item.unavailableDates || []).indexOf(date) >= 0
-      || (item.rentalRanges || []).some(function (range) { return range.startDate <= date && date < range.endDate; });
+      || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
   }
-  function periodUnavailable(id, start, end) {
-    for (var day = start; day && day < end; day = addDays(day, 1)) if (dateUnavailable(id, day)) return true;
+  function termRangeUnavailable(id, start, end) {
+    for (var day = start; day && day <= end; day = addDays(day, 1)) if (dateUnavailable(id, day)) return true;
     return false;
   }
   function nextAvailableDate(id, date) {
@@ -113,7 +122,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function defaultTerm(id) {
     var start = nextAvailableDate(id, today()); var end = addDays(start, Math.max(1, minimumDays));
-    while (periodUnavailable(id, start, end) && end < addDays(start, 730)) end = addDays(end, 1);
+    while (termRangeUnavailable(id, start, end) && end < addDays(start, 730)) end = addDays(end, 1);
     return { startDate: start, endDate: end, startPeriod: 'AM', endPeriod: 'AM' };
   }
   function normalizeTerm(id, value) {
@@ -205,7 +214,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function pickerDateDisabled(id, role, term, date) {
     if (!availabilityReady || availabilityFailed || date < today() || dateUnavailable(id, date)) return true;
-    return role === 'end' && (date <= term.startDate || date < addDays(term.startDate, Math.max(1, minimumDays)) || periodUnavailable(id, term.startDate, date));
+    return role === 'end' && (date <= term.startDate || date < addDays(term.startDate, Math.max(1, minimumDays)) || termRangeUnavailable(id, term.startDate, date));
   }
   function renderPicker(picker, id, role, term, month) {
     var year = month.getFullYear(); var monthIndex = month.getMonth(); clearChildren(picker);
@@ -232,13 +241,11 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     control.append(input, toggle, picker); field.append(label, control); return field;
   }
   function termError(id, term) {
-    if (!parseDate(term.startDate) || !parseDate(term.endDate)) return '请输入有效日期（格式：dd/mm/yyyy）。'; if (term.startDate < today()) return '取货日期不能早于今天。'; if (termDays(term) < minimumDays) return '租期不能少于 ' + minimumDays + ' 天。'; if (dateUnavailable(id, term.startDate) || periodUnavailable(id, term.startDate, term.endDate)) return '该设备在所选租期内不可用，请选择其他日期。'; return '';
+    if (!parseDate(term.startDate) || !parseDate(term.endDate)) return '请输入有效日期（格式：dd/mm/yyyy）。'; if (term.startDate < today()) return '取货日期不能早于今天。'; if (termDays(term) < minimumDays) return '租期不能少于 ' + minimumDays + ' 天。'; if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return '该设备在所选租期内不可用，请选择其他日期。'; return '';
   }
   function termEditor(id, term) {
     var wrap = document.createElement('div'); wrap.className = 'device-term-editor'; var head = document.createElement('div'); head.className = 'device-term-editor-head'; var title = document.createElement('strong'); title.textContent = '本设备租期'; head.appendChild(title); wrap.appendChild(head);
-    var fields = document.createElement('div'); fields.className = 'term-date-grid'; fields.append(dateField(id, 'start', term), dateField(id, 'end', term)); var periods = document.createElement('div'); periods.className = 'term-period-grid';
-    [['startPeriod', '取货时段'], ['endPeriod', '归还时段']].forEach(function (entry) { var field = document.createElement('label'); field.className = 'term-period-field'; field.textContent = entry[1]; var select = document.createElement('select'); select.innerHTML = '<option value="AM">上午</option><option value="PM">下午</option>'; select.value = term[entry[0]]; select.addEventListener('change', function () { var state = read(); state.terms[id][entry[0]] = select.value; persist(state.ids, state.terms); render(); }); field.appendChild(select); periods.appendChild(field); });
-    var status = document.createElement('p'); status.className = 'term-status'; var error = availabilityReady && !availabilityFailed ? termError(id, term) : ''; status.textContent = availabilityFailed ? '设备档期检查失败，请刷新后重试。' : (availabilityReady ? (error || '该设备档期可用。') : '正在检查该设备档期…'); if (error || availabilityFailed) status.dataset.state = 'error'; wrap.append(fields, periods, status); return wrap;
+    var fields = document.createElement('div'); fields.className = 'term-date-grid'; fields.append(dateField(id, 'start', term), dateField(id, 'end', term)); var status = document.createElement('p'); status.className = 'term-status'; var error = availabilityReady && !availabilityFailed ? termError(id, term) : ''; status.textContent = availabilityFailed ? '设备档期检查失败，请刷新后重试。' : (availabilityReady ? (error || '该设备档期可用。') : '正在检查该设备档期…'); if (error || availabilityFailed) status.dataset.state = 'error'; wrap.append(fields, status); return wrap;
   }
   function setEmptyState(isEmpty) {
     empty.hidden = !isEmpty;
@@ -343,7 +350,7 @@ export function renderApply(data: ApplyData): string {
               <label for="deliveryMethod">取还方式</label>
               <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
             </div>
-            <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
+    <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}<div class="row2 pickup-time-fields"><div class="field"><label for="pickupTimeSlot">取货时间段</label><select id="pickupTimeSlot" name="pickupTimeSlot"${hasPickupLocations ? ' required' : ' disabled'}><option value="morning_service">7:00–8:00（早间服务费 10%）</option><option value="morning">9:00–12:00（上午）</option><option value="afternoon">13:00–20:00（下午）</option><option value="evening_service">21:00–23:00（晚间服务费 10%）</option></select></div><div class="field"><label for="returnTimeSlot">归还时间段</label><select id="returnTimeSlot" name="returnTimeSlot"${hasPickupLocations ? ' required' : ' disabled'}><option value="morning_service">7:00–8:00（早间服务费 10%）</option><option value="morning">9:00–12:00（上午）</option><option value="afternoon">13:00–20:00（下午）</option><option value="evening_service">21:00–23:00（晚间服务费 10%）</option></select></div></div><p class="hint pickup-time-hint">自取时间段会按所选日期、当前时间和设备档期自动禁用。</p></div>
             <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
               <div class="field address-autocomplete">
                 <label for="delivery-address-search">搜索墨尔本地址</label>
@@ -473,6 +480,8 @@ export function renderApply(data: ApplyData): string {
   var method = document.getElementById('deliveryMethod');
   var pickupField = document.getElementById('pickup-field');
   var deliveryFields = document.getElementById('delivery-fields');
+  var pickupTimeSlot = document.getElementById('pickupTimeSlot');
+  var returnTimeSlot = document.getElementById('returnTimeSlot');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
   var couponState = 'empty';
@@ -620,6 +629,17 @@ export function renderApply(data: ApplyData): string {
     document.addEventListener('click', function (event) { if (!event.target.closest('.address-autocomplete')) closeAddressSuggestions(); });
   }
   var today = todayStr();
+  var pickupSlots = [
+    { value: 'morning_service', period: 'AM', endMinutes: 8 * 60 },
+    { value: 'morning', period: 'AM', endMinutes: 12 * 60 },
+    { value: 'afternoon', period: 'PM', endMinutes: 20 * 60 },
+    { value: 'evening_service', period: 'PM', endMinutes: 23 * 60 },
+  ];
+  function melbourneMinutes() {
+    var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0);
+  }
+  function slotPassed(date, slot) { return date === today && melbourneMinutes() >= slot.endMinutes; }
   function termFor(id) {
     var value = cartTerms[id] || cartState.legacy || {}; var start = value.startDate || today; if (start < today) start = today;
     return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: value.startPeriod === 'PM' ? 'PM' : 'AM', endPeriod: value.endPeriod === 'PM' ? 'PM' : 'AM' };
@@ -628,21 +648,40 @@ export function renderApply(data: ApplyData): string {
     var half = Math.round((Date.parse(term.endDate + 'T00:00:00Z') - Date.parse(term.startDate + 'T00:00:00Z')) / 86400000) * 2 + (term.endPeriod === 'PM' ? 1 : 0) - (term.startPeriod === 'PM' ? 1 : 0);
     return half > 0 ? Math.ceil(half / 2) : 0;
   }
+  function slotUnavailable(id, date, slot) {
+    var item = DEVICE_AVAILABILITY[id] || {};
+    return (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(slot.period) >= 0) || (UNAVAILABLE_TIME_SLOTS[date] || []).indexOf(slot.value) >= 0 || (item.unavailableTimeSlots && (item.unavailableTimeSlots[date] || []).indexOf(slot.value) >= 0);
+  }
+  function periodUnavailable(id, date, period) {
+    var item = DEVICE_AVAILABILITY[id] || {};
+    var occupied = item.unavailablePeriods ? (item.unavailablePeriods[date] || []) : [];
+    return occupied.indexOf(period) >= 0 || pickupSlots.filter(function (slot) { return slot.period === period; }).every(function (slot) { return slotUnavailable(id, date, slot); });
+  }
   function dateUnavailable(id, date) {
     if (!date || UNAVAILABLE_DATES.indexOf(date) >= 0) return Boolean(date);
     var item = DEVICE_AVAILABILITY[id] || {};
-    return (item.unavailableDates || []).indexOf(date) >= 0 || (item.rentalRanges || []).some(function (range) { return range.startDate <= date && date < range.endDate; });
+    return (item.unavailableDates || []).indexOf(date) >= 0 || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
   }
-  function periodUnavailable(date, period) {
-    var slots = UNAVAILABLE_TIME_SLOTS[date] || [];
-    return period === 'AM' ? slots.indexOf('morning_service') >= 0 || slots.indexOf('morning') >= 0 : slots.indexOf('afternoon') >= 0 || slots.indexOf('evening_service') >= 0;
+  function periodPassed(date, period) {
+    return date === today && melbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60);
+  }
+  function termUsesPeriod(term, date, period) {
+    var start = Date.parse(term.startDate + 'T00:00:00Z') / 86400000 * 2 + (term.startPeriod === 'PM' ? 1 : 0);
+    var end = Date.parse(term.endDate + 'T00:00:00Z') / 86400000 * 2 + (term.endPeriod === 'PM' ? 1 : 0);
+    var current = Date.parse(date + 'T00:00:00Z') / 86400000 * 2 + (period === 'PM' ? 1 : 0);
+    return start <= current && current < end;
+  }
+  function termRangeUnavailable(id, term) {
+    for (var day = term.startDate; day && day <= term.endDate; day = addDays(day, 1)) {
+      if (dateUnavailable(id, day)) return true;
+      for (var period of ['AM', 'PM']) if (termUsesPeriod(term, day, period) && (periodUnavailable(id, day, period) || periodPassed(day, period))) return true;
+    }
+    return false;
   }
   function termError(id, term) {
     if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return '请为每台设备填写有效租期。';
     if (term.startDate < today || termDays(term) < MIN_DAYS) return '每台设备的租期不能少于 ' + MIN_DAYS + ' 天。';
-    if (dateUnavailable(id, term.startDate) || periodUnavailable(term.startDate, term.startPeriod)) return '该设备取货日期或时段不可用。';
-    for (var day = term.startDate; day < term.endDate; day = addDays(day, 1)) if (dateUnavailable(id, day)) return '该设备在所选租期内不可用。';
-    if (periodUnavailable(term.endDate, term.endPeriod)) return '该设备归还时段不可用。';
+    if (termRangeUnavailable(id, term)) return '该设备在所选租期或时段不可用。';
     return '';
   }
   function validateTerms() {
@@ -650,6 +689,33 @@ export function renderApply(data: ApplyData): string {
     if (AVAILABILITY_FAILED) return '设备档期检查失败，请刷新页面后重试。';
     for (var index = 0; index < cartIds.length; index += 1) { var error = termError(cartIds[index], termFor(cartIds[index])); if (error) return error; }
     return '';
+  }
+  function updatePickupTimeOptions() {
+    if (!pickupTimeSlot || !returnTimeSlot) return;
+    [[pickupTimeSlot, 'startDate', 'startPeriod'], [returnTimeSlot, 'endDate', 'endPeriod']].forEach(function (entry) {
+      var select = entry[0];
+      Array.from(select.options).forEach(function (option) {
+        var slot = pickupSlots.find(function (item) { return item.value === option.value; });
+        var allowed = Boolean(slot) && cartIds.length > 0 && cartIds.every(function (id) {
+          var term = termFor(id); var date = term[entry[1]];
+          return slot && !slotUnavailable(id, date, slot) && !slotPassed(date, slot);
+        });
+        option.disabled = !allowed;
+      });
+      var desiredPeriod = cartIds.length ? termFor(cartIds[0])[entry[2]] : 'AM';
+      var selectedSlot = pickupSlots.find(function (slot) { return slot.value === select.value; });
+      if (select.selectedOptions[0]?.disabled || !selectedSlot || selectedSlot.period !== desiredPeriod) select.value = Array.from(select.options).find(function (option) { var slot = pickupSlots.find(function (item) { return item.value === option.value; }); return !option.disabled && slot && slot.period === desiredPeriod; })?.value || Array.from(select.options).find(function (option) { return !option.disabled; })?.value || '';
+    });
+  }
+  function syncPeriodsFromPickupSlots() {
+    if (!pickupTimeSlot || !returnTimeSlot || method.value !== 'Pickup') return;
+    var pickup = pickupSlots.find(function (slot) { return slot.value === pickupTimeSlot.value; });
+    var returned = pickupSlots.find(function (slot) { return slot.value === returnTimeSlot.value; });
+    if (!pickup || !returned) return;
+    cartIds.forEach(function (id) {
+      var term = termFor(id); term.startPeriod = pickup.period; term.endPeriod = returned.period; cartTerms[id] = term;
+    });
+    try { localStorage.setItem(CART_KEY, JSON.stringify({ items: cartIds, terms: cartTerms })); } catch (_) {}
   }
   function refreshSummary() {
     var count = cartIds.length;
@@ -691,6 +757,7 @@ export function renderApply(data: ApplyData): string {
     });
     submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
     deviceTermsInput.value = JSON.stringify(Object.fromEntries(cartIds.map(function (id) { return [id, termFor(id)]; })));
+    updatePickupTimeOptions();
     refreshSummary();
   }
   function rentalFee(product, days) {
@@ -882,9 +949,14 @@ export function renderApply(data: ApplyData): string {
     var pickupLocation = document.getElementById('pickupLocation');
     pickupLocation.disabled = delivery || ${hasPickupLocations ? 'false' : 'true'};
     pickupLocation.required = !delivery && ${hasPickupLocations ? 'true' : 'false'};
+    if (pickupTimeSlot && returnTimeSlot) { pickupTimeSlot.disabled = delivery; returnTimeSlot.disabled = delivery; pickupTimeSlot.required = !delivery && ${hasPickupLocations ? 'true' : 'false'}; returnTimeSlot.required = !delivery && ${hasPickupLocations ? 'true' : 'false'}; }
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) { document.getElementById(id).required = delivery; });
+    updatePickupTimeOptions();
     validateDeliveryAddress(false);
   });
+  if (pickupTimeSlot) pickupTimeSlot.addEventListener('change', function () { syncPeriodsFromPickupSlots(); markCouponDirty(); renderCart(); });
+  if (returnTimeSlot) returnTimeSlot.addEventListener('change', function () { syncPeriodsFromPickupSlots(); markCouponDirty(); renderCart(); });
+  window.setInterval(updatePickupTimeOptions, 30000);
   function validateDeliveryAddress(showError) {
     var suburb = document.getElementById('deliverySuburb');
     if (method.value !== 'Delivery') { suburb.setCustomValidity(''); return true; }

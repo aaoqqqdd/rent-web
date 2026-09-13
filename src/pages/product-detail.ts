@@ -126,6 +126,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var button = document.getElementById('detail-add-cart');
   var minimumDays = ${config.minimumRentalDays};
   var globalUnavailableDates = ${scriptJson(config.unavailableDates)};
+  var globalUnavailableTimeSlots = ${scriptJson(config.unavailableTimeSlots)};
   var availability = {};
   var availabilityReady = false;
   var openPickerState = null;
@@ -164,19 +165,35 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var isUnavailable = function (value) {
     if (!value || globalUnavailableDates.indexOf(value) >= 0) return Boolean(value);
     var item = availability[${JSON.stringify(product.id)}] || {};
-    return (item.unavailableDates || []).indexOf(value) >= 0
-      || (item.rentalRanges || []).some(function (range) { return range.startDate <= value && value < range.endDate; });
+    var globalSlots = globalUnavailableTimeSlots[value] || [];
+    var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[value] || []) : [];
+    return (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || (value === dateString(today) && currentMelbourneMinutes() >= 23 * 60);
   };
   var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
+  var periodUnavailable = function (date, period) {
+    var item = availability[${JSON.stringify(product.id)}] || {};
+    var slots = globalUnavailableTimeSlots[date] || [];
+    var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
+    var occupied = item.unavailablePeriods ? (item.unavailablePeriods[date] || []) : [];
+    var group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service'];
+    return occupied.indexOf(period) >= 0 || group.every(function (slot) { return slots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
+  };
+  var currentMelbourneMinutes = function () { var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()); var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0); };
+  var periodPassed = function (date, period) { return date === dateString(today) && currentMelbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60); };
+  var updatePeriodOptions = function () {
+    [['AM', start, startPeriod], ['PM', start, startPeriod], ['AM', end, endPeriod], ['PM', end, endPeriod]].forEach(function (entry) {
+      var date = readDateValue(entry[1]); var option = Array.from(entry[2].options).find(function (item) { return item.value === entry[0]; });
+      if (!option) return;
+      option.disabled = !date || periodPassed(date, entry[0]) || periodUnavailable(date, entry[0]);
+    });
+    if (startPeriod.selectedOptions[0]?.disabled) startPeriod.value = Array.from(startPeriod.options).find(function (option) { return !option.disabled; })?.value || '';
+    if (endPeriod.selectedOptions[0]?.disabled) endPeriod.value = Array.from(endPeriod.options).find(function (option) { return !option.disabled; })?.value || '';
+  };
   var pickerDateDisabled = function (role, value) {
     if (!availabilityReady || value < start.min || isUnavailable(value)) return true;
     if (role !== 'end') return false;
     var startValue = readDateValue(start);
-    return !startValue || value < end.min || periodUnavailable(startValue, value);
-  };
-  var periodUnavailable = function (from, to) {
-    for (var value = from; value && value < to; value = addDays(value, 1)) if (isUnavailable(value)) return true;
-    return false;
+    return !startValue || value < end.min || (periodUnavailable(startValue, 'AM') && periodUnavailable(startValue, 'PM')) || periodUnavailable(value, 'AM') && periodUnavailable(value, 'PM');
   };
   var renderPicker = function (picker, input, toggle, role, month) {
     var year = month.getFullYear();
@@ -239,6 +256,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       startValue = nextAvailable(startValue);
       setDateValue(start, startValue);
     }
+    updatePeriodOptions();
     start.setCustomValidity(startValue < start.min ? pastDateMessage : isUnavailable(startValue) ? unavailableDateMessage : '');
     end.min = nextAvailable(addDays(startValue, minimumDays));
     end.dataset.minIso = end.min;
@@ -248,6 +266,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       setDateValue(end, endValue);
     }
     end.setCustomValidity(!endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : isUnavailable(endValue) ? unavailableDateMessage : '');
+    updatePeriodOptions();
   };
   start.min = dateString(today); setDateValue(start, start.min);
   end.min = addDays(start.min, minimumDays); setDateValue(end, end.min);
@@ -260,6 +279,9 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   end.addEventListener('input', function () { end.value = maskDate(end.value); applyDateRules(false); });
   start.addEventListener('change', function () { applyDateRules(false); });
   end.addEventListener('change', function () { applyDateRules(false); });
+  startPeriod.addEventListener('change', function () { applyDateRules(false); });
+  endPeriod.addEventListener('change', function () { applyDateRules(false); });
+  window.setInterval(updatePeriodOptions, 30000);
   startToggle.addEventListener('click', function () { openPicker(startPicker, start, startToggle, 'start'); });
   endToggle.addEventListener('click', function () { openPicker(endPicker, end, endToggle, 'end'); });
   start.addEventListener('focus', function () { openPicker(startPicker, start, startToggle, 'start'); });
@@ -276,7 +298,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     applyDateRules(false);
     var startValue = readDateValue(start);
     var endValue = readDateValue(end);
-    if (!startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
+    if (!startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity() || startPeriod.selectedOptions[0]?.disabled || endPeriod.selectedOptions[0]?.disabled) return;
     window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: startValue, endDate: endValue, startPeriod: startPeriod.value, endPeriod: endPeriod.value });
     location.href = ${JSON.stringify(applyHref)};
   });
