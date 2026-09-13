@@ -700,7 +700,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .form-card { border-radius: 14px; padding: 30px; }.form-card-head { display: flex; gap: 13px; align-items: center; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }.form-card-head > span { color: var(--primary); font-family: var(--mono); font-size: 10px; }.form-card-head h3 { font-size: 17px; }.form-card-head p { margin-top: 3px; color: var(--muted-fg); font-size: 11px; }
 .cart-term-card { margin-bottom: 18px; border-color: rgba(124,108,255,.28); background: rgba(124,108,255,.06); }
 .field input, .field select, .field textarea { min-height: 44px; border-radius: 8px; background: #0b0e15; }.field textarea { min-height: 100px; }.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,.13); }
-.form-summary { border-color: rgba(124,108,255,.22); background: rgba(124,108,255,.06); }
+.form-summary { border-color: rgba(124,108,255,.22); background: rgba(124,108,255,.06); overflow-wrap: anywhere; line-height: 1.6; }
 .coupon-hint { margin: -6px 0 0; color: var(--muted-fg); font-size: 12px; }
 .apply-expectations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 24px; border: 1px solid var(--border); background: var(--border); }
 .apply-expectations > div { min-height: 156px; padding: 20px; background: var(--card); }
@@ -711,8 +711,9 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .stripe-wallet-box, .stripe-setup-box { padding: 0; }
 .stripe-wallet-box + .stripe-setup-box { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
 .stripe-setup-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.stripe-setup-head > div { min-width: 0; }
 .stripe-setup-head label { display: block; font-size: 13px; font-weight: 600; }
-.stripe-setup-head p { margin-top: 5px; color: var(--muted-fg); font-size: 12px; }
+.stripe-setup-head p { margin-top: 5px; color: var(--muted-fg); font-size: 12px; line-height: 1.55; }
 .stripe-setup-head > span { color: var(--secondary); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; white-space: nowrap; }
 .stripe-card-element { min-height: 48px; margin-top: 15px; padding: 14px 13px; border: 1px solid var(--border-bright); border-radius: 8px; background: #0b0e15; transition: border-color .15s, box-shadow .15s; }
 .stripe-card-element:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,.12); }
