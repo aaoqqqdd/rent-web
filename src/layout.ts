@@ -108,7 +108,7 @@ ${renderSiteFooter(opts.contact)}
   function formatSentenceBreaks(value, node) {
     var text = String(value || '');
     if (/[；;]/.test(text) && node && node.parentElement) node.parentElement.classList.add('has-sentence-break');
-    return text.replace(/[；;]/g, '\n');
+    return text.replace(/[；;]/g, '\\n');
   }
   function englishFor(value) {
     var lookup = String(value || '').replace(/\\s+/g, ' ').trim();
