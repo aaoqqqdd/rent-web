@@ -365,8 +365,8 @@ export function renderApply(data: ApplyData): string {
           <div class="form-card">
             <div class="form-card-head"><span>03</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
             <div class="row2">
-              <div class="field"><label for="contactFirstName">名 / Given name</label><input id="contactFirstName" name="firstName" maxlength="100" autocomplete="given-name" required></div>
-              <div class="field"><label for="contactLastName">姓 / Family name</label><input id="contactLastName" name="lastName" maxlength="100" autocomplete="family-name" required></div>
+              <div class="field"><label for="contactFirstName">名</label><input id="contactFirstName" name="firstName" maxlength="100" autocomplete="given-name" required></div>
+              <div class="field"><label for="contactLastName">姓</label><input id="contactLastName" name="lastName" maxlength="100" autocomplete="family-name" required></div>
             </div>
             <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
             <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
