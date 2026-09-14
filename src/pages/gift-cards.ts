@@ -1,11 +1,15 @@
 import { esc } from '../layout'
 
 export interface GiftCardsData {
-  giftCardUrl: string
+  order: string
+  checkBalance: string
+  reload: string
 }
 
 export function renderGiftCards(data: GiftCardsData): string {
-  const giftCardUrl = esc(data.giftCardUrl)
+  const orderUrl = esc(data.order)
+  const checkBalanceUrl = esc(data.checkBalance)
+  const reloadUrl = esc(data.reload)
   return /* html */ `
 <section class="page-hero compact gift-card-hero">
   <div class="wrap">
@@ -13,7 +17,7 @@ export function renderGiftCards(data: GiftCardsData): string {
     <h1>把下一次升级，<em>送给值得的人。</em></h1>
     <p data-i18n="giftCardIntro">购买一张 GeekSlope Square eGift Card，用于设备租赁；也可以随时查询余额或给现有礼品卡加值。</p>
     <div class="hero-actions">
-      <a class="btn btn-primary btn-lg" href="${giftCardUrl}" target="_blank" rel="noopener" data-i18n="giftCardOpen">打开礼品卡页面 <span>↗</span></a>
+      <a class="btn btn-primary btn-lg" href="${orderUrl}" target="_blank" rel="noopener" data-i18n="giftCardOpen">打开礼品卡页面 <span>↗</span></a>
       <a class="btn btn-ghost btn-lg" href="/products" data-i18n="giftCardRent">查看租赁设备</a>
     </div>
   </div>
@@ -26,19 +30,19 @@ export function renderGiftCards(data: GiftCardsData): string {
       <p data-i18n="giftCardDescription">Square 托管支付、收件人与礼品卡交付。点击任一入口后，会在 Square 页面完成对应操作。</p>
     </div>
     <div class="gift-card-grid">
-      <a class="gift-card-action" href="${giftCardUrl}" target="_blank" rel="noopener">
+      <a class="gift-card-action" href="${orderUrl}" target="_blank" rel="noopener">
         <span class="gift-card-action-index">01 / BUY</span>
         <h3 data-i18n="giftCardBuy">购买礼品卡</h3>
         <p data-i18n="giftCardBuyText">选择金额、填写收件人和祝福语，付款后由 Square 发送数字礼品卡。</p>
         <b>购买 eGift Card <span>↗</span></b>
       </a>
-      <a class="gift-card-action" href="${giftCardUrl}" target="_blank" rel="noopener">
+      <a class="gift-card-action" href="${checkBalanceUrl}" target="_blank" rel="noopener">
         <span class="gift-card-action-index">02 / CHECK</span>
         <h3 data-i18n="giftCardCheck">查询余额</h3>
         <p data-i18n="giftCardCheckText">打开礼品卡页面，输入 16 位卡号和 PIN（如有）查看实时余额。</p>
         <b>查看卡片余额 <span>↗</span></b>
       </a>
-      <a class="gift-card-action gift-card-action-accent" href="${giftCardUrl}" target="_blank" rel="noopener">
+      <a class="gift-card-action gift-card-action-accent" href="${reloadUrl}" target="_blank" rel="noopener">
         <span class="gift-card-action-index">03 / LOAD</span>
         <h3 data-i18n="giftCardAdd">Add money</h3>
         <p data-i18n="giftCardAddText">已有礼品卡？在 Square 页面选择 Reload card，为卡片增加新的金额。</p>
