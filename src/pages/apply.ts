@@ -386,7 +386,7 @@ export function renderApply(data: ApplyData): string {
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
           <div class="form-card square-gift-card-setup" id="square-gift-card-setup">
-            <div class="stripe-setup-head"><div><label>礼品卡</label></div><span>SECURE</span></div>
+            <div class="stripe-setup-head"><div><label>礼品卡</label></div></div>
             <div id="square-gift-card-element"></div>
             <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
           </div>

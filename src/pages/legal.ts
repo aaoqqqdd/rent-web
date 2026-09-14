@@ -15,6 +15,8 @@ interface LegalPageData {
 
 function renderVariables(data: LegalPageData): Record<string, unknown> {
   const { companyDetails, bankDetails, metadata } = data.document
+  const version = metadata.version || '1.0'
+  const lastUpdatedDate = metadata.lastUpdatedDate || '—'
   return {
     company_name: companyDetails.name || data.contact.name,
     company_abn: companyDetails.abn || '',
@@ -23,10 +25,16 @@ function renderVariables(data: LegalPageData): Record<string, unknown> {
     company_email: companyDetails.email || data.contact.email,
     company_website: companyDetails.website || '',
     company_logo: companyDetails.logo || '',
-    [`${data.variablePrefix}_version`]: metadata.version,
-    [`${data.variablePrefix}_last_updated_date`]: metadata.lastUpdatedDate,
+    [`${data.variablePrefix}_version`]: version,
+    [`${data.variablePrefix}_last_updated_date`]: lastUpdatedDate,
+    ...(data.variablePrefix === 'user_agreement'
+      ? {
+          user_terms_version: version,
+          user_terms_last_updated_date: lastUpdatedDate,
+        }
+      : {}),
     ...(data.variablePrefix === 'refund_policy'
-      ? { last_updated_date: metadata.lastUpdatedDate }
+      ? { last_updated_date: lastUpdatedDate }
       : {}),
     ...(data.rentalTemplate
       ? {
@@ -71,7 +79,9 @@ function sanitizeDocument(html: string): string {
 export function renderLegalDocument(data: LegalPageData): string {
   let content = data.document.content
   for (const [key, value] of Object.entries(renderVariables(data))) {
-    content = content.replace(new RegExp(`\\$\\{${key}\\}|\\{${key}\\}`, 'g'), esc(value))
+    // 同时兼容编辑器中把下划线写成 `\_` 的 Markdown 转义形式。
+    const placeholderKey = key.replace(/_/g, '\\\\?_')
+    content = content.replace(new RegExp(`\\$\\{${placeholderKey}\\}|\\{${placeholderKey}\\}`, 'g'), esc(value))
   }
   if (data.rentalTemplate) {
     content = content.replace(/\$?\{[a-z0-9_]+\}/gi, '<span class="doc-blank">——</span>')

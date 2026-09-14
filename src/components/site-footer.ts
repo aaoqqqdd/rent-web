@@ -3,8 +3,8 @@ import type { SiteContact } from '../db'
 import { renderBrand } from './brand'
 
 export function renderSiteFooter(contact: SiteContact): string {
-    const year = new Date().getFullYear()
-    return /* html */ `
+  const year = new Date().getFullYear()
+  return /* html */ `
 <footer class="site-footer">
   <div class="wrap">
     <div class="foot-grid">
@@ -25,7 +25,6 @@ export function renderSiteFooter(contact: SiteContact): string {
       <div class="foot-col">
         <h4 data-i18n="footerServices">服务</h4>
         <a href="/rental-guide" data-i18n="rentalGuide">租赁说明</a>
-        <a href="/gift-cards" data-i18n="giftCards">礼品卡</a>
         <a href="/rental-guide#faq" data-i18n="faq">常见问题</a>
         <a href="/about" data-i18n="navAbout">关于我们</a>
         <a href="/about#contact" data-i18n="contactUs">联系我们</a>
