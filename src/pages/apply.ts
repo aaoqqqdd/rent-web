@@ -390,6 +390,11 @@ export function renderApply(data: ApplyData): string {
 
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
+          ${squareGiftCardEnabled ? `<div class="form-card square-gift-card-setup" id="square-gift-card-setup">
+              <div class="stripe-setup-head"><div><label>Square 礼品卡</label></div><span>SECURE / SQUARE</span></div>
+              <div id="square-gift-card-element"></div>
+              <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
+            </div>` : ''}
           <div class="form-card">
             <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>租金可用礼品卡，押金使用信用卡预授权</p></div></div>
             <div class="payment-method-options" id="payment-method-options">
@@ -429,11 +434,6 @@ export function renderApply(data: ApplyData): string {
               <small>默认方式，提交后不可修改。</small>
             </div>
           </div>
-          ${squareGiftCardEnabled ? `<div class="form-card square-gift-card-setup" id="square-gift-card-setup">
-              <div class="stripe-setup-head"><div><label>Square 礼品卡</label></div><span>SECURE / SQUARE</span></div>
-              <div id="square-gift-card-element"></div>
-              <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
-            </div>` : ''}
       </div>
 
       <div class="field legal-agreement">
@@ -887,20 +887,20 @@ export function renderApply(data: ApplyData): string {
       var payments = window.Square.payments(squareGiftCardConfig.applicationId, squareGiftCardConfig.locationId);
       return payments.giftCard().then(function (instance) {
         squareGiftCard = instance;
-        return squareGiftCard.configure({
-          style: {
-            '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
-            '.input-container.is-focus': { borderColor: '#7c6cff' },
-            '.input-container.is-error': { borderColor: '#ff7185' },
-            '.message-text': { color: '#9ca3b7', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', fontSize: '12px' },
-            '.message-icon': { color: '#737b91' },
-            '.message-text.is-error': { color: '#ff7185' },
-            '.message-icon.is-error': { color: '#ff7185' },
-            input: { color: '#171a24', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
-            'input::placeholder': { color: '#737b91' },
-          },
-        }).then(function () {
-          return squareGiftCard.attach('#square-gift-card-element');
+        return squareGiftCard.attach('#square-gift-card-element').then(function () {
+          return squareGiftCard.configure({
+            style: {
+              '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
+              '.input-container.is-focus': { borderColor: '#7c6cff' },
+              '.input-container.is-error': { borderColor: '#ff7185' },
+              '.message-text': { color: '#9ca3b7', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', fontSize: '12px' },
+              '.message-icon': { color: '#737b91' },
+              '.message-text.is-error': { color: '#ff7185' },
+              '.message-icon.is-error': { color: '#ff7185' },
+              input: { color: '#171a24', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+              'input::placeholder': { color: '#737b91' },
+            },
+          });
         });
       });
     }).catch(function (error) {
