@@ -87,13 +87,16 @@ function siteUrl(requestUrl: string): string {
   return new URL(requestUrl).origin
 }
 
-const DEFAULT_SQUARE_GIFT_CARD_URL = 'https://app.squareup.com/gift/MLP6ZYA585ZQT/order'
+const DEFAULT_SQUARE_GIFT_CARD_ID = 'MLP6ZYA585ZQT'
+const DEFAULT_SQUARE_GIFT_CARD_URL = `https://app.squareup.com/gift/${DEFAULT_SQUARE_GIFT_CARD_ID}/order`
+const SQUARE_GIFT_CARD_ORDER_URL_PATTERN = /^https:\/\/app\.squareup\.com\/gift\/([A-Za-z0-9]+)\/order(?:[/?#].*)?$/i
 
-function squareGiftCardUrl(env: Env): string {
+/** Square 的礼品卡托管页面按用途分三个子路径（购买/查询/加值，同一张卡的 ID），而不是同一个链接。 */
+function squareGiftCardUrls(env: Env): { order: string; checkBalance: string; reload: string } {
   const configured = String(env.SQUARE_GIFT_CARD_URL || '').trim()
-  return /^https:\/\/app\.squareup\.com\/gift\/[A-Za-z0-9]+\/order(?:[/?#].*)?$/i.test(configured)
-    ? configured
-    : DEFAULT_SQUARE_GIFT_CARD_URL
+  const giftCardId = SQUARE_GIFT_CARD_ORDER_URL_PATTERN.exec(configured)?.[1] || DEFAULT_SQUARE_GIFT_CARD_ID
+  const base = `https://app.squareup.com/gift/${giftCardId}`
+  return { order: `${base}/order`, checkBalance: `${base}/check-balance`, reload: `${base}/reload` }
 }
 
 function xmlEsc(value: string): string {
@@ -435,7 +438,7 @@ app.get('/gift-cards', (c) =>
     return renderPage({
       title: `礼品卡 — ${contact.name}`,
       description: '购买 GeekSlope Square 数字礼品卡、查询礼品卡余额，或给现有礼品卡加值。',
-      body: renderGiftCards({ giftCardUrl: squareGiftCardUrl(c.env) }),
+      body: renderGiftCards(squareGiftCardUrls(c.env)),
       contact,
       appUrl: appUrl(c.env),
       path: '/gift-cards',
