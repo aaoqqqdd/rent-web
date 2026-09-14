@@ -26,7 +26,9 @@
 		"MONTHLY_MULTIPLIER": "20",
 		// Cloudflare Turnstile 站点公钥（与 rent 主应用同一个 Turnstile 组件）。
 		// 留空则「立即租赁」表单不显示人机验证；rent 侧未配置 TURNSTILE_SECRET_KEY 时也会放行。
-		"TURNSTILE_SITE_KEY": ""
+		"TURNSTILE_SITE_KEY": "",
+		// Square Dashboard 中发布的 eGift Card order site；官网入口会复用该页面的购买、查余额和 Reload card 功能。
+		"SQUARE_GIFT_CARD_URL": "https://app.squareup.com/gift/MLP6ZYA585ZQT/order",
 		// Stripe 可直接使用环境变量；若留空，官网会读取 rent 中加密保存的 Stripe 配置。
 	}
 	// 可选覆盖项（用 `wrangler secret put` 或在此加 vars）：

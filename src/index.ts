@@ -26,6 +26,7 @@ import { renderLogin } from './pages/login'
 import { renderAbout, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
+import { renderGiftCards } from './pages/gift-cards'
 import { createRentalSetupIntent, getPublicPaymentMethods, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
 import { getPublicSquareGiftCardConfig } from './squareGiftCard'
 import { autocompleteMelbourneAddresses } from './address'
@@ -57,6 +58,7 @@ export interface Env {
   // Turnstile 服务端密钥（`wrangler secret put TURNSTILE_SECRET_KEY`）。
   // 未配置时 /register 跳过人机校验（与 rent 公开接口行为一致）。
   TURNSTILE_SECRET_KEY?: string
+  SQUARE_GIFT_CARD_URL?: string
 }
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
@@ -83,6 +85,15 @@ function appUrl(env: Env): string {
 
 function siteUrl(requestUrl: string): string {
   return new URL(requestUrl).origin
+}
+
+const DEFAULT_SQUARE_GIFT_CARD_URL = 'https://app.squareup.com/gift/MLP6ZYA585ZQT/order'
+
+function squareGiftCardUrl(env: Env): string {
+  const configured = String(env.SQUARE_GIFT_CARD_URL || '').trim()
+  return /^https:\/\/app\.squareup\.com\/gift\/[A-Za-z0-9]+\/order(?:[/?#].*)?$/i.test(configured)
+    ? configured
+    : DEFAULT_SQUARE_GIFT_CARD_URL
 }
 
 function xmlEsc(value: string): string {
@@ -222,7 +233,7 @@ app.get('/robots.txt', (c) =>
 app.get('/sitemap.xml', async (c) => {
   const base = siteUrl(c.req.url)
   const products = await listProducts(c.env)
-  const paths = ['/', '/products', '/rental-guide', '/about', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
+  const paths = ['/', '/products', '/gift-cards', '/rental-guide', '/about', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
   const productPaths = products.filter((product) => product.id).map((product) => `/products/${encodeURIComponent(product.id)}`)
   const urls = [...paths, ...productPaths].map((path) => `<url><loc>${xmlEsc(base + path)}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
@@ -413,6 +424,22 @@ app.get('/products/:id', (c) =>
           ],
         },
       ],
+      user,
+    })
+  }),
+)
+
+app.get('/gift-cards', (c) =>
+  cachedHtml(c, HTML_TTL, async (user) => {
+    const contact = await getSiteContact(c.env)
+    return renderPage({
+      title: `礼品卡 — ${contact.name}`,
+      description: '购买 GeekSlope Square 数字礼品卡、查询礼品卡余额，或给现有礼品卡加值。',
+      body: renderGiftCards({ giftCardUrl: squareGiftCardUrl(c.env) }),
+      contact,
+      appUrl: appUrl(c.env),
+      path: '/gift-cards',
+      siteUrl: siteUrl(c.req.url),
       user,
     })
   }),
