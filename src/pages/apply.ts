@@ -540,6 +540,7 @@ export function renderApply(data: ApplyData): string {
   var addressTimer = null;
   var addressRequest = null;
   var activeAddressSuggestion = -1;
+  var activeInlineErrors = [];
 
   function isEnglish() {
     return (window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en') || document.documentElement.lang === 'en-AU';
@@ -584,14 +585,39 @@ export function renderApply(data: ApplyData): string {
     var areas = ['melbourne', 'docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne'].concat(DELIVERY_AREAS || []);
     return areas.map(normalizeAddress).filter(Boolean).some(function (area) { return text.indexOf(area.replace('melbourne cbd', 'melbourne')) >= 0; });
   }
-  function showFormError(message) {
+  function removeInlineError(target) {
+    var host = target ? errorHost(target) : null;
+    activeInlineErrors = activeInlineErrors.filter(function (item) {
+      if (!host || item.host === host) { item.error.remove(); return false; }
+      return true;
+    });
+  }
+  function errorHost(target) {
+    if (!target) return submitBtn.parentElement;
+    if (target.id === 'deviceTerms') return itemsBox.closest('.field') || itemsBox.parentElement;
+    if (target.tagName === 'BUTTON') return target.parentElement || target;
+    if (target.tagName === 'P') return target.parentElement || target;
+    if (target.matches && target.matches('input, select, textarea')) return target.closest('.field, .legal-agreement') || target.parentElement;
+    return target;
+  }
+  function showFormError(message, target) {
     checkoutBlocked = true;
-    errBox.textContent = uiCopy(message);
-    errBox.hidden = false;
+    errBox.hidden = true;
+    var host = errorHost(target);
+    var error = document.createElement('p');
+    error.className = 'inline-form-error';
+    error.setAttribute('role', 'alert');
+    error.textContent = uiCopy(message);
+    removeInlineError(host);
+    if (target && target.tagName === 'BUTTON' && host && host.parentNode) host.insertBefore(error, target);
+    else if (host && host.parentNode) host.appendChild(error);
+    else if (submitBtn.parentNode) submitBtn.parentNode.insertBefore(error, submitBtn);
+    activeInlineErrors.push({ host: host, error: error });
   }
   function clearCheckoutError() {
     checkoutBlocked = false;
-    if (!form.querySelector(':invalid')) errBox.hidden = true;
+    removeInlineError();
+    errBox.hidden = true;
   }
   function markCouponDirty() {
     var code = document.getElementById('couponCode').value.trim();
@@ -643,7 +669,7 @@ export function renderApply(data: ApplyData): string {
             renderAddressSuggestions(result.json.suggestions || []);
             setAddressStatus(result.json.suggestions && result.json.suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', result.json.suggestions && result.json.suggestions.length ? 'ready' : 'empty');
           })
-          .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(''); showFormError(error.message || '地址联想暂时不可用，请手工填写。'); } });
+          .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(''); showFormError(error.message || '地址联想暂时不可用，请手工填写。', addressSearch); } });
       }, 300);
     });
     addressSearch.addEventListener('keydown', function (event) {
@@ -849,14 +875,14 @@ export function renderApply(data: ApplyData): string {
         return squareGiftCard.attach('#square-gift-card-element').then(function () {
           return squareGiftCard.configure({
             style: {
-              '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
+              '.input-container': { backgroundColor: '#0b0e15', borderColor: '#353b4d', borderRadius: '8px' },
               '.input-container.is-focus': { borderColor: '#7c6cff' },
               '.input-container.is-error': { borderColor: '#ff7185' },
               '.message-text': { color: '#9ca3b7' },
               '.message-icon': { color: '#737b91' },
               '.message-text.is-error': { color: '#ff7185' },
               '.message-icon.is-error': { color: '#ff7185' },
-              input: { color: '#171a24' },
+              input: { backgroundColor: '#0b0e15', color: '#f3f4f8' },
               'input::placeholder': { color: '#737b91' },
             },
           });
@@ -972,7 +998,7 @@ export function renderApply(data: ApplyData): string {
           })
           .catch(function (error) {
             var message = paymentError(error, uiCopy('Apple Pay 验证失败，请重试。'));
-            walletMessage.textContent = ''; showFormError(message);
+            walletMessage.textContent = ''; showFormError(message, walletBox);
           });
       });
       stripeElements = stripe.elements({ appearance: appearance });
@@ -1004,13 +1030,13 @@ export function renderApply(data: ApplyData): string {
           })
           .catch(function (error) {
             var message = paymentError(error, uiCopy('卡片验证失败，请重试。'));
-            cardConfirm.disabled = false; cardConfirm.textContent = uiText('验证信用卡', 'Verify card'); setCardMessage(''); showFormError(message);
+            cardConfirm.disabled = false; cardConfirm.textContent = uiText('验证信用卡', 'Verify card'); setCardMessage(''); showFormError(message, stripeSetupBox);
           });
       });
     })
     .catch(function (error) {
       var message = paymentError(error, uiCopy('安全付款组件暂不可用，请联系客服。'));
-      setCardMessage(''); showFormError(message);
+      setCardMessage(''); showFormError(message, stripeSetupBox);
     });
   ['change', 'input'].forEach(function (eventName) { [deviceTermsInput].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });
   method.addEventListener('change', function () {
@@ -1030,7 +1056,7 @@ export function renderApply(data: ApplyData): string {
     var message = street && suburbValue && postcode && !isMelbourneDeliveryAddress()
       ? uiText('送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。', 'Delivery is limited to Melbourne and the configured service areas. Choose store pickup for other cities or suburbs.') : '';
     suburb.setCustomValidity(message);
-    if (message && showError) showFormError(message);
+    if (message && showError) showFormError(message, suburb);
     return !message;
   }
   function validateContactFields(showError) { return true; }
@@ -1057,7 +1083,7 @@ export function renderApply(data: ApplyData): string {
         clearCheckoutError();
         refreshSummary();
       })
-      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || uiCopy('优惠码校验失败，请稍后重试。')); });
+      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || uiCopy('优惠码校验失败，请稍后重试。'), hint); });
   });
   document.getElementById('couponCode').addEventListener('input', markCouponDirty);
   window.addEventListener('geekslope:language-change', function () {
@@ -1113,31 +1139,33 @@ export function renderApply(data: ApplyData): string {
       var message = field.id === 'agree' ? uiCopy('请先勾选同意服务条款与隐私政策。')
         : field.id === 'deliveryPostcode' && field.validity.patternMismatch ? uiCopy('请输入 4 位澳洲邮编。')
         : field.validationMessage;
-      showFormError(message);
+      showFormError(message, field);
     }
   }, true);
   form.addEventListener('input', function (event) {
     var field = event.target;
-    if (field && field.checkValidity() && !form.querySelector(':invalid')) { checkoutBlocked = false; errBox.hidden = true; }
+    if (field && field.checkValidity()) {
+      removeInlineError(field);
+      if (!form.querySelector(':invalid')) clearCheckoutError();
+    }
   });
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
-    if (checkoutBlocked) { errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-    errBox.hidden = true;
+    if (checkoutBlocked) { if (activeInlineErrors[0]) activeInlineErrors[0].error.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    removeInlineError(); errBox.hidden = true;
     if (!cartIds.length) { renderCart(); return; }
     if (!validateDeliveryAddress(true) || !validateContactFields(true) || !form.reportValidity()) return;
     var enteredCoupon = document.getElementById('couponCode').value.trim();
     if (enteredCoupon && couponState !== 'valid') {
-      showFormError(uiCopy('请先点击“使用优惠码”完成校验，确认优惠码有效后再提交。'));
-      errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showFormError(uiCopy('请先点击“使用优惠码”完成校验，确认优惠码有效后再提交。'), document.getElementById('couponCode'));
       return;
     }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     if (selectedPaymentMethod === 'card' && (!cardReady || !setupIntentInput.value)) {
-      showFormError(uiCopy('请先填写并验证信用卡信息。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      showFormError(uiCopy('请先填写并验证信用卡信息。'), stripeSetupBox); return;
     }
     var termValidationError = validateTerms();
-    if (termValidationError) { showFormError(termValidationError); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    if (termValidationError) { showFormError(termValidationError, document.getElementById('agree')); return; }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
     if (saveContactInfo.checked) {
@@ -1161,7 +1189,7 @@ export function renderApply(data: ApplyData): string {
         throw new Error(uiCopy((result.json && result.json.message) || '提交失败，请稍后重试。'));
       })
       .catch(function (error) {
-        showFormError(error.message || uiCopy('提交失败，请稍后重试。')); submitBtn.disabled = false; submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showFormError(error.message || uiCopy('提交失败，请稍后重试。'), submitBtn); submitBtn.disabled = false; submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application');
       });
   });
 })();
