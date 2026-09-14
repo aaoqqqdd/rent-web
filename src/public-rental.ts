@@ -3,6 +3,7 @@ import { getRentalConfig } from './db'
 import { combinePersonName, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import { isMelbourneAddress } from './address'
 import type { Env } from './index'
+import { linkSquareGiftCardToCustomer } from './squareGiftCard'
 
 type RentalContext = Context<{ Bindings: Env }>
 
@@ -25,8 +26,8 @@ function depositAuthorizationWindowDays(cardBrand: unknown): 7 | 30 {
   return brand === 'visa' || brand === 'mastercard' ? 30 : 7
 }
 
-function depositPaymentModeForRental(rentalPeriod: number, cardPayment: boolean, cardBrand: unknown): 'PAID' | 'PREAUTH' | 'SETUP_INTENT' {
-  if (!cardPayment) return 'PAID'
+function depositPaymentModeForRental(rentalPeriod: number, depositCardProvided: boolean, cardBrand: unknown): 'PAID' | 'PREAUTH' | 'SETUP_INTENT' {
+  if (!depositCardProvided) return 'PAID'
   return rentalPeriod >= LONG_TERM_RENTAL_DAYS || rentalPeriod > depositAuthorizationWindowDays(cardBrand) ? 'SETUP_INTENT' : 'PREAUTH'
 }
 
@@ -217,13 +218,13 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
     intent = await stripeRequest(c, `payment_intents/${created.id}/confirm`, params, `web-deposit-auth-confirm-${orderId}`)
   } catch (error) {
     if (!requiresExtendedWindow) {
-      await stripeRequest(c, `payment_intents/${created.id}/cancel`, new URLSearchParams()).catch(() => {})
+      await stripeRequest(c, `payment_intents/${created.id}/cancel`, new URLSearchParams()).catch(() => { })
       throw new Error(error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。')
     }
     try {
       intent = await stripeRequest(c, `payment_intents/${created.id}/confirm`, confirmParams(), `web-deposit-auth-confirm-standard-${orderId}`)
     } catch (retryError) {
-      await stripeRequest(c, `payment_intents/${created.id}/cancel`, new URLSearchParams()).catch(() => {})
+      await stripeRequest(c, `payment_intents/${created.id}/cancel`, new URLSearchParams()).catch(() => { })
       throw new Error(retryError instanceof Error ? retryError.message : '押金预授权失败，请更换信用卡后重试。')
     }
   }
@@ -465,7 +466,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   let stripePaymentMethodId = ''
   let stripeCardBrand = ''
   const setupIntentId = String(body.stripeSetupIntentId || '').trim()
-  if (paymentProvider === 'stripe') {
+  const depositCardPayment = paymentProvider === 'stripe' || paymentProvider === 'square'
+  if (depositCardPayment) {
     if (!setupIntentId) return json(c, 400, { ok: false, message: '请先填写并验证信用卡信息。' })
     try {
       const verified = await verifySetupIntent(c, setupIntentId)
@@ -478,7 +480,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
 
   const config = await getRentalConfig(c.env)
   const settings = await paymentSettings(c)
-  if (paymentProvider === 'square' && !settings.square) return json(c, 400, { ok: false, message: 'Square 礼品卡支付当前未启用。' })
+  if (paymentProvider === 'square' && !settings.square) return json(c, 400, { ok: false, message: '礼品卡支付当前未启用。' })
   if (paymentMethod === 'balance' && !settings.balancePayment) return json(c, 400, { ok: false, message: '账户余额支付当前未启用。' })
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const unavailableDates = new Set(config.unavailableDates)
@@ -614,8 +616,19 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const accountEligible = String(user.account_type || 'formal') === 'formal' && String(user.role || 'CUSTOMER') === 'CUSTOMER'
   const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], 0)
   if (paymentMethod === 'balance' && (!accountEligible || numberValue(user.balance) < totalBeforePayment)) return json(c, 400, { ok: false, message: '账户余额不足以支付这笔申请。' })
+  let squareGiftCardId = ''
+  if (paymentProvider === 'square') {
+    const squareGiftCardNonce = String(body.squareGiftCardNonce || '').trim()
+    if (!squareGiftCardNonce) return json(c, 400, { ok: false, message: '请填写 Square 礼品卡并完成安全验证。' })
+    try {
+      squareGiftCardId = await linkSquareGiftCardToCustomer(c, user, squareGiftCardNonce)
+    } catch (error) {
+      console.error('Website Square gift card link failed:', error instanceof Error ? error.message : error)
+      return json(c, 400, { ok: false, message: 'Square 礼品卡验证或保存失败，请检查卡号后重试。' })
+    }
+  }
   let stripeCustomerId = ''
-  if (paymentProvider === 'stripe') {
+  if (depositCardPayment) {
     try {
       stripeCustomerId = await ensurePaymentMethodCustomer(c, stripePaymentMethodId, {
         id: user.id,
@@ -625,7 +638,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       })
     } catch (error) {
       console.error('Website Stripe customer setup failed:', error)
-      return json(c, 402, { ok: false, message: '信用卡无法用于后续租金或押金支付，请重新验证信用卡后重试。' })
+      return json(c, 402, { ok: false, message: '信用卡无法用于押金预授权，请重新验证信用卡后重试。' })
     }
   }
 
@@ -646,17 +659,20 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
       ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
       orderIds.push(orderId)
-      // payment_provider 在共享主站中区分 Stripe 卡与 Square 礼品卡；旧数据库没有该列时，
+      // payment_provider 在共享主站中区分 Stripe 卡与礼品卡；旧数据库没有该列时，
       // 保留 card / balance 的历史兼容路径，但不能静默丢弃客户明确选择的 Square。
       try {
         await c.env.RENT.prepare('UPDATE orders SET payment_provider = ?, refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
-          .bind(paymentProvider, refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, paymentProvider === 'stripe', stripeCardBrand), orderId).run()
+          .bind(paymentProvider, refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand), orderId).run()
       } catch (error) {
         if (paymentProvider === 'square') throw error
         await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
-          .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, paymentProvider === 'stripe', stripeCardBrand), orderId).run()
+          .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand), orderId).run()
       }
-      const depositMode = depositPaymentModeForRental(rentalPlan.period.days, paymentProvider === 'stripe', stripeCardBrand)
+      if (paymentProvider === 'square') {
+        await c.env.RENT.prepare('UPDATE orders SET square_gift_card_id = ? WHERE id = ?').bind(squareGiftCardId, orderId).run()
+      }
+      const depositMode = depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand)
       // 短租：提交申请时就用已验证的卡对押金做预授权，审核通过后只需要扣租金。
       // 长租（SetupIntent 模式）不在这里扣款，损坏或逾期时才按实际费用从保存的卡扣。
       if (depositMode === 'PREAUTH' && deposit > 0) {
@@ -687,7 +703,9 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
       : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
     : paymentProvider === 'square'
-      ? `Square 礼品卡将在审核通过并签约后用于支付租金及服务费；押金按订单约定单独处理。`
+      ? firstOrder?.deposit_payment_mode === 'PREAUTH'
+        ? `礼品卡将在审核通过并签约后用于支付租金及服务费；押金 AUD$${totalDeposit.toFixed(2)} 已在另一张信用卡上预授权。`
+        : `礼品卡将在审核通过并签约后用于支付租金及服务费；押金 AUD$${totalDeposit.toFixed(2)} 已通过信用卡验证并保存，归还验收后按规则结算。`
       : ''
   return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: rentalPlans.get(deviceIds[0])?.period.days || 0, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
 }

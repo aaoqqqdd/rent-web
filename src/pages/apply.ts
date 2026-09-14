@@ -12,6 +12,7 @@ interface ApplyData {
   turnstileSiteKey: string
   squareGiftCardEnabled: boolean
   squareGiftCardFeeRate: number
+  squareGiftCardConfig: { applicationId: string; locationId: string; environment: 'sandbox' | 'production' } | null
 }
 
 function scriptJson(value: unknown): string {
@@ -270,7 +271,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
 }
 
 export function renderApply(data: ApplyData): string {
-  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardEnabled, squareGiftCardFeeRate } = data
+  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardEnabled, squareGiftCardFeeRate, squareGiftCardConfig } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
   const deliveryAreas = config.deliveryAreas.join('、')
@@ -305,6 +306,9 @@ export function renderApply(data: ApplyData): string {
        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
     : ''
   const stripeScript = '<script src="https://js.stripe.com/v3/"></script>'
+  const squareScript = squareGiftCardEnabled && squareGiftCardConfig
+    ? `<script src="${squareGiftCardConfig.environment === 'production' ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js'}"></script>`
+    : ''
 
   return /* html */ `
 <section class="page-hero compact apply-hero"><div class="wrap"><div class="kicker">租赁申请</div><h1>确认设备，安排你的使用时间</h1><p>现在只提交申请。档期和费用确认后，再进入合同与付款。</p><div class="apply-progress"><span class="is-current"><i>1</i>填写申请</span><b></b><span><i>2</i>确认档期</span><b></b><span><i>3</i>签约交付</span></div></div></section>
@@ -387,7 +391,7 @@ export function renderApply(data: ApplyData): string {
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
           <div class="form-card">
-            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>可使用快捷支付或信用卡验证，押金归还时使用</p></div></div>
+            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>租金可用礼品卡，押金使用信用卡预授权</p></div></div>
             <div class="payment-method-options" id="payment-method-options">
               <label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="card" checked>
@@ -395,7 +399,7 @@ export function renderApply(data: ApplyData): string {
               </label>
               ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="square">
-                <span class="payment-method-copy"><strong>Square 礼品卡</strong><small>审核通过并签约后，用 Square 礼品卡支付租金及服务费；收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 手续费，押金按订单约定单独处理。</small></span>
+                <span class="payment-method-copy"><strong>礼品卡</strong><small>审核通过并签约后，用礼品卡支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
               </label>` : ''}
               <div id="balance-payment-option" hidden>
                 <label class="balance-payment-option choice-line">
@@ -411,13 +415,18 @@ export function renderApply(data: ApplyData): string {
                 <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
               </div>
               <div class="stripe-setup-box">
-                <div class="stripe-setup-head"><div><label>信用卡资料</label><p>验证支付方式。</p></div><span>SECURE / STRIPE</span></div>
+                <div class="stripe-setup-head"><div><label>押金信用卡资料</label><p>仅用于押金预授权，不会立即收取租金。</p></div><span>SECURE / STRIPE</span></div>
                 <div id="stripe-card-element" class="stripe-card-element"></div>
                 <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
                 <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
                 <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
               </div>
             </div>
+            ${squareGiftCardEnabled ? `<div class="square-gift-card-setup" id="square-gift-card-setup" hidden>
+              <div class="stripe-setup-head"><div><label>Square 礼品卡</label><p>请填写礼品卡号。提交申请时会安全绑定到 Square，审核通过后再扣款。</p></div><span>SECURE / SQUARE</span></div>
+              <div id="square-gift-card-element"></div>
+              <p id="square-gift-card-message" class="hint" aria-live="polite">选择 Square 礼品卡后加载安全输入框…</p>
+            </div>` : ''}
             <div class="refund-method-fixed">
               <input type="hidden" name="refundMethod" value="original">
               <span>押金退还方式</span>
@@ -432,10 +441,10 @@ export function renderApply(data: ApplyData): string {
         <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
         <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
       </div>
-      ${stripeScript}${turnstile}
+      ${stripeScript}${squareScript}${turnstile}
 
       <div class="apply-expectations" aria-label="提交申请后的流程">
-        <div><span>提交时</span><strong>不会立即扣款</strong><p>先创建租赁申请，保留你的设备、租期和联系信息。</p></div>
+        <div><span>提交时</span><strong>验证并预授权押金</strong><p>租金不会立即扣款；信用卡只用于押金预授权。</p></div>
         <div><span>审核时</span><strong>确认档期与费用</strong><p>我们会核对库存、地址、优惠码和最终配送安排。</p></div>
         <div><span>确认后</span><strong>签约再付款</strong><p>档期确认后进入租赁系统，完成合同、付款和取机安排。</p></div>
       </div>
@@ -515,6 +524,9 @@ export function renderApply(data: ApplyData): string {
   var cardReady = false;
   var stripeFeeRate = 0.025;
   var squareGiftCardFeeRate = ${squareGiftCardFeeRate};
+  var squareGiftCardConfig = ${scriptJson(squareGiftCardConfig)};
+  var squareGiftCard = null;
+  var squareGiftCardLoading = null;
   var accountBalance = null;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
@@ -531,6 +543,8 @@ export function renderApply(data: ApplyData): string {
   var walletMessage = document.getElementById('stripe-wallet-message');
   var stripePaymentBox = document.querySelector('.stripe-payment-box');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
+  var squareGiftCardSetup = document.getElementById('square-gift-card-setup');
+  var squareGiftCardMessage = document.getElementById('square-gift-card-message');
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
   var addressStatus = document.getElementById('address-search-status');
@@ -866,12 +880,34 @@ export function renderApply(data: ApplyData): string {
       ? '无法连接支付服务，请检查网络后刷新页面重试。'
       : (message || fallback);
   }
+  function loadSquareGiftCard() {
+    if (squareGiftCard) return Promise.resolve(squareGiftCard);
+    if (squareGiftCardLoading) return squareGiftCardLoading;
+    if (!squareGiftCardConfig || !window.Square) return Promise.reject(new Error(uiCopy('Square 礼品卡组件暂不可用，请刷新页面后重试。')));
+    squareGiftCardLoading = Promise.resolve().then(function () {
+      var payments = window.Square.payments(squareGiftCardConfig.applicationId, squareGiftCardConfig.locationId);
+      return payments.giftCard().then(function (instance) {
+        squareGiftCard = instance;
+        return squareGiftCard.attach('#square-gift-card-element').then(function () {
+          if (squareGiftCardMessage) squareGiftCardMessage.textContent = uiText('请输入礼品卡号，提交申请时会安全绑定。', 'Enter the gift card number. It will be securely linked when you submit the application.');
+          return instance;
+        });
+      });
+    }).catch(function (error) {
+      squareGiftCardLoading = null;
+      if (squareGiftCardMessage) squareGiftCardMessage.textContent = paymentError(error, uiCopy('Square 礼品卡输入框加载失败，请刷新页面后重试。'));
+      throw error;
+    });
+    return squareGiftCardLoading;
+  }
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
     var useSquare = form.querySelector('input[name="paymentMethod"]:checked')?.value === 'square';
-    stripePaymentBox.hidden = useBalance || useSquare;
-    stripeSetupBox.hidden = useBalance || useSquare;
+    stripePaymentBox.hidden = useBalance;
+    stripeSetupBox.hidden = useBalance;
     walletBox.hidden = useBalance || useSquare || walletBox.getAttribute('data-available') !== 'true';
+    if (squareGiftCardSetup) squareGiftCardSetup.hidden = !useSquare;
+    if (useSquare && !squareGiftCard) loadSquareGiftCard().catch(function () {});
   }
   function lookupBalance() {
     var email = contactEmail.value.trim();
@@ -1105,7 +1141,7 @@ export function renderApply(data: ApplyData): string {
     var field = event.target;
     if (field && field.checkValidity() && !form.querySelector(':invalid')) { checkoutBlocked = false; errBox.hidden = true; }
   });
-  form.addEventListener('submit', function (event) {
+  form.addEventListener('submit', async function (event) {
     event.preventDefault();
     if (checkoutBlocked) { errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
     errBox.hidden = true;
@@ -1118,11 +1154,23 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    if (selectedPaymentMethod === 'card' && (!cardReady || !setupIntentInput.value)) {
-      showFormError(uiCopy('请先填写并验证信用卡信息。验证过程不会扣款。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    if ((selectedPaymentMethod === 'card' || selectedPaymentMethod === 'square') && (!cardReady || !setupIntentInput.value)) {
+      showFormError(uiCopy(selectedPaymentMethod === 'square' ? '请先填写并验证押金信用卡。' : '请先填写并验证信用卡信息。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     var termValidationError = validateTerms();
     if (termValidationError) { showFormError(termValidationError); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    var squareGiftCardNonce = '';
+    if (selectedPaymentMethod === 'square') {
+      try {
+        var squareCard = await loadSquareGiftCard();
+        var tokenResult = await squareCard.tokenize();
+        if (tokenResult.status !== 'OK') throw new Error(tokenResult.errors?.map(function (item) { return item.message; }).join('；') || uiCopy('Square 礼品卡验证失败，请检查卡号后重试。'));
+        squareGiftCardNonce = String(tokenResult.token || '').trim();
+        if (!squareGiftCardNonce) throw new Error(uiCopy('Square 未返回有效的礼品卡凭据，请重试。'));
+      } catch (error) {
+        showFormError(paymentError(error, uiCopy('Square 礼品卡验证失败，请检查卡号后重试。'))); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      }
+    }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
     if (saveContactInfo.checked) {
@@ -1130,6 +1178,7 @@ export function renderApply(data: ApplyData): string {
     }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
     payload.deviceTerms = deviceTermsInput.value;
+    if (selectedPaymentMethod === 'square') payload.squareGiftCardNonce = squareGiftCardNonce;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
     submitBtn.disabled = true; submitBtn.textContent = uiText('提交中…', 'Submitting…');
