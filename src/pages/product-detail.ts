@@ -54,13 +54,10 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       <div class="detail-rental-term">
         <div class="kicker">先选租期</div>
         <p>选择后加入购物车，之后仍可在购物车中修改。</p>
-        <div class="row2">
+        <div class="row2"><div>
           <div class="field detail-date-field"><label for="detail-start-date">取货日期</label><div class="detail-date-control"><input type="text" id="detail-start-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required><button type="button" class="detail-date-picker-toggle" id="detail-start-date-toggle" aria-label="打开取货日期日历" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg></button><div class="date-picker detail-date-picker" id="detail-start-date-picker" hidden></div></div></div>
-          <div class="field"><label for="detail-start-period">取货时段</label><select id="detail-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
-        <div class="row2">
           <div class="field detail-date-field"><label for="detail-end-date">归还日期</label><div class="detail-date-control"><input type="text" id="detail-end-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required><button type="button" class="detail-date-picker-toggle" id="detail-end-date-toggle" aria-label="打开归还日期日历" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></button><div class="date-picker detail-date-picker" id="detail-end-date-picker" hidden></div></div></div>
-          <div class="field"><label for="detail-end-period">归还时段</label><select id="detail-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
         </div>
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
       </div>
@@ -121,8 +118,6 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var endToggle = document.getElementById('detail-end-date-toggle');
   var startPicker = document.getElementById('detail-start-date-picker');
   var endPicker = document.getElementById('detail-end-date-picker');
-  var startPeriod = document.getElementById('detail-start-period');
-  var endPeriod = document.getElementById('detail-end-period');
   var button = document.getElementById('detail-add-cart');
   var minimumDays = ${config.minimumRentalDays};
   var globalUnavailableDates = ${scriptJson(config.unavailableDates)};
@@ -179,16 +174,6 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     return occupied.indexOf(period) >= 0 || group.every(function (slot) { return slots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
   };
   var currentMelbourneMinutes = function () { var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()); var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0); };
-  var periodPassed = function (date, period) { return date === dateString(today) && currentMelbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60); };
-  var updatePeriodOptions = function () {
-    [['AM', start, startPeriod], ['PM', start, startPeriod], ['AM', end, endPeriod], ['PM', end, endPeriod]].forEach(function (entry) {
-      var date = readDateValue(entry[1]); var option = Array.from(entry[2].options).find(function (item) { return item.value === entry[0]; });
-      if (!option) return;
-      option.disabled = !date || periodPassed(date, entry[0]) || periodUnavailable(date, entry[0]);
-    });
-    if (startPeriod.selectedOptions[0]?.disabled) startPeriod.value = Array.from(startPeriod.options).find(function (option) { return !option.disabled; })?.value || '';
-    if (endPeriod.selectedOptions[0]?.disabled) endPeriod.value = Array.from(endPeriod.options).find(function (option) { return !option.disabled; })?.value || '';
-  };
   var pickerDateDisabled = function (role, value) {
     if (!availabilityReady || value < start.min || isUnavailable(value)) return true;
     if (role !== 'end') return false;
@@ -256,7 +241,6 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       startValue = nextAvailable(startValue);
       setDateValue(start, startValue);
     }
-    updatePeriodOptions();
     start.setCustomValidity(startValue < start.min ? pastDateMessage : isUnavailable(startValue) ? unavailableDateMessage : '');
     end.min = nextAvailable(addDays(startValue, minimumDays));
     end.dataset.minIso = end.min;
@@ -266,7 +250,6 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       setDateValue(end, endValue);
     }
     end.setCustomValidity(!endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : isUnavailable(endValue) ? unavailableDateMessage : '');
-    updatePeriodOptions();
   };
   start.min = dateString(today); setDateValue(start, start.min);
   end.min = addDays(start.min, minimumDays); setDateValue(end, end.min);
@@ -279,9 +262,6 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   end.addEventListener('input', function () { end.value = maskDate(end.value); applyDateRules(false); });
   start.addEventListener('change', function () { applyDateRules(false); });
   end.addEventListener('change', function () { applyDateRules(false); });
-  startPeriod.addEventListener('change', function () { applyDateRules(false); });
-  endPeriod.addEventListener('change', function () { applyDateRules(false); });
-  window.setInterval(updatePeriodOptions, 30000);
   startToggle.addEventListener('click', function () { openPicker(startPicker, start, startToggle, 'start'); });
   endToggle.addEventListener('click', function () { openPicker(endPicker, end, endToggle, 'end'); });
   start.addEventListener('focus', function () { openPicker(startPicker, start, startToggle, 'start'); });
@@ -298,8 +278,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     applyDateRules(false);
     var startValue = readDateValue(start);
     var endValue = readDateValue(end);
-    if (!startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity() || startPeriod.selectedOptions[0]?.disabled || endPeriod.selectedOptions[0]?.disabled) return;
-    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: startValue, endDate: endValue, startPeriod: startPeriod.value, endPeriod: endPeriod.value });
+    if (!startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
+    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: startValue, endDate: endValue, startPeriod: 'AM', endPeriod: 'AM' });
     location.href = ${JSON.stringify(applyHref)};
   });
 })();

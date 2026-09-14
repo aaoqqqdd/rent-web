@@ -10,9 +10,6 @@ interface ApplyData {
   config: RentalConfig
   appUrl: string
   turnstileSiteKey: string
-  squareGiftCardEnabled: boolean
-  squareGiftCardFeeRate: number
-  squareGiftCardConfig: { applicationId: string; locationId: string; environment: 'sandbox' | 'production' } | null
 }
 
 function scriptJson(value: unknown): string {
@@ -130,7 +127,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function normalizeTerm(id, value) {
     var fallback = defaultTerm(id); value = value && typeof value === 'object' ? value : {};
-    return { startDate: parseDate(value.startDate) || fallback.startDate, endDate: parseDate(value.endDate) || fallback.endDate, startPeriod: value.startPeriod === 'PM' ? 'PM' : 'AM', endPeriod: value.endPeriod === 'PM' ? 'PM' : 'AM' };
+    return { startDate: parseDate(value.startDate) || fallback.startDate, endDate: parseDate(value.endDate) || fallback.endDate, startPeriod: 'AM', endPeriod: 'AM' };
   }
   function read() {
     try {
@@ -173,10 +170,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       endInput.value = term.endDate && term.endDate >= endInput.min ? term.endDate : endInput.min;
       if (availabilityReady && deviceDateUnavailable(endInput.value)) endInput.value = nextAvailableDate(endInput.value);
       startInput.disabled = !availabilityReady; endInput.disabled = !availabilityReady;
-      startPeriodInput.value = term.startPeriod || 'AM';
-      endPeriodInput.value = term.endPeriod || 'AM';
       if (availabilityReady && (startInput.value !== savedStart || endInput.value !== savedEnd)) {
-        write(ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: startPeriodInput.value, endPeriod: endPeriodInput.value });
+        write(ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: 'AM', endPeriod: 'AM' });
         return;
       }
     }
@@ -271,7 +266,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
 }
 
 export function renderApply(data: ApplyData): string {
-  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardEnabled, squareGiftCardFeeRate, squareGiftCardConfig } = data
+  const { products, selectedId, config, appUrl, turnstileSiteKey } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
   const deliveryAreas = config.deliveryAreas.join('、')
@@ -306,10 +301,6 @@ export function renderApply(data: ApplyData): string {
        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
     : ''
   const stripeScript = '<script src="https://js.stripe.com/v3/"></script>'
-  const squareScript = squareGiftCardEnabled && squareGiftCardConfig
-    ? `<script src="${squareGiftCardConfig.environment === 'production' ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js'}"></script>`
-    : ''
-
   return /* html */ `
 <section class="page-hero compact apply-hero"><div class="wrap"><div class="kicker">租赁申请</div><h1>确认设备，安排你的使用时间</h1><p>现在只提交申请。档期和费用确认后，再进入合同与付款。</p><div class="apply-progress"><span class="is-current"><i>1</i>填写申请</span><b></b><span><i>2</i>确认档期</span><b></b><span><i>3</i>签约交付</span></div></div></section>
 <section class="section apply-section">
@@ -355,7 +346,7 @@ export function renderApply(data: ApplyData): string {
               <label for="deliveryMethod">取还方式</label>
               <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
             </div>
-    <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}<div class="row2 pickup-time-fields"><div class="field"><label for="pickupTimeSlot">取货时间段</label><select id="pickupTimeSlot" name="pickupTimeSlot"${hasPickupLocations ? ' required' : ' disabled'}><option value="morning_service">7:00–8:00（早间服务费 10%）</option><option value="morning">9:00–12:00（上午）</option><option value="afternoon">13:00–20:00（下午）</option><option value="evening_service">21:00–23:00（晚间服务费 10%）</option></select></div><div class="field"><label for="returnTimeSlot">归还时间段</label><select id="returnTimeSlot" name="returnTimeSlot"${hasPickupLocations ? ' required' : ' disabled'}><option value="morning_service">7:00–8:00（早间服务费 10%）</option><option value="morning">9:00–12:00（上午）</option><option value="afternoon">13:00–20:00（下午）</option><option value="evening_service">21:00–23:00（晚间服务费 10%）</option></select></div></div><p class="hint pickup-time-hint">自取时间段会按所选日期、当前时间和设备档期自动禁用。</p></div>
+            <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
             <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
               <div class="field address-autocomplete">
                 <label for="delivery-address-search">搜索墨尔本地址</label>
@@ -390,22 +381,13 @@ export function renderApply(data: ApplyData): string {
 
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
-          ${squareGiftCardEnabled ? `<div class="form-card square-gift-card-setup" id="square-gift-card-setup">
-              <div class="stripe-setup-head"><div><label>礼品卡</label></div><span>SECURE</span></div>
-              <div id="square-gift-card-element"></div>
-              <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
-            </div>` : ''}
           <div class="form-card">
-            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>租金可用礼品卡，押金使用信用卡预授权</p></div></div>
+            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>审核通过后付款，押金使用信用卡预授权</p></div></div>
             <div class="payment-method-options" id="payment-method-options">
               <label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="card" checked>
-                <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small>审核通过后按确认金额付款，信用卡由 Stripe 安全处理，收取 x% 手续费。</small></span>
+                <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small>审核通过后按确认金额付款，信用卡由 Stripe 安全处理。</small></span>
               </label>
-              ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
-                <input type="radio" name="paymentMethod" value="square">
-                <span class="payment-method-copy"><strong>礼品卡</strong><small>提交时先安全绑定礼品卡；审核通过并签约后，用它支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
-              </label>` : ''}
               <div id="balance-payment-option" hidden>
                 <label class="balance-payment-option choice-line">
                   <input type="radio" name="paymentMethod" value="balance">
@@ -435,12 +417,13 @@ export function renderApply(data: ApplyData): string {
             </div>
           </div>
       </div>
+      </div>
 
       <div class="field legal-agreement">
         <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
         <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
       </div>
-      ${stripeScript}${squareScript}${turnstile}
+      ${stripeScript}${turnstile}
 
       <div class="apply-expectations" aria-label="提交申请后的流程">
         <div><span>提交时</span><strong>验证并预授权押金</strong><p>租金不会立即扣款；信用卡只用于押金预授权。</p></div>
@@ -511,8 +494,6 @@ export function renderApply(data: ApplyData): string {
   var method = document.getElementById('deliveryMethod');
   var pickupField = document.getElementById('pickup-field');
   var deliveryFields = document.getElementById('delivery-fields');
-  var pickupTimeSlot = document.getElementById('pickupTimeSlot');
-  var returnTimeSlot = document.getElementById('returnTimeSlot');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
   var couponState = 'empty';
@@ -522,10 +503,6 @@ export function renderApply(data: ApplyData): string {
   var setupIntent = null;
   var cardReady = false;
   var stripeFeeRate = 0.025;
-  var squareGiftCardFeeRate = ${squareGiftCardFeeRate};
-  var squareGiftCardConfig = ${scriptJson(squareGiftCardConfig)};
-  var squareGiftCard = null;
-  var squareGiftCardLoading = null;
   var accountBalance = null;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
@@ -542,8 +519,6 @@ export function renderApply(data: ApplyData): string {
   var walletMessage = document.getElementById('stripe-wallet-message');
   var stripePaymentBox = document.querySelector('.stripe-payment-box');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
-  var squareGiftCardSetup = document.getElementById('square-gift-card-setup');
-  var squareGiftCardMessage = document.getElementById('square-gift-card-message');
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
   var addressStatus = document.getElementById('address-search-status');
@@ -679,19 +654,18 @@ export function renderApply(data: ApplyData): string {
   }
   var today = todayStr();
   var pickupSlots = [
-    { value: 'morning_service', period: 'AM', endMinutes: 8 * 60 },
-    { value: 'morning', period: 'AM', endMinutes: 12 * 60 },
-    { value: 'afternoon', period: 'PM', endMinutes: 20 * 60 },
-    { value: 'evening_service', period: 'PM', endMinutes: 23 * 60 },
+    { value: 'morning_service', period: 'AM' },
+    { value: 'morning', period: 'AM' },
+    { value: 'afternoon', period: 'PM' },
+    { value: 'evening_service', period: 'PM' },
   ];
   function melbourneMinutes() {
     var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
     var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0);
   }
-  function slotPassed(date, slot) { return date === today && melbourneMinutes() >= slot.endMinutes; }
   function termFor(id) {
     var value = cartTerms[id] || cartState.legacy || {}; var start = value.startDate || today; if (start < today) start = today;
-    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: value.startPeriod === 'PM' ? 'PM' : 'AM', endPeriod: value.endPeriod === 'PM' ? 'PM' : 'AM' };
+    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: 'AM', endPeriod: 'AM' };
   }
   function termDays(term) {
     var half = Math.round((Date.parse(term.endDate + 'T00:00:00Z') - Date.parse(term.startDate + 'T00:00:00Z')) / 86400000) * 2 + (term.endPeriod === 'PM' ? 1 : 0) - (term.startPeriod === 'PM' ? 1 : 0);
@@ -739,41 +713,6 @@ export function renderApply(data: ApplyData): string {
     for (var index = 0; index < cartIds.length; index += 1) { var error = termError(cartIds[index], termFor(cartIds[index])); if (error) return error; }
     return '';
   }
-  function updatePickupTimeOptions() {
-    if (!pickupTimeSlot || !returnTimeSlot) return;
-    [[pickupTimeSlot, 'startDate', 'startPeriod'], [returnTimeSlot, 'endDate', 'endPeriod']].forEach(function (entry) {
-      var select = entry[0];
-      Array.from(select.options).forEach(function (option) {
-        var slot = pickupSlots.find(function (item) { return item.value === option.value; });
-        var allowed = Boolean(slot) && cartIds.length > 0 && cartIds.every(function (id) {
-          var term = termFor(id); var date = term[entry[1]];
-          return slot && !slotUnavailable(id, date, slot) && !slotPassed(date, slot);
-        });
-        option.disabled = !allowed;
-      });
-      var desiredPeriod = cartIds.length ? termFor(cartIds[0])[entry[2]] : 'AM';
-      var selectedSlot = pickupSlots.find(function (slot) { return slot.value === select.value; });
-      if (select.selectedOptions[0]?.disabled || !selectedSlot || selectedSlot.period !== desiredPeriod) select.value = Array.from(select.options).find(function (option) { var slot = pickupSlots.find(function (item) { return item.value === option.value; }); return !option.disabled && slot && slot.period === desiredPeriod; })?.value || Array.from(select.options).find(function (option) { return !option.disabled; })?.value || '';
-    });
-  }
-  function syncPeriodsFromPickupSlots() {
-    if (!pickupTimeSlot || !returnTimeSlot || method.value !== 'Pickup') return;
-    var pickup = pickupSlots.find(function (slot) { return slot.value === pickupTimeSlot.value; });
-    var returned = pickupSlots.find(function (slot) { return slot.value === returnTimeSlot.value; });
-    if (!pickup || !returned) return;
-    cartIds.forEach(function (id) {
-      var term = termFor(id); term.startPeriod = pickup.period; term.endPeriod = returned.period; cartTerms[id] = term;
-    });
-    try { localStorage.setItem(CART_KEY, JSON.stringify({ items: cartIds, terms: cartTerms })); } catch (_) {}
-  }
-  var SERVICE_SLOTS = ['morning_service', 'evening_service'];
-  function serviceFeeFor(rentTotal) {
-    if (method.value !== 'Pickup') return 0;
-    var pickupIsService = pickupTimeSlot && SERVICE_SLOTS.indexOf(pickupTimeSlot.value) >= 0;
-    var returnIsService = returnTimeSlot && SERVICE_SLOTS.indexOf(returnTimeSlot.value) >= 0;
-    var rate = (pickupIsService ? 0.1 : 0) + (returnIsService ? 0.1 : 0);
-    return Math.round(rentTotal * rate * 100) / 100;
-  }
   function summaryRow(label, amount, className) {
     return '<div class="summary-row' + (className ? ' ' + className : '') + '"><span>' + label + '</span><span>' + amount + '</span></div>';
   }
@@ -782,15 +721,12 @@ export function renderApply(data: ApplyData): string {
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
-    var serviceFee = serviceFeeFor(rentTotal);
-    var total = Math.max(0, rentTotal + serviceFee + depositTotal - appliedDiscount);
+    var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var paymentFee = selectedPaymentMethod === 'card'
-      ? Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * stripeFeeRate * 100) / 100
-      : selectedPaymentMethod === 'square'
-        ? Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * squareGiftCardFeeRate * 100) / 100
-        : 0;
-    var payableTotal = Math.max(0, rentTotal + serviceFee - appliedDiscount) + paymentFee;
+      ? Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100
+      : 0;
+    var payableTotal = Math.max(0, rentTotal - appliedDiscount) + paymentFee;
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
@@ -802,7 +738,6 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
-      + (serviceFee ? summaryRow(uiText('服务费', 'Service fee'), '$' + serviceFee.toFixed(2)) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
       + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '');
     summary.innerHTML = '<div class="summary-title">' + uiText('订单金额', 'Order total') + '</div>'
@@ -832,7 +767,6 @@ export function renderApply(data: ApplyData): string {
     });
     submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application');
     deviceTermsInput.value = JSON.stringify(Object.fromEntries(cartIds.map(function (id) { return [id, termFor(id)]; })));
-    updatePickupTimeOptions();
     refreshSummary();
   }
   function rentalFee(product, days) {
@@ -879,44 +813,11 @@ export function renderApply(data: ApplyData): string {
       ? '无法连接支付服务，请检查网络后刷新页面重试。'
       : (message || fallback);
   }
-  function loadSquareGiftCard() {
-    if (squareGiftCard) return Promise.resolve(squareGiftCard);
-    if (squareGiftCardLoading) return squareGiftCardLoading;
-    if (!squareGiftCardConfig || !window.Square) return Promise.reject(new Error(uiCopy('礼品卡组件暂不可用，请刷新页面后重试。')));
-    squareGiftCardLoading = Promise.resolve().then(function () {
-      var payments = window.Square.payments(squareGiftCardConfig.applicationId, squareGiftCardConfig.locationId);
-      return payments.giftCard().then(function (instance) {
-        squareGiftCard = instance;
-        return squareGiftCard.attach('#square-gift-card-element').then(function () {
-          return squareGiftCard.configure({
-            style: {
-              '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
-              '.input-container.is-focus': { borderColor: '#7c6cff' },
-              '.input-container.is-error': { borderColor: '#ff7185' },
-              '.message-text': { color: '#9ca3b7' },
-              '.message-icon': { color: '#737b91' },
-              '.message-text.is-error': { color: '#ff7185' },
-              '.message-icon.is-error': { color: '#ff7185' },
-              input: { color: '#171a24' },
-              'input::placeholder': { color: '#737b91' },
-            },
-          });
-        });
-      });
-    }).catch(function (error) {
-      squareGiftCardLoading = null;
-      if (squareGiftCardMessage) squareGiftCardMessage.textContent = paymentError(error, uiCopy('礼品卡输入框加载失败，请刷新页面后重试。'));
-      throw error;
-    });
-    return squareGiftCardLoading;
-  }
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
-    var useSquare = form.querySelector('input[name="paymentMethod"]:checked')?.value === 'square';
     stripePaymentBox.hidden = useBalance;
     stripeSetupBox.hidden = useBalance;
-    walletBox.hidden = useBalance || useSquare || walletBox.getAttribute('data-available') !== 'true';
-    if (useSquare && !squareGiftCard) loadSquareGiftCard().catch(function () {});
+    walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
   }
   function lookupBalance() {
     var email = contactEmail.value.trim();
@@ -943,7 +844,6 @@ export function renderApply(data: ApplyData): string {
   });
   paymentMethodInputs.forEach(function (input) { input.addEventListener('change', function () { updatePaymentMethodVisibility(); refreshSummary(); }); });
   updatePaymentMethodVisibility();
-  if (squareGiftCardSetup) loadSquareGiftCard().catch(function () {});
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
     .then(readJsonResponse)
     .then(function (result) {
@@ -1060,14 +960,9 @@ export function renderApply(data: ApplyData): string {
     var pickupLocation = document.getElementById('pickupLocation');
     pickupLocation.disabled = delivery || ${hasPickupLocations ? 'false' : 'true'};
     pickupLocation.required = !delivery && ${hasPickupLocations ? 'true' : 'false'};
-    if (pickupTimeSlot && returnTimeSlot) { pickupTimeSlot.disabled = delivery; returnTimeSlot.disabled = delivery; pickupTimeSlot.required = !delivery && ${hasPickupLocations ? 'true' : 'false'}; returnTimeSlot.required = !delivery && ${hasPickupLocations ? 'true' : 'false'}; }
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) { document.getElementById(id).required = delivery; });
-    updatePickupTimeOptions();
     validateDeliveryAddress(false);
   });
-  if (pickupTimeSlot) pickupTimeSlot.addEventListener('change', function () { syncPeriodsFromPickupSlots(); markCouponDirty(); renderCart(); });
-  if (returnTimeSlot) returnTimeSlot.addEventListener('change', function () { syncPeriodsFromPickupSlots(); markCouponDirty(); renderCart(); });
-  window.setInterval(updatePickupTimeOptions, 30000);
   function validateDeliveryAddress(showError) {
     var suburb = document.getElementById('deliverySuburb');
     if (method.value !== 'Delivery') { suburb.setCustomValidity(''); return true; }
@@ -1164,23 +1059,11 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    if ((selectedPaymentMethod === 'card' || selectedPaymentMethod === 'square') && (!cardReady || !setupIntentInput.value)) {
-      showFormError(uiCopy(selectedPaymentMethod === 'square' ? '请先填写并验证押金信用卡。' : '请先填写并验证信用卡信息。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    if (selectedPaymentMethod === 'card' && (!cardReady || !setupIntentInput.value)) {
+      showFormError(uiCopy('请先填写并验证信用卡信息。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
     var termValidationError = validateTerms();
     if (termValidationError) { showFormError(termValidationError); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-    var squareGiftCardNonce = '';
-    if (selectedPaymentMethod === 'square') {
-      try {
-        var squareCard = await loadSquareGiftCard();
-        var tokenResult = await squareCard.tokenize();
-        if (tokenResult.status !== 'OK') throw new Error(tokenResult.errors?.map(function (item) { return item.message; }).join('；') || uiCopy('礼品卡验证失败，请检查卡号后重试。'));
-        squareGiftCardNonce = String(tokenResult.token || '').trim();
-        if (!squareGiftCardNonce) throw new Error(uiCopy('未返回有效的礼品卡凭据，请重试。'));
-      } catch (error) {
-        showFormError(paymentError(error, uiCopy('礼品卡验证失败，请检查卡号后重试。'))); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
-      }
-    }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
     if (saveContactInfo.checked) {
@@ -1188,7 +1071,6 @@ export function renderApply(data: ApplyData): string {
     }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
     payload.deviceTerms = deviceTermsInput.value;
-    if (selectedPaymentMethod === 'square') payload.squareGiftCardNonce = squareGiftCardNonce;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
     submitBtn.disabled = true; submitBtn.textContent = uiText('提交中…', 'Submitting…');
