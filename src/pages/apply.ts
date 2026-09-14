@@ -399,7 +399,7 @@ export function renderApply(data: ApplyData): string {
               </label>
               ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="square">
-                <span class="payment-method-copy"><strong>礼品卡</strong><small>审核通过并签约后，用礼品卡支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
+                <span class="payment-method-copy"><strong>Square 礼品卡</strong><small>提交时先安全绑定 Square 礼品卡；审核通过并签约后，用它支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
               </label>` : ''}
               <div id="balance-payment-option" hidden>
                 <label class="balance-payment-option choice-line">
