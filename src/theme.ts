@@ -46,14 +46,14 @@ p { margin: 0; }
   border-bottom: 1px solid var(--border);
 }
 .site-header .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-.header-brand-group { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.header-brand-group { display: flex; align-items: center; gap: 16px; flex-shrink: 0; min-width: 0; }
 .brand { display: inline-flex; align-items: center; }
 .brand .brand-banner { height: 36px; width: auto; display: block; }
 .site-footer .brand .brand-banner { height: 30px; }
 @media (max-width: 620px) { .brand .brand-banner { height: 32px; } }
 .header-location { padding-left: 16px; border-left: 1px solid var(--border); color: var(--muted-fg); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; white-space: nowrap; }
-.nav { display: flex; align-items: center; gap: 30px; }
-.nav a { color: var(--muted-fg); font-size: 14px; transition: color .15s; }
+.nav { display: flex; align-items: center; gap: 28px; flex: 1; justify-content: center; min-width: 0; }
+.nav a { color: var(--muted-fg); font-size: 14px; white-space: nowrap; transition: color .15s; }
 .nav a:hover { color: var(--fg); }
 .header-cart {
   position: relative; display: inline-flex; align-items: center; gap: 8px;
@@ -67,7 +67,7 @@ p { margin: 0; }
   background: var(--primary); color: var(--primary-ink); font-size: 11px; line-height: 18px; text-align: center;
   will-change: transform, opacity;
 }
-.header-actions { display: flex; align-items: center; gap: 12px; }
+.header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .language-switcher { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; }
 .language-switcher button { padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--muted-fg); font: 600 10px var(--mono); cursor: pointer; }
 .language-switcher button.is-active { background: var(--primary); color: var(--primary-ink); }
@@ -813,13 +813,16 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .foot-bottom a:hover { color: var(--primary); }
 
 /* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .header-location { display: none; }
+  .nav { gap: 20px; }
+}
 @media (max-width: 900px) {
   .features .wrap { grid-template-columns: repeat(2, 1fr); }
   .grid, .steps { grid-template-columns: 1fr; }
   .foot-grid { grid-template-columns: 1fr 1fr; }
-  .nav { gap: 18px; }
+  .nav { gap: 16px; }
   .header-account { display: none; }
-  .header-location { display: none; }
   .hero .hero-grid { grid-template-columns: 1fr; gap: 42px; }
   .rental-console { width: min(100%, 680px); justify-self: center; }
   .detail-grid { grid-template-columns: 1fr; gap: 44px; }
