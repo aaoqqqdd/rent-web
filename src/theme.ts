@@ -422,6 +422,7 @@ html[lang^="en"] .header-cart { font-size: 12px; }
 .hero h1 { max-width: 680px; margin: 24px 0 0; font-size: clamp(48px, 6.3vw, 78px); }
 .hero h1 em { display: block; color: var(--primary); font-style: normal; }
 .hero p { max-width: 620px; margin: 26px 0 30px; color: #afb5c6; font-size: 17px; line-height: 1.85; }
+.hero p .hero-subnote { display: block; margin-top: 10px; color: var(--muted-fg); font-size: 12px; line-height: 1.5; }
 .hero-notes { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 26px; color: var(--muted-fg); font-family: var(--mono); font-size: 11px; }
 .hero-notes span::first-letter { color: var(--secondary); }
 .rental-console { position: relative; z-index: 2; overflow: hidden; border: 1px solid var(--border-bright); border-radius: 18px; background: rgba(14,17,26,.88); box-shadow: 0 34px 90px -36px rgba(0,0,0,.9), 0 0 70px -42px var(--primary); transform: rotate(1.2deg); }

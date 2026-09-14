@@ -53,7 +53,7 @@ interface HomeData {
 
 export function renderHome(data: HomeData): string {
   const { featured, products, minRate, catalogMinRate, config } = data
-  const fromLine = catalogMinRate > 0 ? `起租价格 $${catalogMinRate}/day 起` : '灵活租期，按需计费'
+  const fromLine = catalogMinRate > 0 ? `最低$${catalogMinRate}/天起` : '灵活租期，按需计费'
   const heroDevice = products.length ? products[Math.floor(Math.random() * products.length)] : featured[0]
   const availableCount = products.filter((p) => p.available).length
   const pickupSummary = config.pickupLocations.length
@@ -70,7 +70,7 @@ export function renderHome(data: HomeData): string {
     <div class="hero-copy">
       <span class="eyebrow">MELBOURNE · 设备租赁</span>
       <h1>设备不用拥有，<em>进度照样向前。</em></h1>
-      <p>给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，${esc(fromLine)}<br>提交申请后再确认档期、签约与付款。</p>
+      <p>给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，${esc(fromLine)}<span class="hero-subnote">提交申请后再确认档期、签约与付款。</span></p>
       <div class="hero-actions">
         <a class="btn btn-primary btn-lg" href="/products">打开设备库 <span>→</span></a>
         <a class="btn btn-ghost btn-lg" href="/rental-guide">先了解怎么租</a>
