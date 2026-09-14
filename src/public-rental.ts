@@ -10,7 +10,6 @@ const MAX_CART_ITEMS = 10
 const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const LONG_TERM_RENTAL_DAYS = 30
-const SQUARE_GIFT_CARD_FEE_RATE = 0.022
 const PICKUP_TIME_SLOTS = ['morning_service', 'morning', 'afternoon', 'evening_service'] as const
 type PickupTimeSlot = typeof PICKUP_TIME_SLOTS[number]
 
@@ -290,8 +289,8 @@ async function stripeConfig(c: RentalContext): Promise<{ publishableKey: string;
   return { publishableKey: stored.publishableKey, secretKey }
 }
 
-async function paymentSettings(c: RentalContext): Promise<{ stripe: boolean; square: boolean; balancePayment: boolean; processingFeeRate: number }> {
-  const fallback = { stripe: true, square: false, balancePayment: true, processingFeeRate: 0.025 }
+async function paymentSettings(c: RentalContext): Promise<{ stripe: boolean; square: boolean; balancePayment: boolean; processingFeeRate: number; squareProcessingFeeRate: number }> {
+  const fallback = { stripe: true, square: false, balancePayment: true, processingFeeRate: 0.025, squareProcessingFeeRate: 0.022 }
   try {
     const row = await c.env.RENT.prepare("SELECT value FROM systemSettings WHERE key = 'paymentMethods'").first<{ value: string }>()
     if (!row?.value) return fallback
@@ -303,6 +302,9 @@ async function paymentSettings(c: RentalContext): Promise<{ stripe: boolean; squ
       processingFeeRate: Number.isFinite(Number(value.processingFeeRate))
         ? Math.min(1, Math.max(0, Number(value.processingFeeRate)))
         : fallback.processingFeeRate,
+      squareProcessingFeeRate: Number.isFinite(Number(value.squareProcessingFeeRate))
+        ? Math.min(1, Math.max(0, Number(value.squareProcessingFeeRate)))
+        : fallback.squareProcessingFeeRate,
     }
   } catch {
     return fallback
@@ -312,7 +314,7 @@ async function paymentSettings(c: RentalContext): Promise<{ stripe: boolean; squ
 /** 只返回结账页需要的公开支付方式状态，不暴露任何支付凭据。 */
 export async function getPublicPaymentMethods(c: RentalContext): Promise<{ square: boolean; squareFeeRate: number }> {
   const settings = await paymentSettings(c)
-  return { square: settings.square, squareFeeRate: SQUARE_GIFT_CARD_FEE_RATE }
+  return { square: settings.square, squareFeeRate: settings.squareProcessingFeeRate }
 }
 
 async function stripeRequest(c: RentalContext, path: string, params?: URLSearchParams, idempotencyKey?: string): Promise<Record<string, any>> {
