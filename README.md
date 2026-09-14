@@ -10,6 +10,7 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 - **展示信息实时从数据库获取**：设备名称、配置、价格、库存、公司资料与公开法务文档，全部实时读自 rent 的 D1 库（`systemSettings` + `devices`）
 - 深色 + 青色主色、网格背景的落地页
 - `/apply` 下单：访客**注册账号 + 提交租赁申请**，订单进入 `pending_approval`，管理员在 rent 后台确认后再安排签约与付款
+- `/gift-cards` 礼品卡入口：跳转到 Square eGift Card order site，支持购买、查询余额和 Reload / Add money
 - 边缘缓存（`caches.default`）：HTML 60 秒、CSS 1 天
 
 ## 页面与数据
@@ -19,6 +20,7 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 | `/` | 落地页 | 「为你精选」3 张卡（每类别一台，优先现货）、「最低 $X/day」、页脚联系方式 |
 | `/products` | 全部在售设备，按游戏本 / 轻薄本 / 工作站分组 | 全量 `devices`（排除 RETIRED） |
 | `/apply` | 下单表单：选设备 + 租期 + 取还方式 + 注册信息 | 设备下拉、价格、最短租期、可选自取点 |
+| `/gift-cards` | Square 礼品卡购买、余额查询和加值入口 | `SQUARE_GIFT_CARD_URL` |
 | `/login`（`/register` 302 到此） | 独立注册 / 登录页。注册直接写 `users`，登录跳 `${APP_URL}/login` | 无（表单页） |
 | `/rental-guide` | 租赁流程 + 常见问题 | 无（静态文案） |
 | `/about` | 关于 + 联系方式 | 页面内联系方式来自 `systemSettings.companyDetails` |
@@ -83,6 +85,7 @@ npx wrangler deploy --minify        # 部署 Worker: geekslope-web
 - `vars.APP_URL` —— **必须**改成 rent 主应用真实地址（如 `https://rent.geekslope.com.au`）。`/apply` 表单会 POST 到 `${APP_URL}/public/rental-request`。
 - `vars.MONTHLY_MULTIPLIER` —— 月租展示系数。
 - `vars.TURNSTILE_SITE_KEY` —— 与 rent 同一个 Turnstile 组件的站点公钥（留空则不显示人机验证）。
+- `vars.SQUARE_GIFT_CARD_URL` —— Square Dashboard 发布的 eGift Card order site（默认使用当前 GeekSlope 礼品卡页面）。该页面本身提供购买、查余额和 Reload card。
 - 可选：`wrangler secret put CONTACT_PHONE` / `CONTACT_EMAIL` 覆盖数据库里的联系方式。
 
 **rent 主应用侧同时需要：**

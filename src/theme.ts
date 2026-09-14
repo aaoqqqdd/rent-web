@@ -656,6 +656,18 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .info-card > span { color: var(--secondary); font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
 .info-card h3 { margin-top: 22px; font-size: 20px; }.info-card p { margin-top: 10px; color: var(--muted-fg); font-size: 13px; }
 .info-card.linked:hover { border-color: var(--primary); transform: translateY(-2px); }
+.gift-card-hero { min-height: 450px; }
+.gift-card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.gift-card-action { display: flex; flex-direction: column; min-height: 300px; padding: 27px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); transition: transform .2s, border-color .2s, box-shadow .2s; }
+.gift-card-action:hover { transform: translateY(-4px); border-color: var(--primary); box-shadow: 0 18px 40px -30px rgba(124,108,255,.9); }
+.gift-card-action-accent { border-color: rgba(89,229,193,.28); background: linear-gradient(145deg, rgba(89,229,193,.08), var(--card)); }
+.gift-card-action-index { color: var(--secondary); font: 600 10px var(--mono); letter-spacing: .1em; }
+.gift-card-action h3 { margin-top: 55px; font-size: 23px; }
+.gift-card-action p { margin-top: 12px; color: var(--muted-fg); font-size: 13px; line-height: 1.75; }
+.gift-card-action b { display: inline-flex; gap: 8px; align-items: center; margin-top: auto; padding-top: 24px; color: var(--primary); font-size: 13px; }
+.gift-card-note { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+.gift-card-note h2 { margin-top: 10px; font-size: clamp(28px, 4vw, 44px); }
+.gift-card-note p { color: var(--muted-fg); font-size: 15px; line-height: 1.85; }
 .home-essentials-note { display: flex; align-items: center; gap: 18px; margin-top: 18px; padding: 16px 20px; border: 1px solid rgba(89,229,193,.18); border-radius: 10px; background: rgba(89,229,193,.045); }
 .home-essentials-note strong { color: var(--secondary); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
 .home-essentials-note span { color: var(--muted-fg); font-size: 13px; }
@@ -898,6 +910,9 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .scenario-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
   .scenario-wide { grid-row: auto; padding-top: 100px; }
   .info-grid.three { grid-template-columns: 1fr; }
+  .gift-card-grid, .gift-card-note { grid-template-columns: 1fr; }
+  .gift-card-action { min-height: 240px; }
+  .gift-card-action h3 { margin-top: 38px; }
   .service-standard-grid { grid-template-columns: 1fr; }
   .service-standard-grid article { min-height: auto; }
   .about-stats .wrap { grid-template-columns: repeat(2, 1fr); }

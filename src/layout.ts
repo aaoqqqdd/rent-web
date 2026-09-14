@@ -160,10 +160,18 @@ ${renderSiteFooter(opts.contact)}
   }
   var translations = {
     skip: ['跳到主要内容', 'Skip to main content'], menuOpen: ['打开菜单', 'Open menu'], language: ['语言', 'Language'],
-    navProducts: ['产品目录', 'Products'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系我们', 'Contact us'], navLookup: ['订单查询', 'Order Details'],
+    navProducts: ['产品目录', 'Products'], navGiftCards: ['礼品卡', 'Gift cards'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系我们', 'Contact us'], navLookup: ['订单查询', 'Order Details'],
     cart: ['购物车', 'Cart'], account: ['账号中心', 'Account'], footerIntro: ['为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。', 'Reliable computer rentals for study, work, creative projects and short-term needs. Browse live inventory and apply for the time you need.'],
-    footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'],
-    footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help']
+    footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'], giftCards: ['礼品卡', 'Gift cards'],
+    footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help'],
+    giftCardEyebrow: ['GEEKSLOPE · 礼品卡', 'GEEKSLOPE · Gift cards'], giftCardIntro: ['购买一张 GeekSlope Square eGift Card，用于设备租赁；也可以随时查询余额或给现有礼品卡加值。', 'Buy a GeekSlope Square eGift Card for device rentals, or check and reload an existing card anytime.'], giftCardOpen: ['打开礼品卡页面', 'Open gift card page'], giftCardRent: ['查看租赁设备', 'View rental devices'],
+    giftCardKicker: ['SQUARE EGIFT CARD', 'SQUARE EGIFT CARD'], giftCardHeading: ['三个入口，一个礼品卡页面', 'Three actions, one gift card page'], giftCardDescription: ['Square 托管支付、收件人与礼品卡交付。点击任一入口后，会在 Square 页面完成对应操作。', 'Square handles payment, recipient details and delivery. Select an action to continue on Square.'],
+    giftCardBuy: ['购买礼品卡', 'Buy a gift card'], giftCardCheck: ['查询余额', 'Check balance'], giftCardAdd: ['Add money', 'Add money'],
+    giftCardBuyText: ['选择金额、填写收件人和祝福语，付款后由 Square 发送数字礼品卡。', 'Choose an amount, add the recipient and message, then Square sends the digital gift card after payment.'],
+    giftCardCheckText: ['打开礼品卡页面，输入 16 位卡号和 PIN（如有）查看实时余额。', 'Open the gift card page and enter the 16-digit card number and PIN, if applicable, to view the live balance.'],
+    giftCardAddText: ['已有礼品卡？在 Square 页面选择 Reload card，为卡片增加新的金额。', 'Already have a card? Select Reload card on Square to add more value.'],
+    giftCardNoteKicker: ['HOW IT WORKS', 'HOW IT WORKS'], giftCardNoteTitle: ['礼品卡可以用于 GeekSlope 租赁', 'Use your gift card for GeekSlope rentals'],
+    giftCardNoteText: ['购买完成后，请保留礼品卡邮件中的卡号。下单或付款时选择 Square 礼品卡即可使用；余额不足时，可按页面提示完成差额支付。', 'Keep the card number from the gift card email. Select Square gift card when ordering or paying; if the balance is not enough, follow the prompts to pay the remainder.']
   };
   function renderCouponCallouts() {
     document.querySelectorAll('[data-coupon-callout]').forEach(function (callout) {
