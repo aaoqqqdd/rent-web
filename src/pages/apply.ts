@@ -30,7 +30,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   return /* html */ `
 <section class="page-hero compact"><div class="wrap"><div class="kicker">购物车</div><h1>先选设备，再确认租期</h1><p>设备详情页先选租期；加入购物车后，只需在这里修改租期。</p></div></section>
 <section class="section apply-section"><div class="wrap form-wrap cart-page-wrap">
-  <div class="section-head"><div class="kicker">当前选择</div><h2>你的设备清单</h2><p>设备会保存在当前浏览器中，最多同时选择 10 台。</p></div>
+  <div class="section-head"><div><div class="kicker">当前选择</div><h2>你的设备清单</h2></div><p>设备会保存在当前浏览器中，最多同时选择 10 台。</p></div>
   <div class="form-card cart-empty" id="cart-page-empty" hidden><h3>购物车还是空的</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
   <div id="cart-page-content" hidden>
     <div class="form-card cart-term-card">
@@ -225,7 +225,7 @@ export function renderApply(data: ApplyData): string {
     return /* html */ `
     <section class="section">
       <div class="wrap form-wrap">
-        <div class="section-head"><div class="kicker">购物车</div><h2>暂无可租设备</h2></div>
+        <div class="section-head"><div><div class="kicker">购物车</div><h2>暂无可租设备</h2></div></div>
         <p style="color:var(--muted-fg)">产品目录正在更新，请稍后再试，或直接联系客服。</p>
       </div>
     </section>`
@@ -257,8 +257,8 @@ export function renderApply(data: ApplyData): string {
 <section class="section apply-section">
   <div class="wrap form-wrap">
     <div class="section-head">
-      <div class="kicker">第 1 步</div>
-      <h2>确认设备与租赁信息</h2>
+      <div><div class="kicker">第 1 步</div>
+      <h2>确认设备与租赁信息</h2></div>
       <p>同一购物车内的设备共用租期与取还方式。预计填写时间 3–5 分钟。</p>
     </div>
 
