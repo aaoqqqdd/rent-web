@@ -53,7 +53,7 @@ p { margin: 0; }
 @media (max-width: 620px) { .brand .brand-banner { height: 32px; } }
 .header-location { padding-left: 16px; border-left: 1px solid var(--border); color: var(--muted-fg); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; white-space: nowrap; }
 .nav { display: flex; align-items: center; gap: 30px; }
-.nav a { color: var(--muted-fg); font-size: 14px; transition: color .15s; }
+.nav a { color: var(--muted-fg); font-size: 14px; white-space: nowrap; transition: color .15s; }
 .nav a:hover { color: var(--fg); }
 .header-cart {
   position: relative; display: inline-flex; align-items: center; gap: 8px;
@@ -78,7 +78,7 @@ p { margin: 0; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px 20px; border-radius: 6px; font-size: 14px; font-weight: 600;
+  padding: 11px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; white-space: nowrap;
   border: 1px solid transparent; cursor: pointer; transition: transform .12s, box-shadow .15s, background .15s;
 }
 .btn-primary { background: var(--primary); color: var(--primary-ink); box-shadow: 0 0 0 1px rgba(0,230,255,.25), 0 8px 30px -12px rgba(0,230,255,.5); }
@@ -163,10 +163,11 @@ p { margin: 0; }
   background: var(--muted); border: 1px solid var(--border);
   padding: 4px 9px; border-radius: 6px;
 }
-.price-row { display: flex; gap: 26px; padding-top: 16px; border-top: 1px solid var(--border); }
-.price-row .lbl { font-size: 11px; color: var(--muted-fg); text-transform: uppercase; letter-spacing: .06em; }
-.price-row .val { font-size: 18px; font-weight: 700; margin-top: 2px; }
-.price-row .val small { font-size: 12px; font-weight: 500; color: var(--muted-fg); }
+.price-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; padding-top: 16px; border-top: 1px solid var(--border); }
+.price-row .lbl { font-size: 10px; color: var(--muted-fg); text-transform: uppercase; letter-spacing: .06em; }
+.price-row .val { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.price-row .val small { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 500; color: var(--muted-fg); }
+.price-row .price-original { font-size: .68em; }
 .price-original { display: block; color: #737b91; font-size: .65em; font-weight: 500; line-height: 1.25; text-decoration-thickness: 1px; white-space: nowrap; }
 .price-row .val > strong { display: inline-block; }
 .card .btn { width: 100%; margin-top: 18px; }
@@ -813,11 +814,18 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .foot-bottom a:hover { color: var(--primary); }
 
 /* ---------- responsive ---------- */
+@media (max-width: 1180px) {
+  .site-header .wrap { position: relative; gap: 10px; }
+  .header-brand-group { flex: 1; }
+  .menu-toggle { display: block; margin-left: auto; flex: none; }
+  .nav { display: none; }
+  .nav.is-open { position: absolute; top: 74px; left: 12px; right: 12px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: rgba(14,17,25,.98); box-shadow: 0 18px 44px rgba(0,0,0,.38); }
+  .nav.is-open a { padding: 12px 14px; }
+}
 @media (max-width: 900px) {
   .features .wrap { grid-template-columns: repeat(2, 1fr); }
   .grid, .steps { grid-template-columns: 1fr; }
   .foot-grid { grid-template-columns: 1fr 1fr; }
-  .nav { gap: 18px; }
   .header-account { display: none; }
   .header-location { display: none; }
   .hero .hero-grid { grid-template-columns: 1fr; gap: 42px; }
@@ -847,12 +855,6 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .order-record-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
-  .nav { display: none; }
-  .site-header .wrap { position: relative; gap: 10px; }
-  .header-brand-group { flex: 1; }
-  .menu-toggle { display: block; margin-left: auto; flex: none; }
-  .nav.is-open { position: absolute; top: 68px; left: 12px; right: 12px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: rgba(14,17,25,.98); box-shadow: 0 18px 44px rgba(0,0,0,.38); }
-  .nav.is-open a { padding: 12px 14px; }
   .header-cart > span { display: none; }
   .header-actions { gap: 5px; }
   .site-announcement-inner { gap: 10px; min-height: 48px; padding-left: 18px; padding-right: 18px; }
