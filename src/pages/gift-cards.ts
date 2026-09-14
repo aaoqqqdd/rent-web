@@ -44,9 +44,9 @@ export function renderGiftCards(data: GiftCardsData): string {
       </a>
       <a class="gift-card-action gift-card-action-accent" href="${reloadUrl}" target="_blank" rel="noopener">
         <span class="gift-card-action-index">03 / LOAD</span>
-        <h3 data-i18n="giftCardAdd">Add money</h3>
+        <h3 data-i18n="giftCardAdd">给礼品卡加值</h3>
         <p data-i18n="giftCardAddText">已有礼品卡？在 Square 页面选择 Reload card，为卡片增加新的金额。</p>
-        <b>Add money <span>↗</span></b>
+        <b>给礼品卡加值 <span>↗</span></b>
       </a>
     </div>
   </div>
