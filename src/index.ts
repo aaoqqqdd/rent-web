@@ -27,8 +27,7 @@ import { renderAbout, renderNotFound, renderOrderLookup, renderRentalGuide } fro
 import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
 import { renderGiftCards } from './pages/gift-cards'
-import { createRentalSetupIntent, getPublicPaymentMethods, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
-import { getPublicSquareGiftCardConfig } from './squareGiftCard'
+import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
 import { autocompleteMelbourneAddresses } from './address'
 import { listOrdersForUser, lookupOrderByCredentials } from './orders'
 import {
@@ -472,12 +471,10 @@ app.get('/apply', (c) =>
 
 app.get('/checkout', (c) =>
   cachedHtml(c, HTML_TTL, async (user) => {
-    const [products, contact, config, paymentMethods, squareGiftCardConfig] = await Promise.all([
+    const [products, contact, config] = await Promise.all([
       listProducts(c.env),
       getSiteContact(c.env),
       getRentalConfig(c.env),
-      getPublicPaymentMethods(c),
-      getPublicSquareGiftCardConfig(c),
     ])
     const body = renderApply({
       products,
@@ -485,9 +482,6 @@ app.get('/checkout', (c) =>
       config,
       appUrl: appUrl(c.env),
       turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
-      squareGiftCardEnabled: paymentMethods.square,
-      squareGiftCardFeeRate: paymentMethods.squareFeeRate,
-      squareGiftCardConfig,
     })
     return renderPage({
       title: `结账 — ${contact.name}`,

@@ -55,7 +55,7 @@ export function renderGiftCards(data: GiftCardsData): string {
 <section class="section alt gift-card-note-section">
   <div class="wrap gift-card-note">
     <div><span class="kicker" data-i18n="giftCardNoteKicker">HOW IT WORKS</span><h2 data-i18n="giftCardNoteTitle">礼品卡可以用于 GeekSlope 租赁</h2></div>
-    <p data-i18n="giftCardNoteText">购买完成后，请保留礼品卡邮件中的卡号。下单或付款时选择 Square 礼品卡即可使用；余额不足时，可按页面提示完成差额支付。</p>
+    <p data-i18n="giftCardNoteText">购买完成后，请保留礼品卡邮件中的卡号。如需将礼品卡用于租赁，请在提交申请前联系客服确认使用方式。</p>
   </div>
 </section>`
 }
