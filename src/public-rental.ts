@@ -619,12 +619,12 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   let squareGiftCardId = ''
   if (paymentProvider === 'square') {
     const squareGiftCardNonce = String(body.squareGiftCardNonce || '').trim()
-    if (!squareGiftCardNonce) return json(c, 400, { ok: false, message: '请填写 Square 礼品卡并完成安全验证。' })
+    if (!squareGiftCardNonce) return json(c, 400, { ok: false, message: '请填写礼品卡并完成安全验证。' })
     try {
       squareGiftCardId = await linkSquareGiftCardToCustomer(c, user, squareGiftCardNonce)
     } catch (error) {
       console.error('Website Square gift card link failed:', error instanceof Error ? error.message : error)
-      return json(c, 400, { ok: false, message: 'Square 礼品卡验证或保存失败，请检查卡号后重试。' })
+      return json(c, 400, { ok: false, message: '礼品卡验证或保存失败，请检查卡号后重试。' })
     }
   }
   let stripeCustomerId = ''

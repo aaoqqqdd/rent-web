@@ -391,7 +391,7 @@ export function renderApply(data: ApplyData): string {
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
           ${squareGiftCardEnabled ? `<div class="form-card square-gift-card-setup" id="square-gift-card-setup">
-              <div class="stripe-setup-head"><div><label>Square 礼品卡</label></div><span>SECURE / SQUARE</span></div>
+              <div class="stripe-setup-head"><div><label>礼品卡</label></div><span>SECURE</span></div>
               <div id="square-gift-card-element"></div>
               <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
             </div>` : ''}
@@ -404,7 +404,7 @@ export function renderApply(data: ApplyData): string {
               </label>
               ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="square">
-                <span class="payment-method-copy"><strong>Square 礼品卡</strong><small>提交时先安全绑定 Square 礼品卡；审核通过并签约后，用它支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
+                <span class="payment-method-copy"><strong>礼品卡</strong><small>提交时先安全绑定礼品卡；审核通过并签约后，用它支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
               </label>` : ''}
               <div id="balance-payment-option" hidden>
                 <label class="balance-payment-option choice-line">
@@ -882,7 +882,7 @@ export function renderApply(data: ApplyData): string {
   function loadSquareGiftCard() {
     if (squareGiftCard) return Promise.resolve(squareGiftCard);
     if (squareGiftCardLoading) return squareGiftCardLoading;
-    if (!squareGiftCardConfig || !window.Square) return Promise.reject(new Error(uiCopy('Square 礼品卡组件暂不可用，请刷新页面后重试。')));
+    if (!squareGiftCardConfig || !window.Square) return Promise.reject(new Error(uiCopy('礼品卡组件暂不可用，请刷新页面后重试。')));
     squareGiftCardLoading = Promise.resolve().then(function () {
       var payments = window.Square.payments(squareGiftCardConfig.applicationId, squareGiftCardConfig.locationId);
       return payments.giftCard().then(function (instance) {
@@ -893,11 +893,11 @@ export function renderApply(data: ApplyData): string {
               '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
               '.input-container.is-focus': { borderColor: '#7c6cff' },
               '.input-container.is-error': { borderColor: '#ff7185' },
-              '.message-text': { color: '#9ca3b7', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', fontSize: '12px' },
+              '.message-text': { color: '#9ca3b7' },
               '.message-icon': { color: '#737b91' },
               '.message-text.is-error': { color: '#ff7185' },
               '.message-icon.is-error': { color: '#ff7185' },
-              input: { color: '#171a24', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+              input: { color: '#171a24' },
               'input::placeholder': { color: '#737b91' },
             },
           });
@@ -905,7 +905,7 @@ export function renderApply(data: ApplyData): string {
       });
     }).catch(function (error) {
       squareGiftCardLoading = null;
-      if (squareGiftCardMessage) squareGiftCardMessage.textContent = paymentError(error, uiCopy('Square 礼品卡输入框加载失败，请刷新页面后重试。'));
+      if (squareGiftCardMessage) squareGiftCardMessage.textContent = paymentError(error, uiCopy('礼品卡输入框加载失败，请刷新页面后重试。'));
       throw error;
     });
     return squareGiftCardLoading;
@@ -1174,11 +1174,11 @@ export function renderApply(data: ApplyData): string {
       try {
         var squareCard = await loadSquareGiftCard();
         var tokenResult = await squareCard.tokenize();
-        if (tokenResult.status !== 'OK') throw new Error(tokenResult.errors?.map(function (item) { return item.message; }).join('；') || uiCopy('Square 礼品卡验证失败，请检查卡号后重试。'));
+        if (tokenResult.status !== 'OK') throw new Error(tokenResult.errors?.map(function (item) { return item.message; }).join('；') || uiCopy('礼品卡验证失败，请检查卡号后重试。'));
         squareGiftCardNonce = String(tokenResult.token || '').trim();
-        if (!squareGiftCardNonce) throw new Error(uiCopy('Square 未返回有效的礼品卡凭据，请重试。'));
+        if (!squareGiftCardNonce) throw new Error(uiCopy('未返回有效的礼品卡凭据，请重试。'));
       } catch (error) {
-        showFormError(paymentError(error, uiCopy('Square 礼品卡验证失败，请检查卡号后重试。'))); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+        showFormError(paymentError(error, uiCopy('礼品卡验证失败，请检查卡号后重试。'))); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
       }
     }
     var payload = {};
