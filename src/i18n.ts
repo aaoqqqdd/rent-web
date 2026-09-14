@@ -39,7 +39,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '租期内出现故障时，请先停止可能扩大损坏的操作，并联系 7×12 小时技术支持。经确认为设备自身故障且符合租赁条件时，我们会安排排查或免费换机。': 'If a fault occurs, stop any action that may worsen it and contact technical support. We will troubleshoot or provide a free replacement for an eligible confirmed device fault.',
   '快捷支付': 'Express checkout', '使用可用的快捷支付方式验证。': 'Verify with an available express payment method.',
   '支付方式': 'Payment method', '可使用快捷支付或信用卡验证，押金归还时使用': 'Use express checkout or card verification; the deposit is handled on return.',
-  '信用卡 / Apple Pay / Link': 'Card / Apple Pay / Link', '审核通过后按确认金额付款，信用卡由 Stripe 安全处理。': 'Pay the confirmed amount after approval; card details are securely handled by Stripe.',
+  '信用卡 / Apple Pay / Link': 'Card / Apple Pay / Link', '审核通过后按确认金额付款，信用卡由 Stripe 安全处理，收取 x% 手续费。': 'Pay the confirmed amount after approval; card details are securely handled by Stripe, with an x% processing fee.',
   'Square 礼品卡': 'Square Gift Card', '审核通过并签约后，用 Square 礼品卡支付租金及服务费；押金按订单约定单独处理。': 'After approval and signing, use a Square Gift Card for rental and service fees; the deposit is handled separately under the order terms.',
   '审核通过并签约后，用 Square 礼品卡支付租金及服务费；收取 2.2% 手续费，押金按订单约定单独处理。': 'After approval and signing, use a Square Gift Card for rental and service fees; a 2.2% processing fee applies, and the deposit is handled separately under the order terms.',
   'Square 礼品卡支付当前未启用。': 'Square Gift Card payments are currently unavailable.',

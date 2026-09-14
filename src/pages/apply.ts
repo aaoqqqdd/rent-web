@@ -391,7 +391,7 @@ export function renderApply(data: ApplyData): string {
             <div class="payment-method-options" id="payment-method-options">
               <label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="card" checked>
-                <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small>审核通过后按确认金额付款，信用卡由 Stripe 安全处理。</small></span>
+                <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small>审核通过后按确认金额付款，信用卡由 Stripe 安全处理，收取 x% 手续费。</small></span>
               </label>
               ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="square">
