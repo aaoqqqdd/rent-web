@@ -385,14 +385,11 @@ export function renderApply(data: ApplyData): string {
 
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
-<<<<<<< HEAD
-=======
-          ${squareGiftCardEnabled ? `<div class="form-card square-gift-card-setup" id="square-gift-card-setup">
-              <div class="stripe-setup-head"><div><label>礼品卡</label></div><span>SECURE</span></div>
-              <div id="square-gift-card-element"></div>
-              <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
-            </div>` : ''}
->>>>>>> 6c1a97b (Hide Square branding on gift card checkout and fix invalid style props)
+          <div class="form-card square-gift-card-setup" id="square-gift-card-setup">
+            <div class="stripe-setup-head"><div><label>礼品卡</label></div><span>SECURE</span></div>
+            <div id="square-gift-card-element"></div>
+            <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
+          </div>
           <div class="form-card">
             <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>信用卡用于押金预授权，符合条件的账户可使用余额支付</p></div></div>
             <div class="payment-method-options" id="payment-method-options">
@@ -537,7 +534,6 @@ export function renderApply(data: ApplyData): string {
   var paymentMethodOptions = document.getElementById('payment-method-options');
   var squareGiftCardSetup = document.getElementById('square-gift-card-setup');
   var squareGiftCardMessage = document.getElementById('square-gift-card-message');
-  var paymentMethodOptions = document.getElementById('payment-method-options');
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
   var addressStatus = document.getElementById('address-search-status');
@@ -1142,21 +1138,6 @@ export function renderApply(data: ApplyData): string {
     }
     var termValidationError = validateTerms();
     if (termValidationError) { showFormError(termValidationError); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-<<<<<<< HEAD
-=======
-    var squareGiftCardNonce = '';
-    if (selectedPaymentMethod === 'square') {
-      try {
-        var squareCard = await loadSquareGiftCard();
-        var tokenResult = await squareCard.tokenize();
-        if (tokenResult.status !== 'OK') throw new Error(tokenResult.errors?.map(function (item) { return item.message; }).join('；') || uiCopy('礼品卡验证失败，请检查卡号后重试。'));
-        squareGiftCardNonce = String(tokenResult.token || '').trim();
-        if (!squareGiftCardNonce) throw new Error(uiCopy('未返回有效的礼品卡凭据，请重试。'));
-      } catch (error) {
-        showFormError(paymentError(error, uiCopy('礼品卡验证失败，请检查卡号后重试。'))); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
-      }
-    }
->>>>>>> 6c1a97b (Hide Square branding on gift card checkout and fix invalid style props)
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
     if (saveContactInfo.checked) {
