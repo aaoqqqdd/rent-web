@@ -20,7 +20,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '已有礼品卡？在 Square 页面选择 Reload card，为卡片增加新的金额。': 'Already have a card? Select Reload card on Square to add more value.',
   '购买 eGift Card': 'Buy eGift Card', '查看卡片余额': 'View card balance', 'Add money': 'Add money',
   'HOW IT WORKS': 'HOW IT WORKS', '礼品卡可以用于 GeekSlope 租赁': 'Use your gift card for GeekSlope rentals',
-  '购买完成后，请保留礼品卡邮件中的卡号。如需将礼品卡用于租赁，请在提交申请前联系客服确认使用方式。': 'Keep the card number from the gift card email. If you want to use the card for a rental, contact us before submitting your application to confirm the available payment method.',
+  '购买完成后，请保留礼品卡邮件中的卡号。下单或付款时选择礼品卡即可使用；余额不足时，可按页面提示完成差额支付。如需将礼品卡用于租赁，请在提交申请前联系客服确认使用方式。': 'Keep the card number from the gift card email. Select the gift card when ordering or paying; if the balance is not enough, follow the prompts to pay the remainder. If you want to use the card for a rental, contact us before submitting your application to confirm the available payment method.',
   '游戏笔记本': 'Gaming laptops', '轻薄商务本': 'Ultrabooks', '台式工作站': 'Workstations',
   '全部产品': 'All products', '租赁说明': 'Rental guide', '租赁指南': 'Rental guide', '常见问题': 'FAQ',
   '用户协议': 'User terms', '服务条款': 'Service terms', '退款政策': 'Refund policy',
