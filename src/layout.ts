@@ -171,7 +171,11 @@ ${renderSiteFooter(opts.contact)}
     giftCardCheckText: ['打开礼品卡页面，输入 16 位卡号和 PIN（如有）查看实时余额。', 'Open the gift card page and enter the 16-digit card number and PIN, if applicable, to view the live balance.'],
     giftCardAddText: ['已有礼品卡？在 Square 页面选择 Reload card，为卡片增加新的金额。', 'Already have a card? Select Reload card on Square to add more value.'],
     giftCardNoteKicker: ['HOW IT WORKS', 'HOW IT WORKS'], giftCardNoteTitle: ['礼品卡可以用于 GeekSlope 租赁', 'Use your gift card for GeekSlope rentals'],
+<<<<<<< HEAD
     giftCardNoteText: ['购买完成后，请保留礼品卡邮件中的卡号。如需将礼品卡用于租赁，请在提交申请前联系客服确认使用方式。', 'Keep the card number from the gift card email. If you want to use the card for a rental, contact us before submitting your application to confirm the available payment method.']
+=======
+    giftCardNoteText: ['购买完成后，请保留礼品卡邮件中的卡号。下单或付款时选择礼品卡即可使用；余额不足时，可按页面提示完成差额支付。', 'Keep the card number from the gift card email. Select gift card when ordering or paying; if the balance is not enough, follow the prompts to pay the remainder.']
+>>>>>>> 6c1a97b (Hide Square branding on gift card checkout and fix invalid style props)
   };
   function renderCouponCallouts() {
     document.querySelectorAll('[data-coupon-callout]').forEach(function (callout) {
