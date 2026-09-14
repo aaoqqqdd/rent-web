@@ -51,6 +51,30 @@ interface HomeData {
   config: RentalConfig
 }
 
+function homeFaqItems(config: RentalConfig, deliverySummary: string, pickupSummary: string): Array<{ q: string; a: string }> {
+  return [
+    { q: '提交申请会立即扣款吗？', a: '不会。申请先由我们确认档期和费用，之后才进入在线签约与付款。' },
+    { q: '哪些区域可以送货或自取？', a: `可配送区域包括 ${deliverySummary}；${pickupSummary}。` },
+    { q: '最短可以租多久？', a: `当前最短租期为 ${config.minimumRentalDays} 天，具体可用档期以下单页校验为准。` },
+    { q: '设备出故障怎么办？', a: '租期内可联系 7×12 小时技术支持；确认属于设备故障且符合条件时，会安排免费换机。' },
+  ]
+}
+
+export function homeFaqSchema(data: HomeData): Record<string, unknown> {
+  const deliverySummary = data.config.deliveryAreas.length ? data.config.deliveryAreas.join('、') : '墨尔本 CBD 及周边地区'
+  const pickupSummary = data.config.pickupLocations.length
+    ? `可选自取点：${data.config.pickupLocations.join('、')}`
+    : '自取地点请联系客服确认'
+  return {
+    '@type': 'FAQPage',
+    mainEntity: homeFaqItems(data.config, deliverySummary, pickupSummary).map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  }
+}
+
 export function renderHome(data: HomeData): string {
   const { featured, products, minRate, catalogMinRate, config } = data
   const fromLine = catalogMinRate > 0 ? `最低$${catalogMinRate}/天起` : '灵活租期，按需计费'
@@ -180,10 +204,7 @@ export function renderHome(data: HomeData): string {
   <div class="wrap split-head">
     <div><div class="kicker">开始前</div><h2>几个最常问的问题</h2><p>规则不绕弯。更完整的押金、续租、配送与故障处理说明都在租赁指南里。</p><a class="text-link" href="/rental-guide#faq">查看全部常见问题 <span>→</span></a></div>
     <div class="faq-list">
-      <details><summary>提交申请会立即扣款吗？</summary><p>不会。申请先由我们确认档期和费用，之后才进入在线签约与付款。</p></details>
-      <details><summary>哪些区域可以送货或自取？</summary><p>可配送区域包括 ${esc(deliverySummary)}；${esc(pickupSummary)}。</p></details>
-      <details><summary>最短可以租多久？</summary><p>当前最短租期为 ${esc(config.minimumRentalDays)} 天，具体可用档期以下单页校验为准。</p></details>
-      <details><summary>设备出故障怎么办？</summary><p>租期内可联系 7×12 小时技术支持；确认属于设备故障且符合条件时，会安排免费换机。</p></details>
+      ${homeFaqItems(config, deliverySummary, pickupSummary).map((item) => `<details><summary>${esc(item.q)}</summary><p>${esc(item.a)}</p></details>`).join('')}
     </div>
   </div>
 </section>
