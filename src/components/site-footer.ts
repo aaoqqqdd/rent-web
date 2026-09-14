@@ -11,6 +11,9 @@ export function renderSiteFooter(contact: SiteContact): string {
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="${esc(contact.name)} 首页">${renderBrand(contact.name, contact.logo)}</a>
         <p data-i18n="footerIntro">为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。</p>
+        <div style="width:280px;height:28px;overflow:hidden;margin-top:12px;">
+          <iframe width="380" height="38" style="border:0;transform:scale(0.7368);transform-origin:top left;" src="https://climate.stripe.com/badge/EEGS4u?theme=dark&size=small&locale=zh-Hans"></iframe>
+        </div>
       </div>
       <div class="foot-col">
         <h4 data-i18n="footerProducts">产品</h4>
