@@ -731,6 +731,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .square-gift-card-preview strong { color: var(--secondary); font-family: var(--mono); text-align: right; }
 .square-gift-card-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: stretch; }
 .square-gift-card-input-row .btn { min-height: 44px; white-space: nowrap; }
+#square-gift-card-element { min-height: 48px; border-radius: 8px; background: #0b0e15; overflow: hidden; }
 .cart-term-card { margin-bottom: 18px; border-color: rgba(124,108,255,.28); background: rgba(124,108,255,.06); }
 .field input, .field select, .field textarea { min-height: 44px; border-radius: 8px; background: #0b0e15; }.field textarea { min-height: 100px; }.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,.13); }
 .form-summary { border-color: rgba(124,108,255,.22); background: rgba(124,108,255,.06); overflow-wrap: anywhere; line-height: 1.6; }

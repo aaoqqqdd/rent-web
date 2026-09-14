@@ -389,7 +389,7 @@ export function renderApply(data: ApplyData): string {
             <div class="stripe-setup-head"><div><label>礼品卡</label></div></div>
             <div class="square-gift-card-input-row">
               <div id="square-gift-card-element"></div>
-              <button type="button" class="btn btn-ghost" id="square-gift-card-check" disabled>验证</button>
+              <button type="button" class="btn btn-ghost" id="square-gift-card-check" disabled>验证礼品卡余额</button>
             </div>
             <div class="square-gift-card-preview" id="square-gift-card-preview" hidden>
               <div><span>礼品卡余额</span><strong id="square-gift-card-balance">AUD $0.00</strong></div>
@@ -405,7 +405,6 @@ export function renderApply(data: ApplyData): string {
                 <input type="radio" name="paymentMethod" value="card" checked>
                 <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small id="card-payment-method-note">手续费以当前支付配置为准。</small></span>
               </label>
-              ${squareGiftCardConfig ? `<label class="payment-method-option choice-line"><input type="radio" name="paymentMethod" value="square"><span class="payment-method-copy"><strong>礼品卡支付</strong><small id="square-payment-method-note">审核通过后从礼品卡支付租金及手续费，押金仍需信用卡。</small></span></label>` : ''}
               <div id="balance-payment-option" hidden>
                 <label class="balance-payment-option choice-line">
                   <input type="radio" name="paymentMethod" value="balance">
@@ -895,21 +894,17 @@ export function renderApply(data: ApplyData): string {
       ? '无法连接支付服务，请检查网络后刷新页面重试。'
       : (message || fallback);
   }
+  function formatFeePercentage(rate) {
+    var value = Math.round(rate * 100 * 100) / 100;
+    return String(value);
+  }
   function updatePaymentMethodNote() {
     var note = document.getElementById('card-payment-method-note');
-    var percentage = (stripeFeeRate * 100).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+    var percentage = formatFeePercentage(stripeFeeRate);
     if (note) note.textContent = uiText(
       '审核通过后按确认金额付款，信用卡由 Stripe 安全处理，收取 ' + percentage + '% 手续费。',
       'After approval, pay the confirmed amount by card. Stripe securely processes the card payment; a ' + percentage + '% processing fee applies.',
     );
-    var squareNote = document.getElementById('square-payment-method-note');
-    if (squareNote) {
-      var squarePercentage = (squareProcessingFeeRate * 100).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
-      squareNote.textContent = uiText(
-        '审核通过后从礼品卡支付租金及手续费（' + squarePercentage + '%），押金仍需信用卡。',
-        'After approval, the gift card pays the rental and processing fee (' + squarePercentage + '%); the deposit still requires a card.',
-      );
-    }
   }
   function loadSquareGiftCard() {
     if (squareGiftCard) return Promise.resolve(squareGiftCard);
@@ -922,14 +917,14 @@ export function renderApply(data: ApplyData): string {
         return squareGiftCard.attach('#square-gift-card-element').then(function () {
           return squareGiftCard.configure({
             style: {
-              '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
+              '.input-container': { borderColor: '#353b4d', borderRadius: '8px', backgroundColor: '#0b0e15' },
               '.input-container.is-focus': { borderColor: '#7c6cff' },
               '.input-container.is-error': { borderColor: '#ff7185' },
               '.message-text': { color: '#9ca3b7' },
               '.message-icon': { color: '#737b91' },
               '.message-text.is-error': { color: '#ff7185' },
               '.message-icon.is-error': { color: '#ff7185' },
-              input: { color: '#f3f4f8' },
+              input: { color: '#f3f4f8', backgroundColor: '#0b0e15' },
               'input::placeholder': { color: '#737b91' },
             },
           });
@@ -1009,7 +1004,7 @@ export function renderApply(data: ApplyData): string {
   });
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
-    paymentMethodOptions.hidden = balanceOption.hidden && !squareGiftCardConfig;
+    paymentMethodOptions.hidden = balanceOption.hidden;
     stripePaymentBox.hidden = useBalance;
     stripeSetupBox.hidden = useBalance;
     walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
