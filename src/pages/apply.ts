@@ -875,14 +875,14 @@ export function renderApply(data: ApplyData): string {
         return squareGiftCard.attach('#square-gift-card-element').then(function () {
           return squareGiftCard.configure({
             style: {
-              '.input-container': { backgroundColor: '#0b0e15', borderColor: '#353b4d', borderRadius: '8px' },
+              '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
               '.input-container.is-focus': { borderColor: '#7c6cff' },
               '.input-container.is-error': { borderColor: '#ff7185' },
               '.message-text': { color: '#9ca3b7' },
               '.message-icon': { color: '#737b91' },
               '.message-text.is-error': { color: '#ff7185' },
               '.message-icon.is-error': { color: '#ff7185' },
-              input: { backgroundColor: '#0b0e15', color: '#f3f4f8' },
+              input: { color: '#f3f4f8' },
               'input::placeholder': { color: '#737b91' },
             },
           });
