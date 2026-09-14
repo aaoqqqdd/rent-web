@@ -121,16 +121,42 @@ async function ensureSquareCustomer(c: RentalContext, user: Record<string, unkno
   return customerId
 }
 
-export async function getPublicSquareGiftCardConfig(c: RentalContext): Promise<{ applicationId: string; locationId: string; environment: SquareEnvironment } | null> {
+export async function getPublicSquareGiftCardConfig(c: RentalContext): Promise<{ applicationId: string; locationId: string; environment: SquareEnvironment; squareProcessingFeeRate: number } | null> {
   try {
     const paymentMethods = await c.env.RENT.prepare("SELECT value FROM systemSettings WHERE key = 'paymentMethods'").first<{ value?: string }>()
     const settings = paymentMethods?.value ? JSON.parse(paymentMethods.value) as Record<string, unknown> : {}
     if (settings.square !== true) return null
     const config = await runtimeConfig(c)
-    return { applicationId: config.applicationId, locationId: config.locationId, environment: config.environment }
+    const squareProcessingFeeRate = Number(settings.squareProcessingFeeRate)
+    return {
+      applicationId: config.applicationId,
+      locationId: config.locationId,
+      environment: config.environment,
+      squareProcessingFeeRate: Number.isFinite(squareProcessingFeeRate)
+        ? Math.min(1, Math.max(0, squareProcessingFeeRate))
+        : 0.022,
+    }
   } catch {
     return null
   }
+}
+
+export async function inspectSquareGiftCardNonce(c: RentalContext, nonce: string): Promise<{ balance: number; currency: string; state: string }> {
+  const cleanNonce = String(nonce || '').trim()
+  if (cleanNonce.length < 10 || cleanNonce.length > 500) throw new Error('Square 礼品卡凭据无效')
+
+  const retrieved = await squareRequest(c, '/v2/gift-cards/from-nonce', { nonce: cleanNonce })
+  const giftCard = retrieved?.gift_card || retrieved?.giftCard
+  const giftCardId = String(giftCard?.id || '').trim()
+  if (!giftCardId || giftCardId.length > 200 || /[\u0000-\u001f\u007f]/.test(giftCardId)) throw new Error('Square 未返回有效的礼品卡')
+
+  const balanceMoney = giftCard?.balance_money || giftCard?.balanceMoney
+  const balanceCents = Number(balanceMoney?.amount)
+  const currency = String(balanceMoney?.currency || '').toUpperCase()
+  const state = String(giftCard?.state || '').toUpperCase()
+  if (!Number.isFinite(balanceCents) || balanceCents < 0 || currency !== 'AUD') throw new Error('礼品卡余额或币种无效')
+  if (state && state !== 'ACTIVE') throw new Error('这张礼品卡当前不可用。')
+  return { balance: Number((balanceCents / 100).toFixed(2)), currency, state: state || 'ACTIVE' }
 }
 
 /** Convert Square's browser nonce into a gift card ID, then link that card to the customer. */

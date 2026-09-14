@@ -28,7 +28,7 @@ import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
 import { renderGiftCards } from './pages/gift-cards'
 import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
-import { getPublicSquareGiftCardConfig } from './squareGiftCard'
+import { getPublicSquareGiftCardConfig, inspectSquareGiftCardNonce } from './squareGiftCard'
 import { autocompleteMelbourneAddresses } from './address'
 import { listOrdersForUser, lookupOrderByCredentials } from './orders'
 import {
@@ -213,6 +213,19 @@ app.post('/api/rental-setup-intent', async (c) => {
 })
 
 app.get('/api/account-balance', async (c) => c.json(await lookupAccountBalance(c, String(c.req.query('email') || '')), 200, { 'Cache-Control': 'no-store' }))
+
+app.post('/api/square-gift-card-preview', async (c) => {
+  const body = await parseRequestBody(c)
+  if (!body) return c.json({ ok: false, message: '请求格式无效。' }, 400)
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-square-gift-card-preview', ip, 12, 600))) return c.json({ ok: false, message: '礼品卡查询过于频繁，请稍后再试。' }, 429)
+  try {
+    const preview = await inspectSquareGiftCardNonce(c, String(body.nonce || ''))
+    return c.json({ ok: true, ...preview }, 200, { 'Cache-Control': 'no-store' })
+  } catch (error) {
+    return c.json({ ok: false, message: error instanceof Error ? error.message : '礼品卡验证失败，请检查卡号后重试。' }, 400)
+  }
+})
 
 app.post('/api/rental-request', async (c) => {
   const body = await parseRequestBody(c)

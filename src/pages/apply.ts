@@ -10,7 +10,7 @@ interface ApplyData {
   config: RentalConfig
   appUrl: string
   turnstileSiteKey: string
-  squareGiftCardConfig: { applicationId: string; locationId: string; environment: 'sandbox' | 'production' } | null
+  squareGiftCardConfig: { applicationId: string; locationId: string; environment: 'sandbox' | 'production'; squareProcessingFeeRate: number } | null
 }
 
 function scriptJson(value: unknown): string {
@@ -385,10 +385,16 @@ export function renderApply(data: ApplyData): string {
 
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
-          <div class="form-card square-gift-card-setup" id="square-gift-card-setup">
-            <div class="stripe-setup-head"><div><label>礼品卡</label></div></div>
+          <div class="form-card square-gift-card-setup" id="square-gift-card-setup"${squareGiftCardConfig ? '' : ' hidden'}>
+            <div class="stripe-setup-head"><div><label>礼品卡</label><p>验证后显示余额和本次预计扣减金额；实际扣款在审核通过后完成。</p></div></div>
             <div id="square-gift-card-element"></div>
+            <div class="square-gift-card-preview" id="square-gift-card-preview" hidden>
+              <div><span>礼品卡余额</span><strong id="square-gift-card-balance">AUD $0.00</strong></div>
+              <div><span>本次预计扣减</span><strong id="square-gift-card-deduction">AUD $0.00</strong></div>
+              <div><span>扣减后剩余应付</span><strong id="square-gift-card-remaining">AUD $0.00</strong></div>
+            </div>
             <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
+            <button type="button" class="btn btn-ghost" id="square-gift-card-check" disabled>验证礼品卡余额</button>
           </div>
           <div class="form-card">
             <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>信用卡用于押金预授权，符合条件的账户可使用余额支付</p></div></div>
@@ -397,6 +403,7 @@ export function renderApply(data: ApplyData): string {
                 <input type="radio" name="paymentMethod" value="card" checked>
                 <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small id="card-payment-method-note">手续费以当前支付配置为准。</small></span>
               </label>
+              ${squareGiftCardConfig ? `<label class="payment-method-option choice-line"><input type="radio" name="paymentMethod" value="square"><span class="payment-method-copy"><strong>礼品卡支付</strong><small id="square-payment-method-note">审核通过后从礼品卡支付租金及手续费，押金仍需信用卡。</small></span></label>` : ''}
               <div id="balance-payment-option" hidden>
                 <label class="balance-payment-option choice-line">
                   <input type="radio" name="paymentMethod" value="balance">
@@ -513,8 +520,12 @@ export function renderApply(data: ApplyData): string {
   var cardReady = false;
   var stripeFeeRate = 0.025;
   var squareGiftCardConfig = ${scriptJson(squareGiftCardConfig)};
+  var squareProcessingFeeRate = squareGiftCardConfig ? Number(squareGiftCardConfig.squareProcessingFeeRate || 0.022) : 0.022;
   var squareGiftCard = null;
   var squareGiftCardLoading = null;
+  var squareGiftCardNonce = '';
+  var squareGiftCardBalance = null;
+  var squareGiftCardVerified = false;
   var accountBalance = null;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
@@ -526,6 +537,7 @@ export function renderApply(data: ApplyData): string {
   var contactFirstName = document.getElementById('contactFirstName');
   var contactLastName = document.getElementById('contactLastName');
   var balanceEndpoint = '/api/account-balance';
+  var squareGiftCardPreviewEndpoint = '/api/square-gift-card-preview';
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
   var walletMessage = document.getElementById('stripe-wallet-message');
@@ -534,6 +546,8 @@ export function renderApply(data: ApplyData): string {
   var paymentMethodOptions = document.getElementById('payment-method-options');
   var squareGiftCardSetup = document.getElementById('square-gift-card-setup');
   var squareGiftCardMessage = document.getElementById('square-gift-card-message');
+  var squareGiftCardCheck = document.getElementById('square-gift-card-check');
+  var squareGiftCardPreview = document.getElementById('square-gift-card-preview');
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
   var addressStatus = document.getElementById('address-search-status');
@@ -757,6 +771,16 @@ export function renderApply(data: ApplyData): string {
   function summaryRow(label, amount, className) {
     return '<div class="summary-row' + (className ? ' ' + className : '') + '"><span>' + label + '</span><span>' + amount + '</span></div>';
   }
+  function calculateRentalPayable() {
+    var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
+    var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
+    var paymentFee = selectedPaymentMethod === 'card'
+      ? Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100
+      : selectedPaymentMethod === 'square'
+        ? Math.round(Math.max(0, rentTotal - appliedDiscount) * squareProcessingFeeRate * 100) / 100
+        : 0;
+    return Math.max(0, rentTotal - appliedDiscount) + paymentFee;
+  }
   function refreshSummary() {
     updatePaymentMethodNote();
     var count = cartIds.length;
@@ -767,8 +791,15 @@ export function renderApply(data: ApplyData): string {
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var paymentFee = selectedPaymentMethod === 'card'
       ? Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100
+      : selectedPaymentMethod === 'square'
+        ? Math.round(Math.max(0, rentTotal - appliedDiscount) * squareProcessingFeeRate * 100) / 100
       : 0;
-    var payableTotal = Math.max(0, rentTotal - appliedDiscount) + paymentFee;
+    var rentalPayable = Math.max(0, rentTotal - appliedDiscount) + paymentFee;
+    var giftCardDeduction = selectedPaymentMethod === 'square' && squareGiftCardBalance !== null
+      ? Math.min(squareGiftCardBalance, rentalPayable)
+      : 0;
+    var giftCardRemaining = Math.max(0, rentalPayable - giftCardDeduction);
+    var payableTotal = selectedPaymentMethod === 'square' && squareGiftCardVerified ? giftCardRemaining : rentalPayable;
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
@@ -781,13 +812,20 @@ export function renderApply(data: ApplyData): string {
     }
     var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
-      + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '');
+      + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '')
+      + (selectedPaymentMethod === 'square' && squareGiftCardVerified ? summaryRow(uiText('礼品卡预计扣减', 'Estimated gift card deduction'), '-$' + giftCardDeduction.toFixed(2), 'summary-discount') : '')
+      + (selectedPaymentMethod === 'square' && squareGiftCardVerified ? summaryRow(uiText('礼品卡扣减后待付', 'Remaining after gift card'), '$' + giftCardRemaining.toFixed(2)) : '');
     summary.innerHTML = '<div class="summary-title">' + uiText('订单金额', 'Order total') + '</div>'
       + '<div class="summary-count">' + count + uiText(' 台设备', ' device(s)') + '</div>'
       + '<div class="summary-rows">' + rows + '</div>'
       + '<div class="summary-divider"></div>'
       + summaryRow(uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
       + summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit');
+    if (squareGiftCardVerified && squareGiftCardBalance !== null) {
+      var previewPayable = calculateRentalPayable();
+      var previewDeduction = Math.min(squareGiftCardBalance, previewPayable);
+      updateSquareGiftCardPreview(squareGiftCardBalance, previewDeduction, Math.max(0, previewPayable - previewDeduction));
+    }
   }
   function renderCart() {
     form.hidden = cartIds.length === 0;
@@ -857,12 +895,19 @@ export function renderApply(data: ApplyData): string {
   }
   function updatePaymentMethodNote() {
     var note = document.getElementById('card-payment-method-note');
-    if (!note) return;
     var percentage = (stripeFeeRate * 100).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
-    note.textContent = uiText(
+    if (note) note.textContent = uiText(
       '审核通过后按确认金额付款，信用卡由 Stripe 安全处理，收取 ' + percentage + '% 手续费。',
       'After approval, pay the confirmed amount by card. Stripe securely processes the card payment; a ' + percentage + '% processing fee applies.',
     );
+    var squareNote = document.getElementById('square-payment-method-note');
+    if (squareNote) {
+      var squarePercentage = (squareProcessingFeeRate * 100).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+      squareNote.textContent = uiText(
+        '审核通过后从礼品卡支付租金及手续费（' + squarePercentage + '%），押金仍需信用卡。',
+        'After approval, the gift card pays the rental and processing fee (' + squarePercentage + '%); the deposit still requires a card.',
+      );
+    }
   }
   function loadSquareGiftCard() {
     if (squareGiftCard) return Promise.resolve(squareGiftCard);
@@ -886,6 +931,18 @@ export function renderApply(data: ApplyData): string {
               'input::placeholder': { color: '#737b91' },
             },
           });
+        }).then(function () {
+          if (squareGiftCardCheck) squareGiftCardCheck.disabled = false;
+          if (squareGiftCard && squareGiftCard.addEventListener) {
+            squareGiftCard.addEventListener('input', function () {
+              squareGiftCardNonce = '';
+              squareGiftCardBalance = null;
+              squareGiftCardVerified = false;
+              if (squareGiftCardPreview) squareGiftCardPreview.hidden = true;
+              if (squareGiftCardMessage) squareGiftCardMessage.textContent = '';
+              refreshSummary();
+            });
+          }
         });
       });
     }).catch(function (error) {
@@ -895,9 +952,62 @@ export function renderApply(data: ApplyData): string {
     });
     return squareGiftCardLoading;
   }
+  function squareGiftCardToken() {
+    return loadSquareGiftCard().then(function (instance) {
+      return instance.tokenize().then(function (result) {
+        if (!result || result.status !== 'OK' || !result.token) {
+          var errors = result && (result.errors || result.errorList);
+          var detail = Array.isArray(errors) && errors.length ? errors.map(function (item) { return item.detail || item.message; }).filter(Boolean).join('；') : '';
+          throw new Error(detail || uiCopy('请填写有效的礼品卡卡号。'));
+        }
+        return result.token;
+      });
+    });
+  }
+  function updateSquareGiftCardPreview(balance, deduction, remaining) {
+    if (!squareGiftCardPreview) return;
+    document.getElementById('square-gift-card-balance').textContent = 'AUD $' + balance.toFixed(2);
+    document.getElementById('square-gift-card-deduction').textContent = 'AUD $' + deduction.toFixed(2);
+    document.getElementById('square-gift-card-remaining').textContent = 'AUD $' + remaining.toFixed(2);
+    squareGiftCardPreview.hidden = false;
+  }
+  if (squareGiftCardCheck) squareGiftCardCheck.addEventListener('click', function () {
+    squareGiftCardCheck.disabled = true;
+    squareGiftCardMessage.textContent = uiCopy('正在验证礼品卡余额…');
+    squareGiftCardToken()
+      .then(function (nonce) {
+        return fetch(squareGiftCardPreviewEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ nonce: nonce }),
+        }).then(readJsonResponse).then(function (result) {
+          if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '礼品卡验证失败。'));
+          squareGiftCardNonce = nonce;
+          squareGiftCardBalance = Number(result.json.balance || 0);
+          squareGiftCardVerified = true;
+          var squareInput = form.querySelector('input[value="square"]');
+          if (squareInput) squareInput.checked = true;
+          var rentalPayable = calculateRentalPayable();
+          var deduction = Math.min(squareGiftCardBalance, rentalPayable);
+          updateSquareGiftCardPreview(squareGiftCardBalance, deduction, Math.max(0, rentalPayable - deduction));
+          squareGiftCardMessage.textContent = uiCopy('礼品卡余额已验证，可用于支付租金及手续费。');
+          updatePaymentMethodVisibility();
+          refreshSummary();
+        });
+      })
+      .catch(function (error) {
+        squareGiftCardNonce = '';
+        squareGiftCardBalance = null;
+        squareGiftCardVerified = false;
+        if (squareGiftCardPreview) squareGiftCardPreview.hidden = true;
+        squareGiftCardMessage.textContent = paymentError(error, uiCopy('礼品卡验证失败，请检查卡号后重试。'));
+        refreshSummary();
+      })
+      .finally(function () { squareGiftCardCheck.disabled = false; });
+  });
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
-    paymentMethodOptions.hidden = balanceOption.hidden;
+    paymentMethodOptions.hidden = balanceOption.hidden && !squareGiftCardConfig;
     stripePaymentBox.hidden = useBalance;
     stripeSetupBox.hidden = useBalance;
     walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
@@ -1161,8 +1271,11 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    if (selectedPaymentMethod === 'card' && (!cardReady || !setupIntentInput.value)) {
-      showFormError(uiCopy('请先填写并验证信用卡信息。'), stripeSetupBox); return;
+    if ((selectedPaymentMethod === 'card' || selectedPaymentMethod === 'square') && (!cardReady || !setupIntentInput.value)) {
+      showFormError(uiCopy(selectedPaymentMethod === 'square' ? '礼品卡支付仍需填写并验证押金信用卡。' : '请先填写并验证信用卡信息。'), stripeSetupBox); return;
+    }
+    if (selectedPaymentMethod === 'square' && (!squareGiftCardVerified || !squareGiftCardNonce)) {
+      showFormError(uiCopy('请先验证礼品卡余额。'), squareGiftCardSetup); return;
     }
     var termValidationError = validateTerms();
     if (termValidationError) { showFormError(termValidationError, document.getElementById('agree')); return; }
@@ -1173,6 +1286,7 @@ export function renderApply(data: ApplyData): string {
     }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
     payload.deviceTerms = deviceTermsInput.value;
+    if (selectedPaymentMethod === 'square') payload.squareGiftCardNonce = squareGiftCardNonce;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
     submitBtn.disabled = true; submitBtn.textContent = uiText('提交中…', 'Submitting…');

@@ -724,6 +724,12 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .form-card { border-radius: 14px; padding: 30px; }.form-card-head { display: flex; gap: 13px; align-items: center; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }.form-card-head > span { color: var(--primary); font-family: var(--mono); font-size: 10px; }.form-card-head h3 { font-size: 17px; }.form-card-head p { margin-top: 3px; color: var(--muted-fg); font-size: 11px; }
 .square-gift-card-setup .stripe-setup-head { align-items: center; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
 .square-gift-card-setup .stripe-setup-head label { font-size: 17px; }
+.square-gift-card-setup .stripe-setup-head p { margin-top: 5px; color: var(--muted-fg); font-size: 12px; line-height: 1.55; }
+.square-gift-card-preview { display: grid; gap: 0; margin-top: 16px; border-top: 1px solid var(--border); }
+.square-gift-card-preview > div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.square-gift-card-preview span { color: var(--muted-fg); }
+.square-gift-card-preview strong { color: var(--secondary); font-family: var(--mono); text-align: right; }
+.square-gift-card-setup > .btn { margin-top: 14px; }
 .cart-term-card { margin-bottom: 18px; border-color: rgba(124,108,255,.28); background: rgba(124,108,255,.06); }
 .field input, .field select, .field textarea { min-height: 44px; border-radius: 8px; background: #0b0e15; }.field textarea { min-height: 100px; }.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(124,108,255,.13); }
 .form-summary { border-color: rgba(124,108,255,.22); background: rgba(124,108,255,.06); overflow-wrap: anywhere; line-height: 1.6; }
