@@ -396,13 +396,6 @@ export function renderApply(data: ApplyData): string {
                 <input type="radio" name="paymentMethod" value="card" checked>
                 <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small>审核通过后按确认金额付款，信用卡由 Stripe 安全处理。</small></span>
               </label>
-<<<<<<< HEAD
-=======
-              ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
-                <input type="radio" name="paymentMethod" value="square">
-                <span class="payment-method-copy"><strong>礼品卡</strong><small>提交时先安全绑定礼品卡；审核通过并签约后，用它支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
-              </label>` : ''}
->>>>>>> 6c1a97b (Hide Square branding on gift card checkout and fix invalid style props)
               <div id="balance-payment-option" hidden>
                 <label class="balance-payment-option choice-line">
                   <input type="radio" name="paymentMethod" value="balance">
@@ -534,6 +527,7 @@ export function renderApply(data: ApplyData): string {
   var walletMessage = document.getElementById('stripe-wallet-message');
   var stripePaymentBox = document.querySelector('.stripe-payment-box');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
+  var paymentMethodOptions = document.getElementById('payment-method-options');
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
   var addressStatus = document.getElementById('address-search-status');
