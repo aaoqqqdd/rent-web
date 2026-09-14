@@ -386,15 +386,17 @@ export function renderApply(data: ApplyData): string {
         <div class="apply-grid-payment">
           <div class="form-summary" id="summary"></div>
           <div class="form-card square-gift-card-setup" id="square-gift-card-setup"${squareGiftCardConfig ? '' : ' hidden'}>
-            <div class="stripe-setup-head"><div><label>礼品卡</label><p>验证后显示余额和本次预计扣减金额；实际扣款在审核通过后完成。</p></div></div>
-            <div id="square-gift-card-element"></div>
+            <div class="stripe-setup-head"><div><label>礼品卡</label></div></div>
+            <div class="square-gift-card-input-row">
+              <div id="square-gift-card-element"></div>
+              <button type="button" class="btn btn-ghost" id="square-gift-card-check" disabled>验证</button>
+            </div>
             <div class="square-gift-card-preview" id="square-gift-card-preview" hidden>
               <div><span>礼品卡余额</span><strong id="square-gift-card-balance">AUD $0.00</strong></div>
               <div><span>本次预计扣减</span><strong id="square-gift-card-deduction">AUD $0.00</strong></div>
               <div><span>扣减后剩余应付</span><strong id="square-gift-card-remaining">AUD $0.00</strong></div>
             </div>
             <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
-            <button type="button" class="btn btn-ghost" id="square-gift-card-check" disabled>验证礼品卡余额</button>
           </div>
           <div class="form-card">
             <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>信用卡用于押金预授权，符合条件的账户可使用余额支付</p></div></div>

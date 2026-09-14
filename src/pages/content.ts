@@ -10,6 +10,34 @@ function pickupSummary(config: RentalConfig): string {
     : '自取地点请联系客服确认'
 }
 
+function rentalGuideFaqItems(config: RentalConfig): Array<{ q: string; a: string }> {
+  return [
+    { q: '最短可以租多久？', a: `当前最短租期为 ${config.minimumRentalDays} 天。设备周转和不可用日期会由租赁系统继续校验。` },
+    { q: '租赁天数怎么计算？', a: '按取货日期、归还日期以及上午 / 下午时段折算，半天部分会计入预计租期。最终天数以审核后的订单和合同为准。' },
+    { q: '为什么提交后还不是正式订单？', a: '库存状态实时同步，但最终仍需人工核对档期、设备状况与配送安排。确认后才生成合同并进入付款。' },
+    { q: '为什么提交前要验证信用卡？', a: '用于确认后续可用的付款方式。验证由 Stripe 安全付款组件处理；提交申请时不会立即扣除租金或押金。' },
+    { q: '一次可以申请多台设备吗？', a: '可以，单次最多 10 台。同一购物车内的设备共用租期、取还方式和联系信息；各台设备会分别建立订单并校验档期。' },
+    { q: '月租参考价是最终价格吗？', a: '不是。月租参考价按日租价乘以展示系数计算，用来快速比较。准确租金以下单日期和审核后的订单为准。' },
+    { q: '押金什么时候退？', a: '设备归还并完成验收后处理。无损坏、缺件、逾期或其他应付费用时，按申请时选择的方式退回；账号余额退回仅适用于符合条件的已有正式账户。' },
+    { q: '可以续租或提前归还吗？', a: '可以提出申请。请尽早联系客服确认后续档期；提前归还是否调整租金，以已签合同约定为准。' },
+    { q: '如果要取消申请怎么办？', a: '尽快联系客服并提供订单编号。付款前取消不涉及退款；已付款订单会按订单状态、已签合同和退款政策处理。' },
+    { q: '设备故障怎么办？', a: '先联系 7×12 小时技术支持。确认是设备自身故障且符合租赁条件时，我们会安排排查或免费换机。' },
+    { q: '设备里会保留我的资料吗？', a: '归还前请自行备份并退出个人账号、清除本地资料。我们会按交付流程重置设备，但重要资料不应只保存在租赁设备上。' },
+    { q: '可以指定软件或配件吗？', a: '可在申请备注中写明软件、接口、显示器或其他配件需求。是否可提供及相关费用会在审核时确认。' },
+  ]
+}
+
+export function rentalGuideFaqSchema(config: RentalConfig): Record<string, unknown> {
+  return {
+    '@type': 'FAQPage',
+    mainEntity: rentalGuideFaqItems(config).map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  }
+}
+
 export function renderRentalGuide(config: RentalConfig): string {
   const deliveryAreas = config.deliveryAreas.length ? config.deliveryAreas.join('、') : '墨尔本 CBD 及周边地区'
   const pickupLocations = config.pickupLocations.length
@@ -103,18 +131,10 @@ export function renderRentalGuide(config: RentalConfig): string {
   <div class="wrap faq-layout">
     <div class="faq-intro"><div class="kicker">FAQ</div><h2>常见问题</h2><p>还有具体问题？带上设备名称、日期和 suburb 联系我们，会更快得到准确答复。</p><a href="/about#contact" class="btn btn-ghost">联系我们</a></div>
     <div class="faq-list">
-      <details open><summary>最短可以租多久？</summary><p>当前最短租期为 ${esc(config.minimumRentalDays)} 天。设备周转和不可用日期会由租赁系统继续校验。</p></details>
-      <details><summary>租赁天数怎么计算？</summary><p>按取货日期、归还日期以及上午 / 下午时段折算，半天部分会计入预计租期。最终天数以审核后的订单和合同为准。</p></details>
-      <details><summary>为什么提交后还不是正式订单？</summary><p>库存状态实时同步，但最终仍需人工核对档期、设备状况与配送安排。确认后才生成合同并进入付款。</p></details>
-      <details><summary>为什么提交前要验证信用卡？</summary><p>用于确认后续可用的付款方式。验证由 Stripe 安全付款组件处理；提交申请时不会立即扣除租金或押金。</p></details>
-      <details><summary>一次可以申请多台设备吗？</summary><p>可以，单次最多 10 台。同一购物车内的设备共用租期、取还方式和联系信息；各台设备会分别建立订单并校验档期。</p></details>
-      <details><summary>月租参考价是最终价格吗？</summary><p>不是。月租参考价按日租价乘以展示系数计算，用来快速比较。准确租金以下单日期和审核后的订单为准。</p></details>
-      <details><summary>押金什么时候退？</summary><p>设备归还并完成验收后处理。无损坏、缺件、逾期或其他应付费用时，按申请时选择的方式退回；账号余额退回仅适用于符合条件的已有正式账户。</p></details>
-      <details><summary>可以续租或提前归还吗？</summary><p>可以提出申请。请尽早联系客服确认后续档期；提前归还是否调整租金，以已签合同约定为准。</p></details>
-      <details><summary>如果要取消申请怎么办？</summary><p>尽快联系客服并提供订单编号。付款前取消不涉及退款；已付款订单会按订单状态、已签合同和<a href="/refund-policy" class="inline-link">退款政策</a>处理。</p></details>
-      <details><summary>设备故障怎么办？</summary><p>先联系 7×12 小时技术支持。确认是设备自身故障且符合租赁条件时，我们会安排排查或免费换机。</p></details>
-      <details><summary>设备里会保留我的资料吗？</summary><p>归还前请自行备份并退出个人账号、清除本地资料。我们会按交付流程重置设备，但重要资料不应只保存在租赁设备上。</p></details>
-      <details><summary>可以指定软件或配件吗？</summary><p>可在申请备注中写明软件、接口、显示器或其他配件需求。是否可提供及相关费用会在审核时确认。</p></details>
+      ${rentalGuideFaqItems(config).map((item, index) => {
+    const answerHtml = esc(item.a).replace('退款政策', '<a href="/refund-policy" class="inline-link">退款政策</a>')
+    return `<details${index === 0 ? ' open' : ''}><summary>${esc(item.q)}</summary><p>${answerHtml}</p></details>`
+  }).join('')}
     </div>
   </div>
 </section>

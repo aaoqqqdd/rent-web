@@ -18,12 +18,12 @@ import {
   pickFeatured,
 } from './db'
 import type { LegalDocumentKey } from './db'
-import { renderHome } from './pages/home'
+import { renderHome, homeFaqSchema } from './pages/home'
 import { renderProducts } from './pages/products'
 import { renderProductDetail } from './pages/product-detail'
 import { renderApply, renderCartPage } from './pages/apply'
 import { renderLogin } from './pages/login'
-import { renderAbout, renderNotFound, renderOrderLookup, renderRentalGuide } from './pages/content'
+import { renderAbout, renderNotFound, renderOrderLookup, renderRentalGuide, rentalGuideFaqSchema } from './pages/content'
 import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
 import { renderGiftCards } from './pages/gift-cards'
@@ -266,13 +266,14 @@ app.get('/', (c) =>
       getRentalConfig(c.env),
     ])
     const featured = pickFeatured(products)
-    const body = renderHome({
+    const homeData = {
       featured,
       products,
       minRate: minDailyRate(featured),
       catalogMinRate: minDailyRate(products),
       config,
-    })
+    }
+    const body = renderHome(homeData)
     return renderPage({
       title: `${contact.name}｜墨尔本电脑租赁、游戏本与工作站短租`,
       description: `${contact.name} 提供墨尔本游戏本、商务本和工作站租赁。实时查看配置、日租价与库存，支持本地配送或自取，确认档期后再签约付款。`,
@@ -281,14 +282,17 @@ app.get('/', (c) =>
       appUrl: appUrl(c.env),
       path: '/',
       siteUrl: siteUrl(c.req.url),
-      structuredData: {
-        '@type': 'Service',
-        '@id': `${siteUrl(c.req.url)}/#computer-rental`,
-        name: '墨尔本电脑租赁服务',
-        serviceType: '电脑、游戏本与工作站租赁',
-        areaServed: { '@type': 'City', name: 'Melbourne' },
-        provider: { '@id': `${siteUrl(c.req.url)}/#organization` },
-      },
+      structuredData: [
+        {
+          '@type': 'Service',
+          '@id': `${siteUrl(c.req.url)}/#computer-rental`,
+          name: '墨尔本电脑租赁服务',
+          serviceType: '电脑、游戏本与工作站租赁',
+          areaServed: { '@type': 'City', name: 'Melbourne' },
+          provider: { '@id': `${siteUrl(c.req.url)}/#organization` },
+        },
+        homeFaqSchema(homeData),
+      ],
       user,
     })
   }),
@@ -624,13 +628,16 @@ app.get('/rental-guide', (c) =>
       appUrl: appUrl(c.env),
       path: '/rental-guide',
       siteUrl: siteUrl(c.req.url),
-      structuredData: {
-        '@type': 'WebPage',
-        '@id': `${siteUrl(c.req.url)}/rental-guide#webpage`,
-        url: `${siteUrl(c.req.url)}/rental-guide`,
-        name: '电脑租赁流程、押金与配送说明',
-        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
-      },
+      structuredData: [
+        {
+          '@type': 'WebPage',
+          '@id': `${siteUrl(c.req.url)}/rental-guide#webpage`,
+          url: `${siteUrl(c.req.url)}/rental-guide`,
+          name: '电脑租赁流程、押金与配送说明',
+          isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
+        },
+        rentalGuideFaqSchema(config),
+      ],
       user,
     })
   }),
