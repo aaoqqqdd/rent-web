@@ -29,9 +29,9 @@ export function renderLogin(data: LoginData): string {
 <section class="section">
   <div class="wrap form-wrap auth-wrap">
     <div class="section-head">
-      <div class="kicker">账号</div>
-      <h2>注册 / 登录</h2>
-      <p style="color:var(--muted-fg);margin-top:12px">
+      <div><div class="kicker">账号</div>
+      <h2>注册 / 登录</h2></div>
+      <p style="color:var(--muted-fg)">
         下单前需注册一个账号（用于后续付款与在线签约）。已注册过？直接登录即可，
         无需重复填写。注册后可用同一套邮箱和密码在下单页与账户中心通用。
       </p>
