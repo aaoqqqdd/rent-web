@@ -733,9 +733,9 @@ export function renderApply(data: ApplyData): string {
     var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var paymentFee = selectedPaymentMethod === 'card'
-      ? Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100
+      ? Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * stripeFeeRate * 100) / 100
       : 0;
-    var payableTotal = Math.max(0, rentTotal - appliedDiscount) + paymentFee;
+    var payableTotal = Math.max(0, rentTotal + serviceFee - appliedDiscount) + paymentFee;
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
@@ -858,6 +858,7 @@ export function renderApply(data: ApplyData): string {
 >>>>>>> 6c1a97b (Hide Square branding on gift card checkout and fix invalid style props)
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
+    paymentMethodOptions.hidden = balanceOption.hidden;
     stripePaymentBox.hidden = useBalance;
     stripeSetupBox.hidden = useBalance;
     walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
