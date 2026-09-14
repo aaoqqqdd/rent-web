@@ -54,7 +54,7 @@ export function renderRentalGuide(config: RentalConfig): string {
   <div class="wrap delivery-grid">
     <div><div class="kicker">取还范围</div><h2>墨尔本本地交付</h2><p>${esc(config.deliveryNote)} 当前可配送区域包括：${esc(deliveryAreas)}。</p><p>具体配送时段、费用和地址是否可服务，会在订单审核时确认。其他墨尔本郊区请选择到店自取。</p><p>当前可选自取 / 归还地点：</p>${pickupLocations}</div>
     <div class="map-card" aria-label="澳大利亚地图，墨尔本本地配送范围">
-      <svg class="australia-map" viewBox="0 0 560 360" role="img" aria-labelledby="australia-map-title australia-map-desc">
+      <svg class="australia-map" viewBox="285 195 230 148" role="img" aria-labelledby="australia-map-title australia-map-desc">
         <title id="australia-map-title">澳大利亚与墨尔本位置</title>
         <desc id="australia-map-desc">澳大利亚轮廓地图，东南部标出维多利亚州和墨尔本本地配送点。</desc>
         <defs>
@@ -139,7 +139,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: 
 
 <section class="section"><div class="wrap story-grid">
   <div class="story-lead"><span>品牌故事</span><h2>从一个简单的困惑开始</h2></div>
-  <div class="story-copy"><p>一次课程项目、几周的剪辑工作、临时出差，往往都需要一台更合适的电脑，却不一定值得长期持有。${esc(contact.name)} 把设备采购、检查、周转和支持放在后台，让用户按真正需要的时间使用设备。</p><p>我们专注墨尔本本地服务，提供游戏笔记本、轻薄商务本和台式工作站。租期可从 ${esc(config.minimumRentalDays)} 天起，也可覆盖更长项目；每份申请都会在付款前核对档期、价格和交付安排。</p><p>我们想解决的不只是“哪里能租到电脑”，而是让配置、费用、押金、取还和售后都有明确的下一步。</p></div>
+  <div class="story-copy"><p><strong>需要电脑，不代表一定要买一台。</strong><br>无论是课程项目、视频剪辑、短期工作还是临时出差，${esc(contact.name)} 都希望让你在需要的时候，用到合适的设备，而不必为短期需求承担长期持有的成本。</p><p>我们提供墨尔本本地电脑租赁，<strong>${esc(config.minimumRentalDays)} 天起租</strong>包括游戏笔记本、轻薄商务本和台式工作站，提交申请后，我们会在付款前确认设备档期、最终价格以及取还安排。</p><p>从设备配置、租金和押金，到取还设备和租后支持，我们希望每一步都<strong>简单、透明、清楚</strong>。</p></div>
 </div></section>
 
 <section class="section alt"><div class="wrap"><div class="section-head"><div><div class="kicker">服务承诺</div><h2>我们对每位用户的承诺</h2></div><p>不用夸大的数字讲故事，用每个订单都能验证的流程建立信任。</p></div><div class="principle-grid about-values">
@@ -237,16 +237,23 @@ function renderOrderCard(order: OrderView): string {
   const credentialBlock = order.windowsPassword
     ? `<section class="order-record-section credential-section"><p class="section-code">ACCESS</p><h3>设备账户</h3>${order.windowsUsername ? `<div class="credential-row"><span>Windows 用户名</span><strong>${esc(order.windowsUsername)}</strong></div>` : ''}<div class="credential-row"><span>Windows 密码</span><strong>${esc(order.windowsPassword)}</strong></div><p class="section-note">请勿将密码分享给他人，归还设备前请备份资料并退出个人账户。</p></section>`
     : ''
-  const contractBlock = order.contract
-    ? `<section class="order-record-section"><p class="section-code">CONTRACT</p><h3>合同</h3><div class="contract-status-row"><span>${esc(order.contract.number || '租赁合同')}</span><strong>${esc(order.contract.statusLabel)}</strong></div>${order.contract.signedAt ? `<p class="section-note">签署时间：${esc(order.contract.signedAt)}</p>` : ''}${order.contract.url ? `<a class="btn btn-primary" href="${esc(order.contract.url)}" target="_blank" rel="noopener">${order.contract.status === 'pending_sign' ? '打开合同并签署' : '查看 / 下载合同'}</a>` : '<p class="section-note">合同链接将在状态更新后开放。</p>'}</section>`
+  const paymentBlock = `<section class="order-record-section"><p class="section-code">PAYMENT</p><h3>费用与付款</h3><dl class="lookup-data-list">${orderDetail('租赁费用', money(rentalAmount))}${orderDetail('配送费', money(order.deliveryFee))}${orderDetail('押金', money(order.depositAmount))}${orderDetail('订单合计', money(order.totalAmount))}${order.amountDue > 0 ? orderDetail('待支付', money(order.amountDue)) : ''}${orderDetail('付款状态', order.paymentStatus)}${orderDetail('押金状态', order.depositStatus)}</dl></section>`
+  const shouldShowContract = Boolean(order.contract) || ['approved', 'awaiting_signature', 'pending_payment', 'pending_pickup', 'paid', 'active', 'completed'].includes(order.status)
+  const contractBlock = shouldShowContract
+    ? order.contract
+      ? `<section class="order-record-section"><p class="section-code">CONTRACT</p><h3>合同</h3><div class="contract-status-row"><span>${esc(order.contract.number || '租赁合同')}</span><strong>${esc(order.contract.statusLabel)}</strong></div>${order.contract.signedAt ? `<p class="section-note">签署时间：${esc(order.contract.signedAt)}</p>` : ''}${order.contract.url ? `<a class="btn btn-primary" href="${esc(order.contract.url)}" target="_blank" rel="noopener">${order.contract.status === 'pending_sign' ? '打开合同并签署' : '查看 / 下载合同'}</a>` : '<p class="section-note">合同链接将在状态更新后开放。</p>'}</section>`
+      : `<section class="order-record-section"><p class="section-code">CONTRACT</p><h3>合同</h3><p class="section-note contract-empty-note">订单已审核通过，合同签署链接正在生成，请稍后刷新订单。</p></section>`
+    : ''
+  const contractAction = order.contract?.url
+    ? `<a class="btn btn-primary order-contract-action" href="${esc(order.contract.url)}" target="_blank" rel="noopener">${order.contract.status === 'pending_sign' ? '签署合同' : '查看合同'}</a>`
     : ''
   return `<article class="order-record">
-    <div class="order-record-head"><div><p class="section-code">ORDER / ${esc(order.orderNo)}</p><h2>${esc(order.device.name)}</h2><p class="section-note">${esc(lookupDate(order.startDate))} 至 ${esc(lookupDate(order.endDate))}</p></div><span class="order-status">${esc(order.statusLabel)}</span></div>
+    <div class="order-record-head"><div><p class="section-code">ORDER / ${esc(order.orderNo)}</p><h2>${esc(order.device.name)}</h2><p class="section-note">${esc(lookupDate(order.startDate))} 至 ${esc(lookupDate(order.endDate))}</p></div><div class="order-record-head-actions"><span class="order-status">${esc(order.statusLabel)}</span>${contractAction}</div></div>
     <div class="order-record-grid">
       <section class="order-record-section"><p class="section-code">ORDER DETAIL</p><h3>订单详情</h3><dl class="lookup-data-list">${orderDetail('订单编号', order.orderNo)}${orderDetail('下单时间', order.createdAt)}${orderDetail('租期', `${lookupDate(order.startDate)} ${order.startPeriod === 'PM' ? '下午' : '上午'} 至 ${lookupDate(order.endDate)} ${order.endPeriod === 'PM' ? '下午' : '上午'}（${order.rentalPeriod || 0} 天）`)}${orderDetail('取还方式', order.deliveryMethod === 'Delivery' ? '送货上门' : '到店自取')}${orderDetail('取货地点 / 时间', [order.pickupLocation, order.pickupTimeSlot].filter(Boolean).join(' · '))}${orderDetail('归还地点 / 时间', [order.returnLocation, order.returnTimeSlot].filter(Boolean).join(' · '))}${orderDetail('订单备注', order.rentalNote)}</dl></section>
       <section class="order-record-section"><p class="section-code">DEVICE</p><h3>设备信息</h3><dl class="lookup-data-list">${orderDetail('设备名称', order.device.name)}${orderDetail('型号', order.device.model)}${orderDetail('序列号', order.device.serialNumber)}${orderDetail('配置', specs)}</dl></section>
-      <section class="order-record-section"><p class="section-code">PAYMENT</p><h3>费用与付款</h3><dl class="lookup-data-list">${orderDetail('租赁费用', money(rentalAmount))}${orderDetail('配送费', money(order.deliveryFee))}${orderDetail('押金', money(order.depositAmount))}${orderDetail('订单合计', money(order.totalAmount))}${order.amountDue > 0 ? orderDetail('待支付', money(order.amountDue)) : ''}${orderDetail('付款状态', order.paymentStatus)}${orderDetail('押金状态', order.depositStatus)}</dl></section>
-      ${contractBlock}${credentialBlock}
+      <div class="order-payment-contract-row">${paymentBlock}${contractBlock}</div>
+      ${credentialBlock}
     </div>
   </article>`
 }
@@ -256,27 +263,30 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
     ? `<section class="lookup-orders"><div class="section-head tight"><div><div class="kicker">我的订单</div><h2>当前订单状态</h2></div><p>登录状态下只显示属于你的订单。</p></div>${orders.map(renderOrderCard).join('')}</section>`
     : ''
   return /* html */ `
-<section class="page-hero compact order-lookup-hero"><div class="wrap"><div class="kicker">订单查询</div><h1>订单进度与交付信息，一页看清。</h1><p>输入订单编号和申请邮箱，可查看审核、签约、取货、租赁和退款状态。合同链接、临时账户密码和 Windows 密码仅在对应信息已生成时显示。</p></div></section>
+<section class="page-hero compact order-lookup-hero"><div class="wrap"><div class="kicker">订单查询</div><h1>订单进度与交付信息</h1><p>输入订单编号和申请邮箱，可查看审核、签约、取货、租赁和退款状态。</p></div></section>
 <section class="section"><div class="wrap form-wrap lookup-wrap">
+  <div class="lookup-query-card">
+    <form class="form-card" id="order-lookup-form">
+      <div class="form-card-head"><span>LOOKUP</span><div><h3>查询一笔订单</h3><p>订单号和申请邮箱需要与提交时一致。</p></div></div>
+      <div class="form-alert" id="lookup-error" hidden></div>
+      <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="OD-20260101-ABC123" autocomplete="off" required></div>
+      <div class="field"><label for="lookup-email">申请邮箱</label><input id="lookup-email" name="email" type="email" autocomplete="email" required></div>
+      ${turnstileSiteKey ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>` : ''}
+      <button class="btn btn-primary btn-lg" type="submit" id="lookup-submit">查询订单</button>
+    </form>
+  </div>
   ${orderList}
-  <form class="form-card" id="order-lookup-form">
-    <div class="form-card-head"><span>LOOKUP</span><div><h3>查询一笔订单</h3><p>订单号和申请邮箱需要与提交时一致。</p></div></div>
-    <div class="form-alert" id="lookup-error" hidden></div>
-    <div class="field"><label for="lookup-order-no">订单编号</label><input id="lookup-order-no" name="orderNo" placeholder="例如 ORD-20260101-ABC123" autocomplete="off" required></div>
-    <div class="field"><label for="lookup-email">申请邮箱</label><input id="lookup-email" name="email" type="email" autocomplete="email" required></div>
-    ${turnstileSiteKey ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>` : ''}
-    <button class="btn btn-primary btn-lg" type="submit" id="lookup-submit">查询订单</button>
-  </form>
   <div class="form-card lookup-result" id="lookup-result" hidden>
     <h2>订单信息</h2><p id="lookup-message" class="form-intro"></p>
     <div id="lookup-credentials" class="temporary-credentials" hidden><span>临时账户</span><strong>订单编号：<b id="lookup-result-order"></b></strong><strong>临时密码：<b id="lookup-result-password"></b></strong><p>密码已更新，请立即保存。之后可进入账号中心登录。</p></div>
     <div id="lookup-order-info"></div>
-    <p class="lookup-login"><a class="btn btn-primary" href="${esc(appUrl)}/login">进入账号中心</a></p>
+    <p class="lookup-login"><a class="btn btn-primary" href="${esc(appUrl)}/login">进入账号中心</a><a class="btn btn-ghost" href="/order-lookup">返回查询</a></p>
   </div>
 </div></section>
 <script>
 (() => {
   var form = document.getElementById('order-lookup-form');
+  var queryCard = document.querySelector('.lookup-query-card');
   var error = document.getElementById('lookup-error');
   var result = document.getElementById('lookup-result');
   var submit = document.getElementById('lookup-submit');
@@ -287,12 +297,14 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
     var article = document.createElement('article'); article.className = 'order-record';
     var head = document.createElement('div'); head.className = 'order-record-head';
     var headCopy = document.createElement('div'); var code = document.createElement('p'); code.className = 'section-code'; code.textContent = 'ORDER / ' + order.orderNo; var title = document.createElement('h2'); title.textContent = order.device.name; var date = document.createElement('p'); date.className = 'section-note'; date.textContent = formatDate(order.startDate) + ' 至 ' + formatDate(order.endDate); headCopy.append(code, title, date);
-    var status = document.createElement('span'); status.className = 'order-status'; status.textContent = order.statusLabel; head.append(headCopy, status); article.appendChild(head);
+    var actions = document.createElement('div'); actions.className = 'order-record-head-actions'; var status = document.createElement('span'); status.className = 'order-status'; status.textContent = order.statusLabel; actions.appendChild(status); if (order.contract && order.contract.url) { var signLink = document.createElement('a'); signLink.className = 'btn btn-primary order-contract-action'; signLink.href = order.contract.url; signLink.target = '_blank'; signLink.rel = 'noopener'; signLink.textContent = order.contract.status === 'pending_sign' ? '签署合同' : '查看合同'; actions.appendChild(signLink); } head.append(headCopy, actions); article.appendChild(head);
     var grid = document.createElement('div'); grid.className = 'order-record-grid';
     var detail = section('订单详情', 'ORDER DETAIL'); var detailList = document.createElement('dl'); detailList.className = 'lookup-data-list'; addDetail(detailList, '订单编号', order.orderNo); addDetail(detailList, '下单时间', order.createdAt); addDetail(detailList, '租期', formatDate(order.startDate) + (order.startPeriod === 'PM' ? ' 下午' : ' 上午') + ' 至 ' + formatDate(order.endDate) + (order.endPeriod === 'PM' ? ' 下午' : ' 上午') + '（' + (order.rentalPeriod || 0) + ' 天）'); addDetail(detailList, '取还方式', order.deliveryMethod === 'Delivery' ? '送货上门' : '到店自取'); addDetail(detailList, '取货地点 / 时间', [order.pickupLocation, order.pickupTimeSlot].filter(Boolean).join(' · ')); addDetail(detailList, '归还地点 / 时间', [order.returnLocation, order.returnTimeSlot].filter(Boolean).join(' · ')); addDetail(detailList, '订单备注', order.rentalNote); detail.appendChild(detailList); grid.appendChild(detail);
     var device = section('设备信息', 'DEVICE'); var deviceList = document.createElement('dl'); deviceList.className = 'lookup-data-list'; addDetail(deviceList, '设备名称', order.device.name); addDetail(deviceList, '型号', order.device.model); addDetail(deviceList, '序列号', order.device.serialNumber); addDetail(deviceList, '配置', [order.device.cpu, order.device.ram, order.device.storage, order.device.gpu, order.device.os].filter(Boolean).join(' · ')); device.appendChild(deviceList); grid.appendChild(device);
-    var payment = section('费用与付款', 'PAYMENT'); var paymentList = document.createElement('dl'); paymentList.className = 'lookup-data-list'; var rentalAmount = Math.max(0, Number(order.totalAmount || 0) - Number(order.depositAmount || 0) - Number(order.deliveryFee || 0)); addDetail(paymentList, '租赁费用', 'AUD$' + rentalAmount.toFixed(2)); addDetail(paymentList, '配送费', 'AUD$' + Number(order.deliveryFee || 0).toFixed(2)); addDetail(paymentList, '押金', 'AUD$' + Number(order.depositAmount || 0).toFixed(2)); addDetail(paymentList, '订单合计', 'AUD$' + Number(order.totalAmount || 0).toFixed(2)); if (Number(order.amountDue || 0) > 0) addDetail(paymentList, '待支付', 'AUD$' + Number(order.amountDue).toFixed(2)); addDetail(paymentList, '付款状态', order.paymentStatus); addDetail(paymentList, '押金状态', order.depositStatus); payment.appendChild(paymentList); grid.appendChild(payment);
-    if (order.contract) { var contract = section('合同', 'CONTRACT'); var contractList = document.createElement('dl'); contractList.className = 'lookup-data-list'; addDetail(contractList, '合同编号', order.contract.number || '租赁合同'); addDetail(contractList, '合同状态', order.contract.statusLabel); if (order.contract.signedAt) addDetail(contractList, '签署时间', order.contract.signedAt); contract.appendChild(contractList); if (order.contract.url) { var link = document.createElement('a'); link.className = 'btn btn-primary'; link.href = order.contract.url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = order.contract.status === 'pending_sign' ? '打开合同并签署' : '查看 / 下载合同'; contract.appendChild(link); } grid.appendChild(contract); }
+    var payment = section('费用与付款', 'PAYMENT'); var paymentList = document.createElement('dl'); paymentList.className = 'lookup-data-list'; var rentalAmount = Math.max(0, Number(order.totalAmount || 0) - Number(order.depositAmount || 0) - Number(order.deliveryFee || 0)); addDetail(paymentList, '租赁费用', 'AUD$' + rentalAmount.toFixed(2)); addDetail(paymentList, '配送费', 'AUD$' + Number(order.deliveryFee || 0).toFixed(2)); addDetail(paymentList, '押金', 'AUD$' + Number(order.depositAmount || 0).toFixed(2)); addDetail(paymentList, '订单合计', 'AUD$' + Number(order.totalAmount || 0).toFixed(2)); if (Number(order.amountDue || 0) > 0) addDetail(paymentList, '待支付', 'AUD$' + Number(order.amountDue).toFixed(2)); addDetail(paymentList, '付款状态', order.paymentStatus); addDetail(paymentList, '押金状态', order.depositStatus); payment.appendChild(paymentList);
+    var paymentContract = document.createElement('div'); paymentContract.className = 'order-payment-contract-row'; paymentContract.appendChild(payment);
+    if (order.contract) { var contract = section('合同', 'CONTRACT'); var contractList = document.createElement('dl'); contractList.className = 'lookup-data-list'; addDetail(contractList, '合同编号', order.contract.number || '租赁合同'); addDetail(contractList, '合同状态', order.contract.statusLabel); if (order.contract.signedAt) addDetail(contractList, '签署时间', order.contract.signedAt); contract.appendChild(contractList); if (order.contract.url) { var link = document.createElement('a'); link.className = 'btn btn-primary'; link.href = order.contract.url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = order.contract.status === 'pending_sign' ? '打开合同并签署' : '查看 / 下载合同'; contract.appendChild(link); } paymentContract.appendChild(contract); } else if (['approved', 'awaiting_signature', 'pending_payment', 'pending_pickup', 'paid', 'active', 'completed'].indexOf(order.status) !== -1) { var pendingContract = section('合同', 'CONTRACT'); var pendingNote = document.createElement('p'); pendingNote.className = 'section-note contract-empty-note'; pendingNote.textContent = '订单已审核通过，合同签署链接正在生成，请稍后刷新订单。'; pendingContract.appendChild(pendingNote); paymentContract.appendChild(pendingContract); }
+    grid.appendChild(paymentContract);
     if (order.windowsPassword || temporaryPassword) { var access = section('账户密码', 'ACCESS'); if (temporaryPassword) { var temp = document.createElement('div'); temp.className = 'credential-row'; var tempLabel = document.createElement('span'); tempLabel.textContent = '临时账户密码'; var tempValue = document.createElement('strong'); tempValue.textContent = temporaryPassword; temp.append(tempLabel, tempValue); access.appendChild(temp); } if (order.windowsUsername) { var username = document.createElement('div'); username.className = 'credential-row'; var usernameLabel = document.createElement('span'); usernameLabel.textContent = 'Windows 用户名'; var usernameValue = document.createElement('strong'); usernameValue.textContent = order.windowsUsername; username.append(usernameLabel, usernameValue); access.appendChild(username); } if (order.windowsPassword) { var win = document.createElement('div'); win.className = 'credential-row'; var winLabel = document.createElement('span'); winLabel.textContent = 'Windows 密码'; var winValue = document.createElement('strong'); winValue.textContent = order.windowsPassword; win.append(winLabel, winValue); access.appendChild(win); } var note = document.createElement('p'); note.className = 'section-note'; note.textContent = temporaryPassword ? '临时密码已更新，请立即保存。' : '请勿将密码分享给他人。'; access.appendChild(note); grid.appendChild(access); }
     article.appendChild(grid); return article;
   }
@@ -301,7 +313,7 @@ export function renderOrderLookup(appUrl: string, orders: OrderView[] = [], turn
     var data = new FormData(form); var turnstile = form.querySelector('[name="cf-turnstile-response"]');
     fetch('/api/order-lookup', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ orderNo: data.get('orderNo'), email: data.get('email'), turnstileToken: turnstile ? turnstile.value : '' }) })
       .then(function (response) { return response.json().then(function (json) { return { ok: response.ok, json: json }; }); })
-      .then(function (response) { if (!response.ok || !response.json.ok) throw new Error(response.json.message || '查询失败。'); result.hidden = false; document.getElementById('lookup-message').textContent = response.json.message || '已找到订单。'; if (response.json.registered) { document.getElementById('lookup-credentials').hidden = true; document.getElementById('lookup-order-info').replaceChildren(); return; } document.getElementById('lookup-message').textContent = '已找到订单，以下为当前最新信息。'; var credentials = document.getElementById('lookup-credentials'); credentials.hidden = !response.json.temporaryPassword; if (response.json.temporaryPassword) { document.getElementById('lookup-result-order').textContent = response.json.order.orderNo; document.getElementById('lookup-result-password').textContent = response.json.temporaryPassword; } var info = document.getElementById('lookup-order-info'); info.replaceChildren(renderOrder(response.json.order, response.json.temporaryPassword)); })
+      .then(function (response) { if (!response.ok || !response.json.ok) throw new Error(response.json.message || '查询失败。'); result.hidden = false; if (queryCard) queryCard.hidden = true; document.getElementById('lookup-message').textContent = response.json.message || '已找到订单。'; if (response.json.registered) { document.getElementById('lookup-credentials').hidden = true; document.getElementById('lookup-order-info').replaceChildren(); return; } document.getElementById('lookup-message').textContent = '已找到订单，以下为当前最新信息。'; var credentials = document.getElementById('lookup-credentials'); credentials.hidden = !response.json.temporaryPassword; if (response.json.temporaryPassword) { document.getElementById('lookup-result-order').textContent = response.json.order.orderNo; document.getElementById('lookup-result-password').textContent = response.json.temporaryPassword; } var info = document.getElementById('lookup-order-info'); info.replaceChildren(renderOrder(response.json.order, response.json.temporaryPassword)); })
       .catch(function (reason) { error.textContent = reason.message || '查询失败，请稍后重试。'; error.hidden = false; if (window.turnstile) window.turnstile.reset(); })
       .finally(function () { submit.disabled = false; submit.textContent = '查询订单'; });
   });

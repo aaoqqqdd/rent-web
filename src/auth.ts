@@ -121,6 +121,8 @@ export async function verifyTurnstile(env: Env, token: string, ip: string): Prom
 
 export interface RegisterInput {
   name?: unknown
+  firstName?: unknown
+  lastName?: unknown
   email?: unknown
   phone?: unknown
   password?: unknown
@@ -183,6 +185,43 @@ export interface RegisterResult {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+export function combinePersonName(firstName: unknown, lastName: unknown): string {
+  const first = sanitizePlainText(firstName, 100)
+  const last = sanitizePlainText(lastName, 100)
+  if (first && last && /^[\p{Script=Han}]+$/u.test(`${first}${last}`)) return `${first}${last}`
+  return `${first} ${last}`.trim()
+}
+
+interface PersonNameColumns {
+  firstName: boolean
+  lastName: boolean
+}
+
+let personNameSchema: Promise<PersonNameColumns> | null = null
+
+/** 兼容已部署的共享 D1：结账首次写入时补充可空的姓名拆分列。 */
+export function ensurePersonNameColumns(env: Env): Promise<PersonNameColumns> {
+  if (!personNameSchema) {
+    personNameSchema = (async () => {
+      try {
+        const current = await env.RENT.prepare('PRAGMA table_info(users)').all<{ name?: string }>()
+        const columns = new Set((current.results || []).map((row) => String(row.name || '')))
+        for (const column of ['first_name', 'last_name']) {
+          if (!columns.has(column)) {
+            try { await env.RENT.prepare(`ALTER TABLE users ADD COLUMN ${column} TEXT`).run() } catch { /* 并发请求可能已补列 */ }
+          }
+        }
+        const updated = await env.RENT.prepare('PRAGMA table_info(users)').all<{ name?: string }>()
+        const updatedColumns = new Set((updated.results || []).map((row) => String(row.name || '')))
+        return { firstName: updatedColumns.has('first_name'), lastName: updatedColumns.has('last_name') }
+      } catch {
+        return { firstName: false, lastName: false }
+      }
+    })()
+  }
+  return personNameSchema
+}
+
 /**
  * 注册一个 CUSTOMER 账号，直接写 rent 的 D1。字段与 rent /register 落库结果等价：
  * users(id, name, email, phone, password_hash, password_salt='v2', role='CUSTOMER',
@@ -190,7 +229,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * 协议确认列（尽力而为）。users_old 镜像由 D1 触发器自动完成。
  */
 export async function registerCustomer(env: Env, input: RegisterInput, ip: string): Promise<RegisterResult> {
-  const name = sanitizePlainText(input.name, 100)
+  const firstName = sanitizePlainText(input.firstName, 100)
+  const lastName = sanitizePlainText(input.lastName, 100)
+  const name = sanitizePlainText(input.name, 100) || combinePersonName(firstName, lastName)
   const email = sanitizePlainText(input.email, 254).toLowerCase()
   const phone = sanitizePlainText(input.phone, 40)
   const password = String(input.password ?? '')
@@ -243,14 +284,13 @@ export async function registerCustomer(env: Env, input: RegisterInput, ip: strin
     const id = await generateUniqueUserId(env)
     const passwordHash = await hashPassword(password)
     const now = new Date().toISOString()
+    const personNameColumns = await ensurePersonNameColumns(env)
+    const insertFields = ['id', 'name', 'email', 'phone', 'password_hash', 'password_salt', 'role', 'status', 'balance', 'commission_balance', 'referrer_id', 'created_at', 'updated_at']
+    const insertValues: unknown[] = [id, name, email, phone || null, passwordHash, 'v2', 'CUSTOMER', 'active', 0, 0, referrerId, now, now]
+    if (personNameColumns.firstName) { insertFields.push('first_name'); insertValues.push(firstName || null) }
+    if (personNameColumns.lastName) { insertFields.push('last_name'); insertValues.push(lastName || null) }
 
-    await env.RENT.prepare(
-      `INSERT INTO users
-         (id, name, email, phone, password_hash, password_salt, role, status, balance, commission_balance, referrer_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'v2', 'CUSTOMER', 'active', 0, 0, ?, ?, ?)`,
-    )
-      .bind(id, name, email, phone || null, passwordHash, referrerId, now, now)
-      .run()
+    await env.RENT.prepare(`INSERT INTO users (${insertFields.join(', ')}) VALUES (${insertFields.map(() => '?').join(', ')})`).bind(...insertValues).run()
 
     if (referrerId) await lockReferral(env, referrerId, id, referralCode)
 

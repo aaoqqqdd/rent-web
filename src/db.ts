@@ -29,6 +29,8 @@ export interface Product {
 export interface DeviceAvailability {
   unavailableDates: string[]
   rentalRanges: Array<{ startDate: string; endDate: string }>
+  unavailablePeriods: Record<string, Array<'AM' | 'PM'>>
+  unavailableTimeSlots: Record<string, string[]>
 }
 
 export interface SiteContact {
@@ -55,6 +57,7 @@ export type LegalDocumentKey =
 
 export interface LegalDocumentData {
   content: string
+  contentEn: string
   metadata: { version: string; lastUpdatedDate: string }
   companyDetails: Record<string, unknown>
   bankDetails: Record<string, unknown>
@@ -63,6 +66,7 @@ export interface LegalDocumentData {
 export interface PublicNotice {
   id: string
   kind: 'announcement' | 'coupon'
+  isAdminAnnouncement?: boolean
   title: string
   message: string
   createdAt: string
@@ -75,6 +79,7 @@ export interface PublicNotice {
   couponConfigKeyword?: string
   couponBenefitZh?: string
   couponBenefitEn?: string
+  couponMessageEn?: string
 }
 
 const CATEGORY_LABEL: Record<Product['category'], string> = {
@@ -169,7 +174,7 @@ export async function getDeviceAvailability(
 ): Promise<Record<string, DeviceAvailability>> {
   const ids = [...new Set(deviceIds.map((id) => String(id).trim()).filter(Boolean))].slice(0, 10)
   const result: Record<string, DeviceAvailability> = Object.fromEntries(
-    ids.map((id) => [id, { unavailableDates: [], rentalRanges: [] }]),
+    ids.map((id) => [id, { unavailableDates: [], rentalRanges: [], unavailablePeriods: {}, unavailableTimeSlots: {} }]),
   )
   await Promise.all(ids.map(async (deviceId) => {
     const availability = result[deviceId]
@@ -197,8 +202,39 @@ export async function getDeviceAvailability(
           startDate: shiftDate(startDate, -Math.max(0, Math.floor(bufferDays))),
           endDate: shiftDate(endDate, Math.max(0, Math.floor(bufferDays))),
         }))
+      const periodRows = await env.RENT.prepare(
+        "SELECT startDate, endDate, startPeriod, endPeriod FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL ORDER BY startDate",
+      ).bind(deviceId).all<{ startDate?: unknown; endDate?: unknown; startPeriod?: unknown; endPeriod?: unknown }>()
+      for (const row of periodRows.results ?? []) {
+        let date = shiftDate(String(row.startDate ?? '').slice(0, 10), -Math.max(0, Math.floor(bufferDays)))
+        const endDate = shiftDate(String(row.endDate ?? '').slice(0, 10), Math.max(0, Math.floor(bufferDays)))
+        const startPeriod = bufferDays ? 'AM' : (String(row.startPeriod || 'AM') === 'PM' ? 'PM' : 'AM')
+        const endPeriod = bufferDays ? 'PM' : (String(row.endPeriod || 'AM') === 'PM' ? 'PM' : 'AM')
+        const startIndex = Date.parse(`${date}T00:00:00Z`) / 86400000 * 2 + (startPeriod === 'PM' ? 1 : 0)
+        const endIndex = Date.parse(`${endDate}T00:00:00Z`) / 86400000 * 2 + (endPeriod === 'PM' ? 1 : 0)
+        for (let index = startIndex; index < endIndex; index += 1) {
+          const periodDate = new Date(Math.floor(index / 2) * 86400000).toISOString().slice(0, 10)
+          const period = index % 2 ? 'PM' : 'AM'
+          const periods = availability.unavailablePeriods[periodDate] || []
+          if (!periods.includes(period)) periods.push(period)
+          availability.unavailablePeriods[periodDate] = periods
+        }
+      }
     } catch {
       // 兼容旧数据库；提交时仍会在可用的表结构上再次校验。
+    }
+    try {
+      const rows = await env.RENT.prepare(
+        'SELECT unavailable_date, time_slot FROM device_unavailable_time_slots WHERE device_id = ? ORDER BY unavailable_date, time_slot',
+      ).bind(deviceId).all<{ unavailable_date?: unknown; time_slot?: unknown }>()
+      for (const row of rows.results ?? []) {
+        const date = String(row.unavailable_date ?? '').slice(0, 10)
+        const slot = String(row.time_slot ?? '')
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !slot) continue
+        availability.unavailableTimeSlots[date] = [...new Set([...(availability.unavailableTimeSlots[date] || []), slot])]
+      }
+    } catch {
+      // 兼容尚未部署设备级时间段表的旧数据库。
     }
   }))
   return result
@@ -206,6 +242,8 @@ export async function getDeviceAvailability(
 
 /** 公开展示的最新通告与有效优惠码，不包含收件人、使用次数等内部字段。 */
 const PUBLIC_UPDATE_TYPES = new Set(['agreement_update', 'policy_update', 'legal_update'])
+const PUBLIC_ANNOUNCEMENT_DAYS = 7
+const PUBLIC_AGREEMENT_UPDATE_DAYS = 3
 
 function decodeNoticeEntities(value: string): string {
   return value
@@ -248,12 +286,23 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     let result: { results?: Record<string, unknown>[] }
     try {
       result = await env.RENT.prepare(
-        `SELECT MIN(id) AS id, type, title, message, created_at, MAX(expires_at) AS expires_at
+        `SELECT MIN(id) AS id, type, title, message, created_at,
+                MIN(CASE
+                      WHEN expires_at IS NULL OR expires_at > CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
+                                                                    THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
+                                                                    ELSE datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') END
+                        THEN CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
+                                  THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
+                                  ELSE datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') END
+                        ELSE expires_at
+                    END) AS expires_at
          FROM notifications
          WHERE ((type = 'announcement' AND sender_id IS NOT NULL)
                 OR type IN ('agreement_update', 'policy_update', 'legal_update'))
            AND deleted_at IS NULL
            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+           AND ((type IN ('agreement_update', 'policy_update', 'legal_update') AND datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days') > CURRENT_TIMESTAMP)
+                OR (type = 'announcement' AND datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') > CURRENT_TIMESTAMP))
          GROUP BY type, title, message, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
@@ -261,10 +310,15 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     } catch {
       // 0125 尚未应用时，回退到没有 expires_at 的旧通知表结构。
       result = await env.RENT.prepare(
-        `SELECT MIN(id) AS id, type, title, message, created_at
+        `SELECT MIN(id) AS id, type, title, message, created_at,
+                CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
+                     THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
+                     ELSE datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') END AS expires_at
          FROM notifications
            WHERE type IN ('announcement', 'agreement_update', 'policy_update', 'legal_update')
              AND deleted_at IS NULL
+             AND ((type IN ('agreement_update', 'policy_update', 'legal_update') AND datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days') > CURRENT_TIMESTAMP)
+                  OR (type = 'announcement' AND datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') > CURRENT_TIMESTAMP))
          GROUP BY type, title, message, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
@@ -285,6 +339,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       notices.push({
         id: `announcement:${String(row.id ?? '')}`,
         kind: 'announcement',
+        isAdminAnnouncement: type === 'announcement',
         title,
         message,
         createdAt: String(row.created_at ?? ''),
@@ -325,8 +380,10 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       const code = String(row.code ?? '').trim().toUpperCase()
       if (!code) continue
       const discountType = String(row.discount_type ?? '') === 'percent' ? '百分比折扣' : '固定金额折扣'
+      const discountTypeEn = String(row.discount_type ?? '') === 'percent' ? 'percentage discount' : 'fixed discount'
       const discountValue = Number(row.discount_value ?? 0)
       const discount = discountType === '百分比折扣' ? `${discountValue}%` : `AUD$${discountValue.toFixed(2)}`
+      const discountEn = String(row.discount_type ?? '') === 'percent' ? `${discountValue}%` : `AUD$${discountValue.toFixed(2)}`
       const couponBenefitZh = discountType === '百分比折扣'
         ? `立减 ${discountValue}%`
         : `立减 ${discount}`
@@ -339,6 +396,13 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         row.brand ? `品牌：${String(row.brand)}` : '',
         row.config_keyword ? `配置：${String(row.config_keyword)}` : '',
       ].filter(Boolean)
+      const conditionsEn = [
+        row.minimum_order_amount ? `minimum spend AUD$${Number(row.minimum_order_amount).toFixed(2)}` : '',
+        row.device_id ? 'selected devices only' : '',
+        row.brand ? `brand: ${String(row.brand)}` : '',
+        row.config_keyword ? `configuration: ${String(row.config_keyword)}` : '',
+      ].filter(Boolean)
+      const couponMessageEn = `New promo code: ${code}, ${discountTypeEn} ${discountEn}.${conditionsEn.length ? ` Conditions: ${conditionsEn.join('; ')}.` : ''}${row.expires_at ? ` Valid until ${String(row.expires_at)}.` : ''}`
       notices.push({
         id: `coupon:${String(row.id ?? code)}`,
         kind: 'coupon',
@@ -353,6 +417,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         couponConfigKeyword: row.config_keyword ? String(row.config_keyword) : undefined,
         couponBenefitZh,
         couponBenefitEn,
+        couponMessageEn,
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
       })
     }
@@ -405,7 +470,7 @@ export function pickFeatured(products: Product[]): Product[] {
   return chosen.slice(0, 3)
 }
 
-/** 「最低 $X/day」——用于标题与 hero 文案。无数据时返回 0。 */
+/** 周租/月租优惠折算后的最低有效日租价——用于首页起价文案。无数据时返回 0。 */
 export function minDailyRate(products: Product[]): number {
   const rates = products.flatMap((p) => [
     p.pricePerDay,
@@ -452,31 +517,12 @@ export function weeklyDailyRate(pricePerDay: number, discountPercent: number): n
   return Number((pricePerDay * (1 - Math.min(100, Math.max(0, discountPercent)) / 100)).toFixed(2))
 }
 
-export interface DiscountedDailyOffer {
-  rate: number
-  label: '周租折后' | '月租折后'
-}
-
-/**
- * 用于产品卡上的“折后日价”。月租折扣优先，因为它是更长期的价格；
- * 没有月租折扣时才使用周租折扣。没有折扣则返回 null，日租仍显示原价。
- */
-export function bestDiscountedDailyOffer(
-  pricePerDay: number,
-  weeklyDiscountPercent: number,
-  monthlyDiscountPercent: number,
-): DiscountedDailyOffer | null {
-  if (monthlyDiscountPercent > 0) return { rate: monthlyDailyRate(pricePerDay, monthlyDiscountPercent), label: '月租折后' }
-  if (weeklyDiscountPercent > 0) return { rate: weeklyDailyRate(pricePerDay, weeklyDiscountPercent), label: '周租折后' }
-  return null
-}
-
 export function weeklyRentalRate(pricePerDay: number, discountPercent: number): number {
   return Number((weeklyDailyRate(pricePerDay, discountPercent) * 7).toFixed(2))
 }
 
 export function monthlyDailyRate(pricePerDay: number, discountPercent: number): number {
-  return Number((pricePerDay * 30 * (1 - Math.min(100, Math.max(0, discountPercent)) / 100) / 30).toFixed(2))
+  return Number((pricePerDay * (1 - Math.min(100, Math.max(0, discountPercent)) / 100)).toFixed(2))
 }
 
 export function monthlyRentalRate(pricePerDay: number, discountPercent: number): number {
@@ -560,6 +606,7 @@ export async function getLegalDocument(
 ): Promise<LegalDocumentData> {
   const data: LegalDocumentData = {
     content: '',
+    contentEn: '',
     metadata: { version: '1.0', lastUpdatedDate: '' },
     companyDetails: {},
     bankDetails: {},
@@ -567,14 +614,18 @@ export async function getLegalDocument(
   try {
     const rows = await env.RENT.prepare(
       `SELECT key, value FROM systemSettings
-       WHERE key IN (?, 'legalMetadata', 'companyDetails', 'bankDetails')`,
+       WHERE key IN (?, ?, 'legalMetadata', 'companyDetails', 'bankDetails')`,
     )
-      .bind(documentKey)
+      .bind(documentKey, `${documentKey}En`)
       .all<{ key: string; value: string }>()
 
     for (const row of rows.results ?? []) {
       if (row.key === documentKey) {
         data.content = String(row.value ?? '').trim()
+        continue
+      }
+      if (row.key === `${documentKey}En`) {
+        data.contentEn = String(row.value ?? '').trim()
         continue
       }
       const parsed = JSON.parse(row.value || '{}') as Record<string, unknown>

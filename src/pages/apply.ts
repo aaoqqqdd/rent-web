@@ -10,6 +10,9 @@ interface ApplyData {
   config: RentalConfig
   appUrl: string
   turnstileSiteKey: string
+  squareGiftCardEnabled: boolean
+  squareGiftCardFeeRate: number
+  squareGiftCardConfig: { applicationId: string; locationId: string; environment: 'sandbox' | 'production' } | null
 }
 
 function scriptJson(value: unknown): string {
@@ -17,7 +20,7 @@ function scriptJson(value: unknown): string {
 }
 
 export function renderCartPage(products: Product[], config: RentalConfig, selectedId = ''): string {
-  const cartProducts = products.filter((product) => product.id && product.pricePerDay > 0).map((product) => ({
+  const cartProducts = products.filter((product) => product.id).map((product) => ({
     id: product.id,
     name: product.name,
     model: product.model,
@@ -31,19 +34,10 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
 <section class="page-hero compact"><div class="wrap"><div class="kicker">购物车</div><h1>先选设备，再确认租期</h1><p>设备详情页先选租期；加入购物车后，只需在这里修改租期。</p></div></section>
 <section class="section apply-section"><div class="wrap form-wrap cart-page-wrap">
   <div class="section-head"><div><div class="kicker">当前选择</div><h2>你的设备清单</h2></div><p>设备会保存在当前浏览器中，最多同时选择 10 台。</p></div>
-  <div class="form-card cart-empty" id="cart-page-empty" hidden><h3>购物车还是空的</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
+  <div class="form-card cart-empty" id="cart-page-empty"><h3>当前购物车为空</h3><p>先去设备库挑选电脑，加入后会显示在这里。</p><a class="btn btn-primary" href="/products">去选择设备</a></div>
   <div id="cart-page-content" hidden>
     <div class="form-card cart-term-card">
-      <div class="form-card-head"><span>01</span><div><h3>租赁日期</h3><p>购物车中的设备共用这一租期</p></div></div>
-      <div class="row2">
-        <div class="field"><label for="cart-start-date">取货日期</label><input type="date" id="cart-start-date" required></div>
-        <div class="field"><label for="cart-start-period">取货时段</label><select id="cart-start-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
-      </div>
-      <div class="row2">
-        <div class="field"><label for="cart-end-date">归还日期</label><input type="date" id="cart-end-date" required></div>
-        <div class="field"><label for="cart-end-period">归还时段</label><select id="cart-end-period"><option value="AM">上午</option><option value="PM">下午</option></select></div>
-      </div>
-      <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。租期可在提交前继续修改。</p>
+      <p class="hint">请在下方每台设备卡片中选择取货和归还日期</p>
     </div>
     <div class="cart-page-list" id="cart-page-items"></div>
     <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong><p>租金会根据实际日期计算，押金在归还验收后按规则处理。</p></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
@@ -54,6 +48,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var products = ${scriptJson(cartProducts)};
   var selectedId = ${scriptJson(selectedId)};
   var map = new Map(products.map(function (product) { return [product.id, product]; }));
+  window.__GeekSlopeCartValidProductIds = products.map(function (product) { return product.id; });
   var key = 'geekslope-cart-v1';
   var empty = document.getElementById('cart-page-empty');
   var content = document.getElementById('cart-page-content');
@@ -61,13 +56,11 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var total = document.getElementById('cart-page-total');
   var minimumDays = ${config.minimumRentalDays};
   var unavailableDates = ${scriptJson(config.unavailableDates)};
+  var unavailableTimeSlots = ${scriptJson(config.unavailableTimeSlots)};
   var availability = {};
   var availabilityReady = false;
+  var availabilityFailed = false;
   var availabilityKey = '';
-  var startInput = document.getElementById('cart-start-date');
-  var endInput = document.getElementById('cart-end-date');
-  var startPeriodInput = document.getElementById('cart-start-period');
-  var endPeriodInput = document.getElementById('cart-end-period');
   function today() {
     var date = new Date();
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
@@ -76,45 +69,87 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
-  function deviceDateUnavailable(date) {
-    if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
-    return read().ids.some(function (id) {
-      var item = availability[id] || {};
-      return (item.unavailableDates || []).indexOf(date) >= 0
-        || (item.rentalRanges || []).some(function (range) { return range.startDate <= date && date < range.endDate; });
-    });
+  function periodUnavailable(id, date, period) {
+    var item = availability[id] || {};
+    var globalSlots = unavailableTimeSlots[date] || [];
+    var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
+    var occupied = item.unavailablePeriods ? (item.unavailablePeriods[date] || []) : [];
+    var group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service'];
+    return occupied.indexOf(period) >= 0 || group.every(function (slot) { return globalSlots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
   }
-  function nextAvailableDate(date) {
+  function dateUnavailable(id, date) {
+    if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
+    var item = availability[id] || {};
+    return (item.unavailableDates || []).indexOf(date) >= 0
+      || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
+  }
+  function termRangeUnavailable(id, start, end) {
+    for (var day = start; day && day <= end; day = addDays(day, 1)) if (dateUnavailable(id, day)) return true;
+    return false;
+  }
+  function nextAvailableDate(id, date) {
     var value = date || today();
-    for (var index = 0; index < 730 && deviceDateUnavailable(value); index += 1) value = addDays(value, 1);
+    for (var index = 0; index < 730 && dateUnavailable(id, value); index += 1) value = addDays(value, 1);
     return value;
   }
   function loadAvailability(ids) {
-    var key = ids.join(',');
-    if (!key || key === availabilityKey) return;
-    availabilityKey = key;
+    var requestKey = ids.join(',');
+    if (!requestKey || requestKey === availabilityKey) return;
+    availabilityKey = requestKey;
     availabilityReady = false;
-    startInput.disabled = true; endInput.disabled = true;
     fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify(ids)), { headers: { Accept: 'application/json' } })
       .then(function (response) { return response.json(); })
-      .then(function (result) { if (key !== availabilityKey) return; availability = result.availability || {}; availabilityReady = true; render(); })
-      .catch(function () { if (key === availabilityKey) { availabilityReady = true; render(); } });
+      .then(function (result) { if (requestKey !== availabilityKey) return; availability = result.availability || {}; availabilityReady = true; render(); })
+      .catch(function () { if (requestKey === availabilityKey) { availabilityFailed = true; availabilityReady = true; render(); } });
+  }
+  function clearChildren(node) { while (node && node.firstChild) node.removeChild(node.firstChild); }
+  function formatDate(value) { return value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
+  function maskDate(value) {
+    var digits = String(value || '').replace(/\\D/g, '').slice(0, 8);
+    return digits.length > 4 ? digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4)
+      : digits.length > 2 ? digits.slice(0, 2) + '/' + digits.slice(2)
+        : digits;
+  }
+  function parseDate(value) {
+    var text = String(value || '').trim();
+    if (/^\\d{8}$/.test(text)) text = text.slice(0, 2) + '/' + text.slice(2, 4) + '/' + text.slice(4);
+    var match = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(text);
+    if (match) text = match[3] + '-' + match[2] + '-' + match[1];
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(text)) return '';
+    var date = new Date(text + 'T00:00:00Z'); return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === text ? text : '';
+  }
+  function termDays(term) {
+    if (!term || !term.startDate || !term.endDate) return 0;
+    var half = Math.round((Date.parse(term.endDate + 'T00:00:00Z') - Date.parse(term.startDate + 'T00:00:00Z')) / 86400000) * 2 + (term.endPeriod === 'PM' ? 1 : 0) - (term.startPeriod === 'PM' ? 1 : 0);
+    return half > 0 ? Math.ceil(half / 2) : 0;
+  }
+  function defaultTerm(id) {
+    var start = nextAvailableDate(id, today()); var end = addDays(start, Math.max(1, minimumDays));
+    while (termRangeUnavailable(id, start, end) && end < addDays(start, 730)) end = addDays(end, 1);
+    return { startDate: start, endDate: end, startPeriod: 'AM', endPeriod: 'AM' };
+  }
+  function normalizeTerm(id, value) {
+    var fallback = defaultTerm(id); value = value && typeof value === 'object' ? value : {};
+    return { startDate: parseDate(value.startDate) || fallback.startDate, endDate: parseDate(value.endDate) || fallback.endDate, startPeriod: value.startPeriod === 'PM' ? 'PM' : 'AM', endPeriod: value.endPeriod === 'PM' ? 'PM' : 'AM' };
   }
   function read() {
     try {
-      var value = JSON.parse(localStorage.getItem(key) || '[]');
-      var ids = Array.isArray(value) ? value : value.items;
-      var term = Array.isArray(value) ? null : value.term;
-      return { ids: Array.isArray(ids) ? ids.filter(function (id, index) { return map.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [], term: term };
-    } catch (_) { return { ids: [], term: null }; }
+      var value = JSON.parse(localStorage.getItem(key) || '[]'); var ids = Array.isArray(value) ? value : value.items;
+      var savedTerms = !Array.isArray(value) && value.terms && typeof value.terms === 'object' ? value.terms : {}; var legacy = !Array.isArray(value) ? value.term : null;
+      ids = Array.isArray(ids) ? ids.filter(function (id, index) { return map.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
+      var terms = {}; ids.forEach(function (id) { terms[id] = normalizeTerm(id, savedTerms[id] || legacy); });
+      // 产品下架后，旧购物车 ID 仍可能留在 localStorage。立即写回清理后的状态，
+      // 让页面空状态与顶栏角标使用同一份有效购物车数据。
+      try { localStorage.setItem(key, JSON.stringify({ items: ids, terms: terms })); } catch (_) {}
+      return { ids: ids, terms: terms };
+    } catch (_) { return { ids: [], terms: {} }; }
   }
-  function write(ids, term) {
-    var state = { items: ids, term: term };
-    try { localStorage.setItem(key, JSON.stringify(state)); } catch (_) {}
-    if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids, term);
-    render();
+  function persist(ids, terms) {
+    try { localStorage.setItem(key, JSON.stringify({ items: ids, terms: terms })); } catch (_) {}
+    try { if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids); } catch (_) {}
   }
-  function render() {
+  function write(ids, terms) { persist(ids, terms); render(); }
+  function legacySharedRender() {
     var state = read();
     if (!state.ids) state = { ids: [], term: null };
     var ids = state.ids;
@@ -145,7 +180,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
         return;
       }
     }
-    items.replaceChildren();
+    clearChildren(items);
     var deposit = 0;
     var rentalDays = ids.length && startInput.value && endInput.value ? Math.max(0, Math.ceil((new Date(endInput.value + 'T00:00:00Z') - new Date(startInput.value + 'T00:00:00Z')) / 86400000)) : 0;
     ids.forEach(function (id) {
@@ -159,15 +194,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       var price = document.createElement('div'); price.className = 'cart-page-price';
       var priceValue = document.createElement('div');
       var rawDaily = Number(product.day || 0);
-      var effectiveDaily = rentalDays > 0 ? rentalFee(product, rentalDays) / rentalDays : rawDaily;
       var daily = document.createElement('strong');
-      if (rentalDays > 0 && effectiveDaily < rawDaily - 0.005) {
-        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + rawDaily.toFixed(2);
-        priceValue.appendChild(original);
-        daily.textContent = '$' + effectiveDaily.toFixed(2);
-      } else {
-        daily.textContent = '$' + product.day;
-      }
+      daily.textContent = rawDaily > 0 ? '$' + rawDaily.toFixed(2) : '询价';
       var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
       priceValue.appendChild(daily);
       var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
@@ -187,36 +215,63 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     var monthlyRate = day * (1 - Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0))) / 100);
     return monthlyDays * monthlyRate + weeklyDays * weeklyRate + dailyDays * day;
   }
-  function saveTerm() {
-    if (availabilityReady) {
-      if (deviceDateUnavailable(startInput.value)) startInput.value = nextAvailableDate(startInput.value);
-      if (deviceDateUnavailable(endInput.value)) endInput.value = nextAvailableDate(endInput.value);
-    }
-    var minimumEnd = addDays(startInput.value || today(), Math.max(1, minimumDays));
-    if (availabilityReady) minimumEnd = nextAvailableDate(minimumEnd);
-    endInput.min = minimumEnd;
-    if (endInput.value < minimumEnd) endInput.value = minimumEnd;
-    write(read().ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: startPeriodInput.value, endPeriod: endPeriodInput.value });
+  function pickerDateDisabled(id, role, term, date) {
+    if (!availabilityReady || availabilityFailed || date < today() || dateUnavailable(id, date)) return true;
+    return role === 'end' && (date <= term.startDate || date < addDays(term.startDate, Math.max(1, minimumDays)) || termRangeUnavailable(id, term.startDate, date));
   }
-  startInput.addEventListener('change', saveTerm);
-  endInput.addEventListener('change', saveTerm);
-  startPeriodInput.addEventListener('change', saveTerm);
-  endPeriodInput.addEventListener('change', saveTerm);
-  items.addEventListener('click', function (event) {
-    var remove = event.target.closest('[data-cart-remove]');
-    if (!remove) return;
-    selectedId = '';
-    var state = read();
-    write(state.ids.filter(function (id) { return id !== remove.dataset.cartRemove; }), state.term);
-    render();
-  });
+  function renderPicker(picker, id, role, term, month) {
+    var year = month.getFullYear(); var monthIndex = month.getMonth(); clearChildren(picker);
+    var head = document.createElement('div'); head.className = 'date-picker-head'; var title = document.createElement('strong'); title.textContent = year + '年' + (monthIndex + 1) + '月';
+    var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'date-picker-nav'; previous.textContent = '‹'; var next = document.createElement('button'); next.type = 'button'; next.className = 'date-picker-nav'; next.textContent = '›';
+    previous.addEventListener('click', function () { renderPicker(picker, id, role, term, new Date(year, monthIndex - 1, 1)); }); next.addEventListener('click', function () { renderPicker(picker, id, role, term, new Date(year, monthIndex + 1, 1)); }); head.append(previous, title, next); picker.appendChild(head);
+    var week = document.createElement('div'); week.className = 'date-picker-week'; ['一', '二', '三', '四', '五', '六', '日'].forEach(function (label) { var cell = document.createElement('span'); cell.textContent = label; week.appendChild(cell); }); picker.appendChild(week);
+    var grid = document.createElement('div'); grid.className = 'date-picker-grid'; var first = new Date(year, monthIndex, 1); var offset = (first.getDay() + 6) % 7;
+    for (var index = 0; index < 42; index += 1) {
+      var date = new Date(year, monthIndex, index - offset + 1); var iso = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); var button = document.createElement('button'); button.type = 'button'; button.textContent = String(date.getDate()); button.dataset.date = iso;
+      if (date.getMonth() !== monthIndex) button.className = 'is-outside'; button.disabled = pickerDateDisabled(id, role, term, iso); if (iso === term[role === 'start' ? 'startDate' : 'endDate']) button.classList.add('is-selected');
+      button.addEventListener('click', function (event) { var picked = event.currentTarget.dataset.date; term[role === 'start' ? 'startDate' : 'endDate'] = picked; if (role === 'start' && term.endDate < addDays(picked, Math.max(1, minimumDays))) term.endDate = addDays(picked, Math.max(1, minimumDays)); var state = read(); state.terms[id] = term; persist(state.ids, state.terms); render(); }); grid.appendChild(button);
+    }
+    picker.appendChild(grid);
+  }
+  function dateField(id, role, term) {
+    var field = document.createElement('div'); field.className = 'term-date-field'; var label = document.createElement('label'); label.textContent = role === 'start' ? '取货日期' : '归还日期';
+    var control = document.createElement('div'); control.className = 'term-date-control'; var input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric'; input.autocomplete = 'off'; input.maxLength = 10; input.placeholder = 'dd/mm/yyyy'; input.value = formatDate(term[role === 'start' ? 'startDate' : 'endDate']); var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'date-picker-toggle'; toggle.setAttribute('aria-label', role === 'start' ? '打开取货日期日历' : '打开归还日期日历'); toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>'; var picker = document.createElement('div'); picker.className = 'date-picker'; picker.hidden = true;
+    var open = function () { picker.hidden = false; toggle.setAttribute('aria-expanded', 'true'); var value = parseDate(input.value) || term[role === 'start' ? 'startDate' : 'endDate'] || today(); var date = new Date(value + 'T00:00:00'); renderPicker(picker, id, role, term, new Date(date.getFullYear(), date.getMonth(), 1)); };
+    var close = function () { picker.hidden = true; toggle.setAttribute('aria-expanded', 'false'); };
+    toggle.setAttribute('aria-expanded', 'false'); toggle.addEventListener('click', function () { if (picker.hidden) open(); else close(); });
+    input.addEventListener('focus', open); input.addEventListener('click', open); input.addEventListener('input', function () { input.value = maskDate(input.value); input.setCustomValidity(''); });
+    input.addEventListener('blur', function () { window.setTimeout(function () { if (!control.contains(document.activeElement)) close(); }, 100); var value = parseDate(input.value); if (!value) { input.setCustomValidity('请输入有效日期（格式：dd/mm/yyyy）。'); return; } var state = read(); var next = state.terms[id] || term; next[role === 'start' ? 'startDate' : 'endDate'] = value; state.terms[id] = next; persist(state.ids, state.terms); render(); });
+    control.append(input, toggle, picker); field.append(label, control); return field;
+  }
+  function termError(id, term) {
+    if (!parseDate(term.startDate) || !parseDate(term.endDate)) return '请输入有效日期（格式：dd/mm/yyyy）。'; if (term.startDate < today()) return '取货日期不能早于今天。'; if (termDays(term) < minimumDays) return '租期不能少于 ' + minimumDays + ' 天。'; if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return '该设备在所选租期内不可用，请选择其他日期。'; return '';
+  }
+  function termEditor(id, term) {
+    var wrap = document.createElement('div'); wrap.className = 'device-term-editor'; var head = document.createElement('div'); head.className = 'device-term-editor-head'; var title = document.createElement('strong'); title.textContent = '本设备租期'; head.appendChild(title); wrap.appendChild(head);
+    var fields = document.createElement('div'); fields.className = 'term-date-grid'; fields.append(dateField(id, 'start', term), dateField(id, 'end', term)); var status = document.createElement('p'); status.className = 'term-status'; var error = availabilityReady && !availabilityFailed ? termError(id, term) : ''; status.textContent = availabilityFailed ? '设备档期检查失败，请刷新后重试。' : (availabilityReady ? (error || '该设备档期可用。') : '正在检查该设备档期…'); if (error || availabilityFailed) status.dataset.state = 'error'; wrap.append(fields, status); return wrap;
+  }
+  function setEmptyState(isEmpty) {
+    empty.hidden = !isEmpty;
+    content.hidden = isEmpty;
+  }
+  function render() {
+    var state = read(); var ids = state.ids;
+    if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) { ids.push(selectedId); state.terms[selectedId] = normalizeTerm(selectedId, null); persist(ids, state.terms); }
+    setEmptyState(ids.length === 0);
+    if (!ids.length) { clearChildren(items); total.textContent = ''; return; } loadAvailability(ids); clearChildren(items); var deposit = 0; var rent = 0; var valid = true;
+    ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; deposit += Number(product.deposit || 0); rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || '配置详情见设备页'; detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); var dailyRate = Number(product.day || 0); daily.textContent = dailyRate > 0 ? '$' + dailyRate.toFixed(2) : '询价'; if (dailyRate > 0) { var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); } var depositText = document.createElement('span'); depositText.textContent = Number(product.deposit || 0) > 0 ? '押金 $' + Number(product.deposit || 0).toFixed(2) : '押金待确认'; var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除'; price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
+    total.textContent = ids.length + ' 台设备｜租金 $' + rent.toFixed(2) + '｜押金 $' + deposit.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (valid ? '' : '｜请先修正不可用租期');
+    var checkout = content.querySelector('a[href="/checkout"], a[data-checkout-link]');
+    if (checkout) { checkout.dataset.checkoutLink = 'true'; checkout.href = valid ? '/checkout' : '#cart-page-items'; checkout.setAttribute('aria-disabled', String(!valid)); checkout.classList.toggle('is-disabled', !valid); }
+  }
+  items.addEventListener('click', function (event) { var remove = event.target.closest('[data-cart-remove]'); if (!remove) return; selectedId = ''; var state = read(); delete state.terms[remove.dataset.cartRemove]; write(state.ids.filter(function (id) { return id !== remove.dataset.cartRemove; }), state.terms); });
   render();
 })();
 </script>`
 }
 
 export function renderApply(data: ApplyData): string {
-  const { products, selectedId, config, appUrl, turnstileSiteKey } = data
+  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardEnabled, squareGiftCardFeeRate, squareGiftCardConfig } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
   const deliveryAreas = config.deliveryAreas.join('、')
@@ -251,6 +306,9 @@ export function renderApply(data: ApplyData): string {
        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
     : ''
   const stripeScript = '<script src="https://js.stripe.com/v3/"></script>'
+  const squareScript = squareGiftCardEnabled && squareGiftCardConfig
+    ? `<script src="${squareGiftCardConfig.environment === 'production' ? 'https://web.squarecdn.com/v1/square.js' : 'https://sandbox.web.squarecdn.com/v1/square.js'}"></script>`
+    : ''
 
   return /* html */ `
 <section class="page-hero compact apply-hero"><div class="wrap"><div class="kicker">租赁申请</div><h1>确认设备，安排你的使用时间</h1><p>现在只提交申请。档期和费用确认后，再进入合同与付款。</p><div class="apply-progress"><span class="is-current"><i>1</i>填写申请</span><b></b><span><i>2</i>确认档期</span><b></b><span><i>3</i>签约交付</span></div></div></section>
@@ -259,11 +317,10 @@ export function renderApply(data: ApplyData): string {
     <div class="section-head">
       <div><div class="kicker">第 1 步</div>
       <h2>确认设备与租赁信息</h2></div>
-      <p>同一购物车内的设备共用租期与取还方式。预计填写时间 3–5 分钟。</p>
     </div>
 
-    <div class="form-card cart-empty" id="cart-empty" hidden>
-      <h3>购物车还是空的</h3>
+    <div class="form-card cart-empty" id="cart-empty">
+      <h3>当前购物车为空</h3>
       <p>先去设备库挑选电脑，加入后会保存在这里。</p>
       <a class="btn btn-primary" href="/products">去选择设备</a>
     </div>
@@ -271,99 +328,128 @@ export function renderApply(data: ApplyData): string {
     <form id="apply-form" hidden>
       <div class="form-alert" id="form-error" hidden></div>
 
-      <div class="form-card">
-        <div class="form-card-head"><span>01</span><div><h3>订单摘要</h3><p>设备已从购物车带入，需修改时返回购物车</p></div></div>
-        <div class="field">
-          <label>已选择设备</label>
-          <div class="cart-checkout-list" id="cart-items"></div>
-        </div>
-        <p class="hint"><a href="/apply" style="color:var(--primary)">返回购物车修改设备</a> · 每台库存设备只能加入一次，单次最多 10 台。</p>
-        <div class="form-summary" id="summary"></div>
-        <div class="coupon-row">
-          <div class="field">
-            <label for="couponCode">优惠码（选填）</label>
-            <input id="couponCode" name="couponCode" maxlength="40" autocomplete="off" placeholder="输入优惠码">
+      <input type="hidden" id="deviceTerms" name="deviceTerms" required>
+
+      <div class="apply-grid">
+        <div class="apply-grid-main">
+          <div class="form-card">
+            <div class="form-card-head"><span>01</span><div><h3>订单摘要</h3><p>设备已从购物车带入，需修改时返回购物车</p></div></div>
+            <div class="field">
+              <label>已选择设备</label>
+              <div class="cart-checkout-list" id="cart-items"></div>
+            </div>
+            <p class="hint"><a href="/apply" style="color:var(--primary)">返回购物车修改设备</a> · 每台库存设备只能加入一次，单次最多 10 台。</p>
+            <div class="coupon-row">
+              <div class="field">
+                <label for="couponCode">优惠码（选填）</label>
+                <input id="couponCode" name="couponCode" maxlength="40" autocomplete="off" placeholder="输入优惠码">
+              </div>
+              <button class="btn btn-ghost" type="button" id="coupon-check">使用优惠码</button>
+            </div>
+            <p class="coupon-hint" id="coupon-hint" aria-live="polite">有优惠码？提交时会同时校验适用设备、租期和折扣金额。</p>
           </div>
-          <button class="btn btn-ghost" type="button" id="coupon-check">使用优惠码</button>
+
+          <div class="form-card">
+            <div class="form-card-head"><span>02</span><div><h3>取还方式</h3><p>配送范围与运费会在审核时确认</p></div></div>
+            <div class="field">
+              <label for="deliveryMethod">取还方式</label>
+              <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
+            </div>
+    <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}<div class="row2 pickup-time-fields"><div class="field"><label for="pickupTimeSlot">取货时间段</label><select id="pickupTimeSlot" name="pickupTimeSlot"${hasPickupLocations ? ' required' : ' disabled'}><option value="morning_service">7:00–8:00（早间服务费 10%）</option><option value="morning">9:00–12:00（上午）</option><option value="afternoon">13:00–20:00（下午）</option><option value="evening_service">21:00–23:00（晚间服务费 10%）</option></select></div><div class="field"><label for="returnTimeSlot">归还时间段</label><select id="returnTimeSlot" name="returnTimeSlot"${hasPickupLocations ? ' required' : ' disabled'}><option value="morning_service">7:00–8:00（早间服务费 10%）</option><option value="morning">9:00–12:00（上午）</option><option value="afternoon">13:00–20:00（下午）</option><option value="evening_service">21:00–23:00（晚间服务费 10%）</option></select></div></div><p class="hint pickup-time-hint">自取时间段会按所选日期、当前时间和设备档期自动禁用。</p></div>
+            <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
+              <div class="field address-autocomplete">
+                <label for="delivery-address-search">搜索墨尔本地址</label>
+                <input id="delivery-address-search" type="search" autocomplete="off" role="combobox" aria-controls="address-suggestions" aria-expanded="false" placeholder="例如 123 Collins Street, Melbourne">
+                <div class="address-search-status" id="address-search-status" aria-live="polite">输入至少 3 个字符开始联想。</div>
+                <div class="address-suggestions" id="address-suggestions" role="listbox" hidden></div>
+                <small class="address-attribution">地址数据 © OpenStreetMap contributors</small>
+              </div>
+              <div class="field"><label for="deliveryStreet">街道地址</label><input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1"></div>
+              <div class="row3">
+                <div class="field"><label for="deliverySuburb">Suburb</label><input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra"></div>
+                <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
+              </div>
+              <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
+              <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? `<br>可配送区域：${esc(deliveryAreas)}` : ''}</p>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <div class="form-card-head"><span>03</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
+            <div class="row2">
+              <div class="field"><label for="contactFirstName">名</label><input id="contactFirstName" name="firstName" maxlength="100" autocomplete="given-name" required></div>
+              <div class="field"><label for="contactLastName">姓</label><input id="contactLastName" name="lastName" maxlength="100" autocomplete="family-name" required></div>
+            </div>
+            <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
+            <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
+              <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
+          </div>
+
+          <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
         </div>
-        <p class="coupon-hint" id="coupon-hint" aria-live="polite">有优惠码？提交时会同时校验适用设备、租期和折扣金额。</p>
+
+        <div class="apply-grid-payment">
+          <div class="form-summary" id="summary"></div>
+          <div class="form-card">
+            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>租金可用礼品卡，押金使用信用卡预授权</p></div></div>
+            <div class="payment-method-options" id="payment-method-options">
+              <label class="payment-method-option choice-line">
+                <input type="radio" name="paymentMethod" value="card" checked>
+                <span class="payment-method-copy"><strong>信用卡 / Apple Pay / Link</strong><small>审核通过后按确认金额付款，信用卡由 Stripe 安全处理，收取 x% 手续费。</small></span>
+              </label>
+              ${squareGiftCardEnabled ? `<label class="payment-method-option choice-line">
+                <input type="radio" name="paymentMethod" value="square">
+                <span class="payment-method-copy"><strong>Square 礼品卡</strong><small>提交时先安全绑定 Square 礼品卡；审核通过并签约后，用它支付租金及服务费；押金需另用信用卡预授权，收取 ${(squareGiftCardFeeRate * 100).toFixed(1)}% 礼品卡手续费。</small></span>
+              </label>` : ''}
+              <div id="balance-payment-option" hidden>
+                <label class="balance-payment-option choice-line">
+                  <input type="radio" name="paymentMethod" value="balance">
+                  <span class="balance-payment-copy"><strong>账户余额支付</strong><span id="balance-payment-insufficient" class="balance-payment-badge" hidden>余额不足</span><small id="balance-payment-note">当前可用余额： AUD $0.00</small></span>
+                </label>
+              </div>
+            </div>
+            <div class="stripe-payment-box">
+              <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
+                <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
+                <div id="stripe-wallet-element"></div>
+                <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
+              </div>
+              <div class="stripe-setup-box">
+                <div class="stripe-setup-head"><div><label>押金信用卡资料</label><p>仅用于押金预授权，不会立即收取租金。</p></div><span>SECURE / STRIPE</span></div>
+                <div id="stripe-card-element" class="stripe-card-element"></div>
+                <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
+                <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
+                <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
+              </div>
+            </div>
+            <div class="refund-method-fixed">
+              <input type="hidden" name="refundMethod" value="original">
+              <span>押金退还方式</span>
+              <strong>原路退回</strong>
+              <small>默认方式，提交后不可修改。</small>
+            </div>
+          </div>
+          ${squareGiftCardEnabled ? `<div class="form-card square-gift-card-setup" id="square-gift-card-setup">
+              <div class="stripe-setup-head"><div><label>Square 礼品卡</label></div><span>SECURE / SQUARE</span></div>
+              <div id="square-gift-card-element"></div>
+              <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
+            </div>` : ''}
       </div>
 
-      <input type="hidden" id="startDate" name="startDate" required>
-      <input type="hidden" id="endDate" name="endDate" required>
-      <input type="hidden" id="startPeriod" name="startPeriod" value="AM">
-      <input type="hidden" id="endPeriod" name="endPeriod" value="AM">
-
-      <div class="form-card">
-        <div class="form-card-head"><span>03</span><div><h3>取还方式</h3><p>配送范围与运费会在审核时确认</p></div></div>
-        <div class="field">
-          <label for="deliveryMethod">取还方式</label>
-          <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
-        </div>
-        <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
-        <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
-          <div class="field address-autocomplete">
-            <label for="delivery-address-search">搜索墨尔本地址</label>
-            <input id="delivery-address-search" type="search" autocomplete="off" role="combobox" aria-controls="address-suggestions" aria-expanded="false" placeholder="例如 123 Collins Street, Melbourne">
-            <div class="address-search-status" id="address-search-status" aria-live="polite">输入至少 3 个字符开始联想。</div>
-            <div class="address-suggestions" id="address-suggestions" role="listbox" hidden></div>
-            <small class="address-attribution">地址数据 © OpenStreetMap contributors</small>
-          </div>
-          <div class="field"><label for="deliveryStreet">街道地址</label><input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1"></div>
-          <div class="row3">
-            <div class="field"><label for="deliverySuburb">Suburb</label><input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra"></div>
-            <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
-          </div>
-          <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
-          <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? ` 可配送区域：${esc(deliveryAreas)}。` : ''} 其他城市或郊区请选到店自取。</p>
-        </div>
+      <div class="field legal-agreement">
+        <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
+        <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
       </div>
-
-      <div class="form-card">
-        <div class="form-card-head"><span>04</span><div><h3>联系与账号</h3><p>用于接收审核结果、后续签约与付款</p></div></div>
-        <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
-          <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
-          <div id="stripe-wallet-element"></div>
-          <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
-        </div>
-        <div class="row2">
-          <div class="field" id="contact-name-field"><label for="contactName">姓名</label><input id="contactName" name="contactName" maxlength="120" autocomplete="name" required></div>
-          <div class="field"><label for="contactPhone">联系电话</label><input id="contactPhone" name="contactPhone" maxlength="40" autocomplete="tel" required></div>
-        </div>
-        <div class="field" id="contact-email-field"><label for="contactEmail">邮箱</label><input type="email" id="contactEmail" name="contactEmail" maxlength="200" autocomplete="email" required></div>
-        <p class="hint">无需填写密码或登录。新账号会自动生成临时密码，并在申请提交成功后显示；已有账号可直接提交申请。</p>
-        <label class="choice-line save-contact-choice"><input type="checkbox" id="saveContactInfo"> 保存我的信息，以便下次更快结账</label>
-        <div class="payment-method-options" id="payment-method-options" hidden>
-          <label class="choice-line"><input type="radio" name="paymentMethod" value="balance"> 账户余额支付 <span id="balance-payment-note">检测到账户余额，可用于支付本次申请。</span></label>
-        </div>
-        <div class="stripe-setup-box">
-          <div class="stripe-setup-head"><div><label>信用卡资料</label><p>验证支付方式。</p></div><span>SECURE / STRIPE</span></div>
-          <div id="stripe-card-element" class="stripe-card-element"></div>
-          <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
-          <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
-          <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
-        </div>
-        <div class="refund-choice">
-          <label>押金处理方式</label>
-          <label class="choice-line"><input type="radio" name="refundMethod" value="original" checked> 原路退回信用卡</label>
-          <label class="choice-line"><input type="radio" id="refund-balance" name="refundMethod" value="balance" disabled> 退回账号余额（仅正式账户）</label>
-        </div>
-        <div class="field"><label for="rentalNote">备注（选填）</label><textarea id="rentalNote" name="rentalNote" maxlength="500" placeholder="例如期望配送时间、用途等"></textarea></div>
-        <div class="field legal-agreement">
-          <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
-          <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
-        </div>
-        ${stripeScript}${turnstile}
-        <p class="hint">提交后订单进入审核流程，我们确认后会联系你安排签约与付款。个人信息仅用于本次租赁。</p>
-      </div>
+      ${stripeScript}${squareScript}${turnstile}
 
       <div class="apply-expectations" aria-label="提交申请后的流程">
-        <div><span>提交时</span><strong>不会立即扣款</strong><p>先创建租赁申请，保留你的设备、租期和联系信息。</p></div>
+        <div><span>提交时</span><strong>验证并预授权押金</strong><p>租金不会立即扣款；信用卡只用于押金预授权。</p></div>
         <div><span>审核时</span><strong>确认档期与费用</strong><p>我们会核对库存、地址、优惠码和最终配送安排。</p></div>
         <div><span>确认后</span><strong>签约再付款</strong><p>档期确认后进入租赁系统，完成合同、付款和取机安排。</p></div>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">注册并提交申请</button>
+      <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">提交申请</button>
+      <p class="form-note apply-submit-note">提交后，我们将审核你的订单，并在审核通过后联系你完成签约与付款。<br>个人信息仅用于处理本次租赁及相关服务。</p>
       <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">设备库</a> 或联系客服。</p>
     </form>
 
@@ -388,37 +474,45 @@ export function renderApply(data: ApplyData): string {
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
   var DEVICE_AVAILABILITY = {};
   var AVAILABILITY_READY = false;
+  var AVAILABILITY_FAILED = false;
   var DELIVERY_AREAS = ${scriptJson(config.deliveryAreas)};
   var COUPON_ENDPOINT = '/api/coupons/rental-cart-preview';
   var productMap = new Map(PRODUCTS.map(function (product) { return [product.id, product]; }));
+  window.__GeekSlopeCartValidProductIds = PRODUCTS.map(function (product) { return product.id; });
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function readCart() {
+  function readCartState() {
     try {
       var value = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
       var ids = Array.isArray(value) ? value : value.items;
-      return Array.isArray(ids) ? ids.filter(function (id, index) { return productMap.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
-    } catch (_) { return []; }
+      ids = Array.isArray(ids) ? ids.filter(function (id, index) { return productMap.has(id) && ids.indexOf(id) === index; }).slice(0, 10) : [];
+      var terms = !Array.isArray(value) && value.terms && typeof value.terms === 'object' ? value.terms : {};
+      var legacy = !Array.isArray(value) ? value.term : null;
+      // 清理已下架或不存在的设备，避免结账页为空但顶栏仍显示旧角标。
+      try { localStorage.setItem(CART_KEY, JSON.stringify({ items: ids, term: legacy, terms: terms })); } catch (_) {}
+      return { ids: ids, terms: terms, legacy: legacy };
+    } catch (_) { return { ids: [], terms: {}, legacy: null }; }
   }
   function saveCart(ids) {
     if (window.GeekSlopeCart) return window.GeekSlopeCart.write(ids);
-    try { localStorage.setItem(CART_KEY, JSON.stringify(ids)); } catch (_) {}
+    try { localStorage.setItem(CART_KEY, JSON.stringify({ items: ids, terms: cartTerms })); } catch (_) {}
     return ids;
   }
-  var cartIds = readCart();
-  if (SELECTED_ID && productMap.has(SELECTED_ID) && cartIds.indexOf(SELECTED_ID) < 0) { cartIds.push(SELECTED_ID); cartIds = saveCart(cartIds); }
+  var cartState = readCartState();
+  var cartIds = cartState.ids;
+  var cartTerms = cartState.terms;
+  if (SELECTED_ID && productMap.has(SELECTED_ID) && cartIds.indexOf(SELECTED_ID) < 0) { cartIds.push(SELECTED_ID); if (!cartTerms[SELECTED_ID] && cartState.legacy) cartTerms[SELECTED_ID] = cartState.legacy; saveCart(cartIds); }
 
   var form = document.getElementById('apply-form');
   var emptyBox = document.getElementById('cart-empty');
   var itemsBox = document.getElementById('cart-items');
   var errBox = document.getElementById('form-error');
   var summary = document.getElementById('summary');
-  var startD = document.getElementById('startDate');
-  var endD = document.getElementById('endDate');
-  var startP = document.getElementById('startPeriod');
-  var endP = document.getElementById('endPeriod');
+  var deviceTermsInput = document.getElementById('deviceTerms');
   var method = document.getElementById('deliveryMethod');
   var pickupField = document.getElementById('pickup-field');
   var deliveryFields = document.getElementById('delivery-fields');
+  var pickupTimeSlot = document.getElementById('pickupTimeSlot');
+  var returnTimeSlot = document.getElementById('returnTimeSlot');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
   var couponState = 'empty';
@@ -428,26 +522,58 @@ export function renderApply(data: ApplyData): string {
   var setupIntent = null;
   var cardReady = false;
   var stripeFeeRate = 0.025;
+  var squareGiftCardFeeRate = ${squareGiftCardFeeRate};
+  var squareGiftCardConfig = ${scriptJson(squareGiftCardConfig)};
+  var squareGiftCard = null;
+  var squareGiftCardLoading = null;
   var accountBalance = null;
   var cardMessage = document.getElementById('stripe-card-message');
   var cardConfirm = document.getElementById('stripe-card-confirm');
   var setupIntentInput = document.getElementById('stripeSetupIntentId');
-  var balanceOption = document.getElementById('payment-method-options');
+  var balanceOption = document.getElementById('balance-payment-option');
   var paymentMethodInputs = document.querySelectorAll('input[name="paymentMethod"]');
   var balancePaymentInput = balanceOption.querySelector('input[value="balance"]');
-  var refundBalanceInput = document.getElementById('refund-balance');
   var contactEmail = document.getElementById('contactEmail');
+  var contactFirstName = document.getElementById('contactFirstName');
+  var contactLastName = document.getElementById('contactLastName');
   var balanceEndpoint = '/api/account-balance';
   var balanceLookupTimer = null;
   var walletBox = document.getElementById('stripe-wallet-box');
   var walletMessage = document.getElementById('stripe-wallet-message');
+  var stripePaymentBox = document.querySelector('.stripe-payment-box');
   var stripeSetupBox = document.querySelector('.stripe-setup-box');
+  var squareGiftCardSetup = document.getElementById('square-gift-card-setup');
+  var squareGiftCardMessage = document.getElementById('square-gift-card-message');
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
   var addressStatus = document.getElementById('address-search-status');
   var addressTimer = null;
   var addressRequest = null;
   var activeAddressSuggestion = -1;
+
+  function isEnglish() {
+    return (window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en') || document.documentElement.lang === 'en-AU';
+  }
+  function uiText(chinese, english) {
+    if (isEnglish()) return english;
+    return chinese;
+  }
+  function uiCopy(value) {
+    return window.GeekSlopeI18n ? window.GeekSlopeI18n.t(value) : value;
+  }
+
+  function splitContactName(value) {
+    var name = String(value || '').trim();
+    var parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length > 1) return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] };
+    if (/^[\u3400-\u9fff]{2,}$/.test(name)) return { firstName: name.slice(1), lastName: name.slice(0, 1) };
+    return { firstName: name, lastName: '' };
+  }
+  function fullContactName() {
+    var first = contactFirstName.value.trim();
+    var last = contactLastName.value.trim();
+    return first && last && /^[\u3400-\u9fff]+$/.test(first + last) ? first + last : [first, last].filter(Boolean).join(' ');
+  }
 
   function todayStr() {
     var date = new Date();
@@ -458,8 +584,9 @@ export function renderApply(data: ApplyData): string {
     date.setDate(date.getDate() + amount);
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
+  function formatDate(value) { return value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
   function normalizeAddress(value) {
-    return String(value || '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    return String(value || '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').replace(/\\s+/g, ' ').trim();
   }
   function isMelbourneDeliveryAddress() {
     if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
@@ -469,7 +596,7 @@ export function renderApply(data: ApplyData): string {
   }
   function showFormError(message) {
     checkoutBlocked = true;
-    errBox.textContent = message;
+    errBox.textContent = uiCopy(message);
     errBox.hidden = false;
   }
   function clearCheckoutError() {
@@ -482,7 +609,7 @@ export function renderApply(data: ApplyData): string {
     appliedDiscount = 0;
   }
   function setAddressStatus(message, state) {
-    if (addressStatus) { addressStatus.textContent = message; addressStatus.dataset.state = state || ''; }
+    if (addressStatus) { addressStatus.textContent = uiCopy(message); addressStatus.dataset.state = state || ''; }
   }
   function closeAddressSuggestions() {
     if (!addressSuggestions) return;
@@ -551,101 +678,161 @@ export function renderApply(data: ApplyData): string {
     document.addEventListener('click', function (event) { if (!event.target.closest('.address-autocomplete')) closeAddressSuggestions(); });
   }
   var today = todayStr();
-  startD.min = today;
-  endD.min = today;
-  try {
-    var savedCart = JSON.parse(localStorage.getItem(CART_KEY) || '{}');
-    var savedTerm = savedCart && !Array.isArray(savedCart) ? savedCart.term : null;
-    if (savedTerm && savedTerm.startDate && savedTerm.endDate) {
-      startD.value = savedTerm.startDate; endD.value = savedTerm.endDate;
-      if (savedTerm.startPeriod) startP.value = savedTerm.startPeriod;
-      if (savedTerm.endPeriod) endP.value = savedTerm.endPeriod;
-    }
-  } catch (_) {}
-  if (!startD.value) startD.value = today;
-  if (startD.value < today) startD.value = today;
-  endD.min = addDays(startD.value, Math.max(1, MIN_DAYS));
-  if (!endD.value || endD.value < endD.min) endD.value = endD.min;
-  function days() {
-    if (!startD.value || !endD.value) return 0;
-    var start = new Date(startD.value + 'T00:00:00Z'), end = new Date(endD.value + 'T00:00:00Z');
-    var half = Math.round((end - start) / 86400000) * 2 + (endP.value === 'PM' ? 1 : 0) - (startP.value === 'PM' ? 1 : 0);
+  var pickupSlots = [
+    { value: 'morning_service', period: 'AM', endMinutes: 8 * 60 },
+    { value: 'morning', period: 'AM', endMinutes: 12 * 60 },
+    { value: 'afternoon', period: 'PM', endMinutes: 20 * 60 },
+    { value: 'evening_service', period: 'PM', endMinutes: 23 * 60 },
+  ];
+  function melbourneMinutes() {
+    var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0);
+  }
+  function slotPassed(date, slot) { return date === today && melbourneMinutes() >= slot.endMinutes; }
+  function termFor(id) {
+    var value = cartTerms[id] || cartState.legacy || {}; var start = value.startDate || today; if (start < today) start = today;
+    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: value.startPeriod === 'PM' ? 'PM' : 'AM', endPeriod: value.endPeriod === 'PM' ? 'PM' : 'AM' };
+  }
+  function termDays(term) {
+    var half = Math.round((Date.parse(term.endDate + 'T00:00:00Z') - Date.parse(term.startDate + 'T00:00:00Z')) / 86400000) * 2 + (term.endPeriod === 'PM' ? 1 : 0) - (term.startPeriod === 'PM' ? 1 : 0);
     return half > 0 ? Math.ceil(half / 2) : 0;
   }
-  function periodUnavailable(date, period) {
-    var slots = UNAVAILABLE_TIME_SLOTS[date] || [];
-    return period === 'AM'
-      ? slots.indexOf('morning_service') >= 0 || slots.indexOf('morning') >= 0
-      : slots.indexOf('afternoon') >= 0 || slots.indexOf('evening_service') >= 0;
+  function slotUnavailable(id, date, slot) {
+    var item = DEVICE_AVAILABILITY[id] || {};
+    return (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(slot.period) >= 0) || (UNAVAILABLE_TIME_SLOTS[date] || []).indexOf(slot.value) >= 0 || (item.unavailableTimeSlots && (item.unavailableTimeSlots[date] || []).indexOf(slot.value) >= 0);
   }
-  function deviceDateUnavailable(date) {
+  function periodUnavailable(id, date, period) {
+    var item = DEVICE_AVAILABILITY[id] || {};
+    var occupied = item.unavailablePeriods ? (item.unavailablePeriods[date] || []) : [];
+    return occupied.indexOf(period) >= 0 || pickupSlots.filter(function (slot) { return slot.period === period; }).every(function (slot) { return slotUnavailable(id, date, slot); });
+  }
+  function dateUnavailable(id, date) {
     if (!date || UNAVAILABLE_DATES.indexOf(date) >= 0) return Boolean(date);
-    return cartIds.some(function (id) {
-      var item = DEVICE_AVAILABILITY[id] || {};
-      return (item.unavailableDates || []).indexOf(date) >= 0
-        || (item.rentalRanges || []).some(function (range) { return range.startDate <= date && date < range.endDate; });
+    var item = DEVICE_AVAILABILITY[id] || {};
+    return (item.unavailableDates || []).indexOf(date) >= 0 || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
+  }
+  function periodPassed(date, period) {
+    return date === today && melbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60);
+  }
+  function termUsesPeriod(term, date, period) {
+    var start = Date.parse(term.startDate + 'T00:00:00Z') / 86400000 * 2 + (term.startPeriod === 'PM' ? 1 : 0);
+    var end = Date.parse(term.endDate + 'T00:00:00Z') / 86400000 * 2 + (term.endPeriod === 'PM' ? 1 : 0);
+    var current = Date.parse(date + 'T00:00:00Z') / 86400000 * 2 + (period === 'PM' ? 1 : 0);
+    return start <= current && current < end;
+  }
+  function termRangeUnavailable(id, term) {
+    for (var day = term.startDate; day && day <= term.endDate; day = addDays(day, 1)) {
+      if (dateUnavailable(id, day)) return true;
+      for (var period of ['AM', 'PM']) if (termUsesPeriod(term, day, period) && (periodUnavailable(id, day, period) || periodPassed(day, period))) return true;
+    }
+    return false;
+  }
+  function termError(id, term) {
+    if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return uiCopy('请为每台设备填写有效租期。');
+    if (term.startDate < today || termDays(term) < MIN_DAYS) return uiText('每台设备的租期不能少于 ' + MIN_DAYS + ' 天。', 'Each device must be rented for at least ' + MIN_DAYS + ' day(s).');
+    if (termRangeUnavailable(id, term)) return uiCopy('该设备在所选租期或时段不可用。');
+    return '';
+  }
+  function validateTerms() {
+    if (!AVAILABILITY_READY) return uiCopy('正在检查设备档期，请稍候再提交。');
+    if (AVAILABILITY_FAILED) return uiCopy('设备档期检查失败，请刷新页面后重试。');
+    for (var index = 0; index < cartIds.length; index += 1) { var error = termError(cartIds[index], termFor(cartIds[index])); if (error) return error; }
+    return '';
+  }
+  function updatePickupTimeOptions() {
+    if (!pickupTimeSlot || !returnTimeSlot) return;
+    [[pickupTimeSlot, 'startDate', 'startPeriod'], [returnTimeSlot, 'endDate', 'endPeriod']].forEach(function (entry) {
+      var select = entry[0];
+      Array.from(select.options).forEach(function (option) {
+        var slot = pickupSlots.find(function (item) { return item.value === option.value; });
+        var allowed = Boolean(slot) && cartIds.length > 0 && cartIds.every(function (id) {
+          var term = termFor(id); var date = term[entry[1]];
+          return slot && !slotUnavailable(id, date, slot) && !slotPassed(date, slot);
+        });
+        option.disabled = !allowed;
+      });
+      var desiredPeriod = cartIds.length ? termFor(cartIds[0])[entry[2]] : 'AM';
+      var selectedSlot = pickupSlots.find(function (slot) { return slot.value === select.value; });
+      if (select.selectedOptions[0]?.disabled || !selectedSlot || selectedSlot.period !== desiredPeriod) select.value = Array.from(select.options).find(function (option) { var slot = pickupSlots.find(function (item) { return item.value === option.value; }); return !option.disabled && slot && slot.period === desiredPeriod; })?.value || Array.from(select.options).find(function (option) { return !option.disabled; })?.value || '';
     });
   }
-  function validateAvailability() {
-    var startMessage = !AVAILABILITY_READY ? '' : deviceDateUnavailable(startD.value)
-      ? '该日期不可取货，请选择其他日期。'
-      : periodUnavailable(startD.value, startP.value) ? '该取货时段不可用，请选择其他时段。' : '';
-    var endMessage = !AVAILABILITY_READY ? '' : deviceDateUnavailable(endD.value)
-      ? '该日期不可归还，请选择其他日期。'
-      : periodUnavailable(endD.value, endP.value) ? '该归还时段不可用，请选择其他时段。' : '';
-    startD.setCustomValidity(startMessage); startP.setCustomValidity(startMessage);
-    endD.setCustomValidity(endMessage); endP.setCustomValidity(endMessage);
+  function syncPeriodsFromPickupSlots() {
+    if (!pickupTimeSlot || !returnTimeSlot || method.value !== 'Pickup') return;
+    var pickup = pickupSlots.find(function (slot) { return slot.value === pickupTimeSlot.value; });
+    var returned = pickupSlots.find(function (slot) { return slot.value === returnTimeSlot.value; });
+    if (!pickup || !returned) return;
+    cartIds.forEach(function (id) {
+      var term = termFor(id); term.startPeriod = pickup.period; term.endPeriod = returned.period; cartTerms[id] = term;
+    });
+    try { localStorage.setItem(CART_KEY, JSON.stringify({ items: cartIds, terms: cartTerms })); } catch (_) {}
+  }
+  var SERVICE_SLOTS = ['morning_service', 'evening_service'];
+  function serviceFeeFor(rentTotal) {
+    if (method.value !== 'Pickup') return 0;
+    var pickupIsService = pickupTimeSlot && SERVICE_SLOTS.indexOf(pickupTimeSlot.value) >= 0;
+    var returnIsService = returnTimeSlot && SERVICE_SLOTS.indexOf(returnTimeSlot.value) >= 0;
+    var rate = (pickupIsService ? 0.1 : 0) + (returnIsService ? 0.1 : 0);
+    return Math.round(rentTotal * rate * 100) / 100;
+  }
+  function summaryRow(label, amount, className) {
+    return '<div class="summary-row' + (className ? ' ' + className : '') + '"><span>' + label + '</span><span>' + amount + '</span></div>';
   }
   function refreshSummary() {
-    endD.min = addDays(startD.value || todayStr(), Math.max(1, MIN_DAYS));
-    if (endD.value && endD.value < endD.min) endD.value = endD.min;
     var count = cartIds.length;
-    var rentalDays = days();
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
-    var rentTotal = rentalDays ? cartIds.reduce(function (total, id) { return total + rentalFee(productMap.get(id), rentalDays); }, 0) : 0;
-    var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
+    var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
+    var serviceFee = serviceFeeFor(rentTotal);
+    var total = Math.max(0, rentTotal + serviceFee + depositTotal - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentFee = selectedPaymentMethod === 'balance' ? 0 : Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100;
-    var payableTotal = total + paymentFee;
+    var paymentFee = selectedPaymentMethod === 'card'
+      ? Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * stripeFeeRate * 100) / 100
+      : selectedPaymentMethod === 'square'
+        ? Math.round(Math.max(0, rentTotal + serviceFee - appliedDiscount) * squareGiftCardFeeRate * 100) / 100
+        : 0;
+    var payableTotal = Math.max(0, rentTotal + serviceFee - appliedDiscount) + paymentFee;
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
-      document.getElementById('balance-payment-note').textContent = accountBalance >= total
-        ? '当前余额为 AUD$' + accountBalance.toFixed(2) + '，可以支付本次申请。'
-        : '当前余额为 AUD$' + accountBalance.toFixed(2) + '，余额不足';
+      document.getElementById('balance-payment-note').textContent = uiText('当前可用余额： AUD $' + accountBalance.toFixed(2), 'Available balance: AUD $' + accountBalance.toFixed(2));
+      document.getElementById('balance-payment-insufficient').hidden = accountBalance >= total;
     }
-    summary.textContent = rentalDays
-      ? count + ' 台设备｜' + rentalDays + ' 天｜租金 $' + rentTotal.toFixed(2) + (appliedDiscount ? '｜优惠 -$' + appliedDiscount.toFixed(2) : '') + '｜手续费 $' + paymentFee.toFixed(2) + '｜本次应付 $' + (Math.max(0, rentTotal - appliedDiscount) + paymentFee).toFixed(2) + '｜押金 $' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2);
-    validateAvailability();
+    if (!count) {
+      summary.textContent = uiText(count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2), count + ' device(s) · Total $' + dailyTotal.toFixed(2) + '/day · Deposit $' + depositTotal.toFixed(2));
+      return;
+    }
+    var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
+      + (serviceFee ? summaryRow(uiText('服务费', 'Service fee'), '$' + serviceFee.toFixed(2)) : '')
+      + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
+      + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '');
+    summary.innerHTML = '<div class="summary-title">' + uiText('订单金额', 'Order total') + '</div>'
+      + '<div class="summary-count">' + count + uiText(' 台设备', ' device(s)') + '</div>'
+      + '<div class="summary-rows">' + rows + '</div>'
+      + '<div class="summary-divider"></div>'
+      + summaryRow(uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
+      + summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit');
   }
   function renderCart() {
     form.hidden = cartIds.length === 0;
     emptyBox.hidden = cartIds.length !== 0;
     itemsBox.replaceChildren();
-    var rentalDays = days();
     cartIds.forEach(function (id) {
       var product = productMap.get(id);
+      var term = termFor(id);
+      var rentalDays = termDays(term);
       var row = document.createElement('div'); row.className = 'cart-checkout-item';
       var detail = document.createElement('div');
       var name = document.createElement('strong'); name.textContent = product.name;
       var meta = document.createElement('span');
       var rawDaily = Number(product.day || 0);
-      var effectiveDaily = rentalDays > 0 ? rentalFee(product, rentalDays) / rentalDays : rawDaily;
-      var priceText = (product.model ? product.model + ' · ' : '');
-      if (rentalDays > 0 && effectiveDaily < rawDaily - 0.005) {
-        var original = document.createElement('del'); original.className = 'price-original'; original.textContent = '$' + rawDaily.toFixed(2);
-        meta.textContent = priceText;
-        meta.appendChild(original);
-        meta.appendChild(document.createTextNode(' $' + effectiveDaily.toFixed(2) + '/day · 押金 $' + product.deposit));
-      } else {
-        meta.textContent = priceText + '$' + product.day + '/day · 押金 $' + product.deposit;
-      }
-      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
+      var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + ' · ' + rentalDays + uiText(' 天 · ', ' day(s) · ');
+      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : uiText('询价', 'Enquire')) + uiText('/天', '/day') + uiText(' · 押金 $', ' · Deposit $') + product.deposit;
+      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = uiText('移除', 'Remove');
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
     });
-    submitBtn.textContent = cartIds.length ? '提交 ' + cartIds.length + ' 台设备申请' : '提交申请';
+    submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application');
+    deviceTermsInput.value = JSON.stringify(Object.fromEntries(cartIds.map(function (id) { return [id, termFor(id)]; })));
+    updatePickupTimeOptions();
     refreshSummary();
   }
   function rentalFee(product, days) {
@@ -661,7 +848,7 @@ export function renderApply(data: ApplyData): string {
     fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify(cartIds)), { headers: { Accept: 'application/json' } })
       .then(function (response) { return response.json(); })
       .then(function (result) { DEVICE_AVAILABILITY = result.availability || {}; AVAILABILITY_READY = true; refreshSummary(); })
-      .catch(function () { AVAILABILITY_READY = true; refreshSummary(); });
+      .catch(function () { AVAILABILITY_FAILED = true; AVAILABILITY_READY = true; refreshSummary(); });
   } else {
     AVAILABILITY_READY = true;
   }
@@ -692,23 +879,54 @@ export function renderApply(data: ApplyData): string {
       ? '无法连接支付服务，请检查网络后刷新页面重试。'
       : (message || fallback);
   }
+  function loadSquareGiftCard() {
+    if (squareGiftCard) return Promise.resolve(squareGiftCard);
+    if (squareGiftCardLoading) return squareGiftCardLoading;
+    if (!squareGiftCardConfig || !window.Square) return Promise.reject(new Error(uiCopy('Square 礼品卡组件暂不可用，请刷新页面后重试。')));
+    squareGiftCardLoading = Promise.resolve().then(function () {
+      var payments = window.Square.payments(squareGiftCardConfig.applicationId, squareGiftCardConfig.locationId);
+      return payments.giftCard().then(function (instance) {
+        squareGiftCard = instance;
+        return squareGiftCard.configure({
+          style: {
+            '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
+            '.input-container.is-focus': { borderColor: '#7c6cff' },
+            '.input-container.is-error': { borderColor: '#ff7185' },
+            '.message-text': { color: '#9ca3b7', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', fontSize: '12px' },
+            '.message-icon': { color: '#737b91' },
+            '.message-text.is-error': { color: '#ff7185' },
+            '.message-icon.is-error': { color: '#ff7185' },
+            input: { color: '#171a24', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+            'input::placeholder': { color: '#737b91' },
+          },
+        }).then(function () {
+          return squareGiftCard.attach('#square-gift-card-element');
+        });
+      });
+    }).catch(function (error) {
+      squareGiftCardLoading = null;
+      if (squareGiftCardMessage) squareGiftCardMessage.textContent = paymentError(error, uiCopy('Square 礼品卡输入框加载失败，请刷新页面后重试。'));
+      throw error;
+    });
+    return squareGiftCardLoading;
+  }
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
+    var useSquare = form.querySelector('input[name="paymentMethod"]:checked')?.value === 'square';
+    stripePaymentBox.hidden = useBalance;
     stripeSetupBox.hidden = useBalance;
-    walletBox.hidden = useBalance || walletBox.getAttribute('data-available') !== 'true';
+    walletBox.hidden = useBalance || useSquare || walletBox.getAttribute('data-available') !== 'true';
+    if (useSquare && !squareGiftCard) loadSquareGiftCard().catch(function () {});
   }
   function lookupBalance() {
     var email = contactEmail.value.trim();
     balanceOption.hidden = true;
     balancePaymentInput.checked = false;
-    refundBalanceInput.disabled = true;
-    if (document.querySelector('input[name="refundMethod"][value="balance"]:checked')) document.querySelector('input[name="refundMethod"][value="original"]').checked = true;
     if (!email) { updatePaymentMethodVisibility(); return; }
     fetch(balanceEndpoint + '?email=' + encodeURIComponent(email), { headers: { Accept: 'application/json' } })
       .then(readJsonResponse)
       .then(function (result) {
         if (!result.ok || !result.json || contactEmail.value.trim() !== email) return;
-        refundBalanceInput.disabled = !result.json.accountEligible;
         if (result.json.accountEligible) {
           balanceOption.hidden = false;
           var balance = Number(result.json.balance || 0);
@@ -725,10 +943,11 @@ export function renderApply(data: ApplyData): string {
   });
   paymentMethodInputs.forEach(function (input) { input.addEventListener('change', function () { updatePaymentMethodVisibility(); refreshSummary(); }); });
   updatePaymentMethodVisibility();
+  if (squareGiftCardSetup) loadSquareGiftCard().catch(function () {});
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
     .then(readJsonResponse)
     .then(function (result) {
-      if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error((result.json && result.json.message) || '安全付款组件暂不可用。');
+      if (!result.ok || !result.json || !result.json.clientSecret || !result.json.publishableKey || !window.Stripe) throw new Error(uiCopy((result.json && result.json.message) || '安全付款组件暂不可用。'));
       if (Number.isFinite(Number(result.json.feeRate))) stripeFeeRate = Math.min(1, Math.max(0, Number(result.json.feeRate)));
       refreshSummary();
       stripe = window.Stripe(result.json.publishableKey);
@@ -745,30 +964,56 @@ export function renderApply(data: ApplyData): string {
         },
       };
       var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance });
-      var walletElement = walletElements.create('expressCheckout');
+      var walletElement = walletElements.create('expressCheckout', {
+        emailRequired: true,
+        phoneNumberRequired: true,
+        billingAddressRequired: true,
+        shippingAddressRequired: true,
+      });
       walletElement.mount('#stripe-wallet-element');
       walletElement.on('ready', function (event) {
         var labels = { applePay: 'Apple Pay', googlePay: 'Google Pay', link: 'Link', paypal: 'PayPal' };
         var available = event.availablePaymentMethods ? Object.keys(labels).filter(function (method) { return event.availablePaymentMethods[method]; }).map(function (method) { return labels[method]; }) : [];
         if (!available.length) { walletElement.unmount(); return; }
-        document.getElementById('stripe-wallet-title').textContent = available.length === 1 ? available[0] : '快捷支付';
-        document.getElementById('stripe-wallet-description').textContent = '使用 ' + available.join('、') + ' 快速验证支付方式。';
+        document.getElementById('stripe-wallet-title').textContent = available.length === 1 ? available[0] : uiText('快捷支付', 'Express checkout');
+        document.getElementById('stripe-wallet-description').textContent = uiText('使用 ' + available.join('、') + ' 快速验证支付方式。', 'Use ' + available.join(' / ') + ' to verify your payment method quickly.');
         document.getElementById('stripe-wallet-badge').textContent = available.join(' / ').toUpperCase();
+        walletBox.dataset.methods = available.join(' / ');
         walletBox.setAttribute('data-available', 'true');
         updatePaymentMethodVisibility();
       });
-      walletElement.on('confirm', function () {
-        walletMessage.textContent = '正在验证快捷支付方式…';
+      function applyWalletContact(event) {
+        var billing = event.billingDetails || {};
+        var shipping = event.shippingAddress || {};
+        var name = billing.name || shipping.name;
+        if (name) { var parts = splitContactName(name); contactFirstName.value = parts.firstName; contactLastName.value = parts.lastName; }
+        if (billing.phone) document.getElementById('contactPhone').value = billing.phone;
+        if (billing.email) {
+          contactEmail.value = billing.email;
+          contactEmail.dispatchEvent(new Event('input'));
+        }
+        var addr = shipping.address || billing.address;
+        if (addr && method.value === 'Delivery') {
+          if (addr.line1) document.getElementById('deliveryStreet').value = addr.line1;
+          if (addr.city) document.getElementById('deliverySuburb').value = addr.city;
+          if (addr.postal_code) document.getElementById('deliveryPostcode').value = addr.postal_code;
+          if (addr.state) document.getElementById('deliveryState').value = addr.state;
+          validateDeliveryAddress(false);
+        }
+      }
+      walletElement.on('confirm', function (event) {
+        applyWalletContact(event);
+        walletMessage.textContent = uiCopy('正在验证快捷支付方式…');
         stripe.confirmSetup({ elements: walletElements, confirmParams: { return_url: location.href }, redirect: 'if_required' })
           .then(function (result) {
-            if (result.error) throw new Error(paymentError(result.error, '快捷支付验证失败，请重试。'));
+            if (result.error) throw new Error(paymentError(result.error, uiCopy('快捷支付验证失败，请重试。')));
             setupIntent = result.setupIntent;
-            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('快捷支付验证尚未完成，请重试。');
+            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error(uiCopy('快捷支付验证尚未完成，请重试。'));
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; walletMessage.textContent = '快捷支付已验证。'; walletMessage.style.color = 'var(--secondary)'; clearCheckoutError();
+            cardReady = true; walletMessage.textContent = uiCopy('快捷支付已验证。'); walletMessage.style.color = 'var(--secondary)'; clearCheckoutError();
           })
           .catch(function (error) {
-            var message = paymentError(error, 'Apple Pay 验证失败，请重试。');
+            var message = paymentError(error, uiCopy('Apple Pay 验证失败，请重试。'));
             walletMessage.textContent = ''; showFormError(message);
           });
       });
@@ -788,36 +1033,41 @@ export function renderApply(data: ApplyData): string {
         },
       });
       cardElement.mount('#stripe-card-element');
-      cardElement.on('ready', function () { cardConfirm.disabled = false; });
+      cardElement.on('ready', function () { cardConfirm.disabled = false; setCardMessage(''); });
       cardConfirm.addEventListener('click', function () {
-        cardConfirm.disabled = true; cardConfirm.textContent = '验证中…'; setCardMessage('正在向 Stripe 验证支付方式…');
-        stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: document.getElementById('contactName').value, email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
+        cardConfirm.disabled = true; cardConfirm.textContent = uiText('验证中…', 'Verifying…'); setCardMessage(uiText('正在向 Stripe 验证支付方式…', 'Verifying your payment method with Stripe…'));
+        stripe.confirmCardSetup(result.json.clientSecret, { payment_method: { card: cardElement, billing_details: { name: fullContactName(), email: document.getElementById('contactEmail').value, phone: document.getElementById('contactPhone').value } } }, { handleActions: true })
           .then(function (result) {
-            if (result.error) throw new Error(paymentError(result.error, '卡片验证失败，请检查信息。'));
+            if (result.error) throw new Error(paymentError(result.error, uiCopy('卡片验证失败，请检查信息。')));
             setupIntent = result.setupIntent;
-            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error('卡片验证尚未完成，请重试。');
+            if (!setupIntent || setupIntent.status !== 'succeeded') throw new Error(uiCopy('卡片验证尚未完成，请重试。'));
             setupIntentInput.value = setupIntent.id;
-            cardReady = true; cardConfirm.textContent = '信用卡已验证'; setCardMessage('信用卡已验证。', true); clearCheckoutError();
+            cardReady = true; cardConfirm.textContent = uiText('信用卡已验证', 'Card verified'); setCardMessage(uiCopy('信用卡已验证。'), true); clearCheckoutError();
           })
           .catch(function (error) {
-            var message = paymentError(error, '卡片验证失败，请重试。');
-            cardConfirm.disabled = false; cardConfirm.textContent = '验证信用卡'; setCardMessage(''); showFormError(message);
+            var message = paymentError(error, uiCopy('卡片验证失败，请重试。'));
+            cardConfirm.disabled = false; cardConfirm.textContent = uiText('验证信用卡', 'Verify card'); setCardMessage(''); showFormError(message);
           });
       });
     })
     .catch(function (error) {
-      var message = paymentError(error, '安全付款组件暂不可用，请联系客服。');
+      var message = paymentError(error, uiCopy('安全付款组件暂不可用，请联系客服。'));
       setCardMessage(''); showFormError(message);
     });
-  ['change', 'input'].forEach(function (eventName) { [startD, endD, startP, endP].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });
+  ['change', 'input'].forEach(function (eventName) { [deviceTermsInput].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });
   method.addEventListener('change', function () {
     var delivery = method.value === 'Delivery'; deliveryFields.hidden = !delivery; pickupField.hidden = delivery;
     var pickupLocation = document.getElementById('pickupLocation');
     pickupLocation.disabled = delivery || ${hasPickupLocations ? 'false' : 'true'};
     pickupLocation.required = !delivery && ${hasPickupLocations ? 'true' : 'false'};
+    if (pickupTimeSlot && returnTimeSlot) { pickupTimeSlot.disabled = delivery; returnTimeSlot.disabled = delivery; pickupTimeSlot.required = !delivery && ${hasPickupLocations ? 'true' : 'false'}; returnTimeSlot.required = !delivery && ${hasPickupLocations ? 'true' : 'false'}; }
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) { document.getElementById(id).required = delivery; });
+    updatePickupTimeOptions();
     validateDeliveryAddress(false);
   });
+  if (pickupTimeSlot) pickupTimeSlot.addEventListener('change', function () { syncPeriodsFromPickupSlots(); markCouponDirty(); renderCart(); });
+  if (returnTimeSlot) returnTimeSlot.addEventListener('change', function () { syncPeriodsFromPickupSlots(); markCouponDirty(); renderCart(); });
+  window.setInterval(updatePickupTimeOptions, 30000);
   function validateDeliveryAddress(showError) {
     var suburb = document.getElementById('deliverySuburb');
     if (method.value !== 'Delivery') { suburb.setCustomValidity(''); return true; }
@@ -825,7 +1075,7 @@ export function renderApply(data: ApplyData): string {
     var suburbValue = suburb.value.trim();
     var postcode = document.getElementById('deliveryPostcode').value.trim();
     var message = street && suburbValue && postcode && !isMelbourneDeliveryAddress()
-      ? '送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。' : '';
+      ? uiText('送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。', 'Delivery is limited to Melbourne and the configured service areas. Choose store pickup for other cities or suburbs.') : '';
     suburb.setCustomValidity(message);
     if (message && showError) showFormError(message);
     return !message;
@@ -840,24 +1090,36 @@ export function renderApply(data: ApplyData): string {
   document.getElementById('coupon-check').addEventListener('click', function () {
     var code = document.getElementById('couponCode').value.trim();
     var hint = document.getElementById('coupon-hint');
-    if (!code) { couponState = 'empty'; appliedDiscount = 0; hint.textContent = '请先输入优惠码。'; return; }
+    if (!code) { couponState = 'empty'; appliedDiscount = 0; hint.textContent = uiCopy('请先输入优惠码。'); return; }
     couponState = 'checking';
-    hint.textContent = '正在校验优惠码…';
-    var params = new URLSearchParams({ deviceIds: JSON.stringify(cartIds), days: String(days()), code: code });
+    hint.textContent = uiCopy('正在校验优惠码…');
+    var params = new URLSearchParams({ deviceIds: JSON.stringify(cartIds), terms: deviceTermsInput.value, days: '0', code: code });
     fetch(COUPON_ENDPOINT + '?' + params.toString(), { headers: { Accept: 'application/json' } })
       .then(readJsonResponse)
       .then(function (result) {
-        if (!result.ok || !result.json || !result.json.ok) throw new Error((result.json && result.json.message) || '优惠码无效。');
-        hint.textContent = result.json.message || ('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2));
+        if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '优惠码无效。'));
+        hint.textContent = result.json.message ? uiCopy(result.json.message) : uiText('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2), 'Discount applied: AUD$' + Number(result.json.discount || 0).toFixed(2));
         appliedDiscount = Number(result.json.discount || 0);
         couponState = 'valid';
         clearCheckoutError();
         refreshSummary();
       })
-      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || '优惠码校验失败，请稍后重试。'); });
+      .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || uiCopy('优惠码校验失败，请稍后重试。')); });
   });
   document.getElementById('couponCode').addEventListener('input', markCouponDirty);
-  renderCart();
+  window.addEventListener('geekslope:language-change', function () {
+    renderCart();
+    if (walletBox.dataset.methods) {
+      var methods = walletBox.dataset.methods;
+      document.getElementById('stripe-wallet-title').textContent = methods.indexOf(' / ') >= 0 ? uiText('快捷支付', 'Express checkout') : methods;
+      document.getElementById('stripe-wallet-description').textContent = uiText('使用 ' + methods.replace(/ \/ /g, '、') + ' 快速验证支付方式。', 'Use ' + methods + ' to verify your payment method quickly.');
+    }
+    if (cardReady) {
+      cardConfirm.textContent = uiText('信用卡已验证', 'Card verified');
+      setCardMessage(uiCopy('信用卡已验证。'), true);
+    }
+  });
+  window.setTimeout(renderCart, 0);
 
   var doneBox = document.getElementById('apply-done');
   var doneMsg = document.getElementById('apply-done-msg');
@@ -866,7 +1128,11 @@ export function renderApply(data: ApplyData): string {
   var savedContactInfo;
   try { savedContactInfo = JSON.parse(localStorage.getItem('geekslope-contact-v1') || 'null'); } catch (_) { savedContactInfo = null; }
   if (savedContactInfo && typeof savedContactInfo === 'object') {
-    document.getElementById('contactName').value = typeof savedContactInfo.name === 'string' ? savedContactInfo.name : '';
+    var savedName = typeof savedContactInfo.firstName === 'string' || typeof savedContactInfo.lastName === 'string'
+      ? { firstName: typeof savedContactInfo.firstName === 'string' ? savedContactInfo.firstName : '', lastName: typeof savedContactInfo.lastName === 'string' ? savedContactInfo.lastName : '' }
+      : splitContactName(savedContactInfo.name);
+    contactFirstName.value = savedName.firstName;
+    contactLastName.value = savedName.lastName;
     document.getElementById('contactPhone').value = typeof savedContactInfo.phone === 'string' ? savedContactInfo.phone : '';
     document.getElementById('contactEmail').value = typeof savedContactInfo.email === 'string' ? savedContactInfo.email : '';
     saveContactInfo.checked = true;
@@ -875,8 +1141,8 @@ export function renderApply(data: ApplyData): string {
   form.addEventListener('invalid', function (event) {
     var field = event.target;
     if (field && field.validationMessage) {
-      var message = field.id === 'agree' ? '请先勾选同意服务条款与隐私政策。'
-        : field.id === 'deliveryPostcode' && field.validity.patternMismatch ? '请输入 4 位澳洲邮编。'
+      var message = field.id === 'agree' ? uiCopy('请先勾选同意服务条款与隐私政策。')
+        : field.id === 'deliveryPostcode' && field.validity.patternMismatch ? uiCopy('请输入 4 位澳洲邮编。')
         : field.validationMessage;
       showFormError(message);
     }
@@ -885,7 +1151,7 @@ export function renderApply(data: ApplyData): string {
     var field = event.target;
     if (field && field.checkValidity() && !form.querySelector(':invalid')) { checkoutBlocked = false; errBox.hidden = true; }
   });
-  form.addEventListener('submit', function (event) {
+  form.addEventListener('submit', async function (event) {
     event.preventDefault();
     if (checkoutBlocked) { errBox.hidden = false; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
     errBox.hidden = true;
@@ -893,41 +1159,53 @@ export function renderApply(data: ApplyData): string {
     if (!validateDeliveryAddress(true) || !validateContactFields(true) || !form.reportValidity()) return;
     var enteredCoupon = document.getElementById('couponCode').value.trim();
     if (enteredCoupon && couponState !== 'valid') {
-      showFormError('请先点击“使用优惠码”完成校验，确认优惠码有效后再提交。');
+      showFormError(uiCopy('请先点击“使用优惠码”完成校验，确认优惠码有效后再提交。'));
       errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    if (selectedPaymentMethod !== 'balance' && (!cardReady || !setupIntentInput.value)) {
-      showFormError('请先填写并验证信用卡信息。验证过程不会扣款。'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    if ((selectedPaymentMethod === 'card' || selectedPaymentMethod === 'square') && (!cardReady || !setupIntentInput.value)) {
+      showFormError(uiCopy(selectedPaymentMethod === 'square' ? '请先填写并验证押金信用卡。' : '请先填写并验证信用卡信息。')); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
     }
-    if (days() < MIN_DAYS) {
-      showFormError('租期不能少于 ' + MIN_DAYS + ' 天，请调整归还日期。'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+    var termValidationError = validateTerms();
+    if (termValidationError) { showFormError(termValidationError); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    var squareGiftCardNonce = '';
+    if (selectedPaymentMethod === 'square') {
+      try {
+        var squareCard = await loadSquareGiftCard();
+        var tokenResult = await squareCard.tokenize();
+        if (tokenResult.status !== 'OK') throw new Error(tokenResult.errors?.map(function (item) { return item.message; }).join('；') || uiCopy('Square 礼品卡验证失败，请检查卡号后重试。'));
+        squareGiftCardNonce = String(tokenResult.token || '').trim();
+        if (!squareGiftCardNonce) throw new Error(uiCopy('Square 未返回有效的礼品卡凭据，请重试。'));
+      } catch (error) {
+        showFormError(paymentError(error, uiCopy('Square 礼品卡验证失败，请检查卡号后重试。'))); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      }
     }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
     if (saveContactInfo.checked) {
-      try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ name: payload.contactName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
+      try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ firstName: payload.firstName || '', lastName: payload.lastName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
     }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
-    payload.startDate = startD.value; payload.endDate = endD.value; payload.startPeriod = startP.value; payload.endPeriod = endP.value;
+    payload.deviceTerms = deviceTermsInput.value;
+    if (selectedPaymentMethod === 'square') payload.squareGiftCardNonce = squareGiftCardNonce;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
-    submitBtn.disabled = true; submitBtn.textContent = '提交中…';
+    submitBtn.disabled = true; submitBtn.textContent = uiText('提交中…', 'Submitting…');
     fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(readJsonResponse)
       .then(function (result) {
         if (result.ok && result.json && result.json.ok) {
-          saveCart([]); form.hidden = true; doneMsg.textContent = result.json.message || '申请已提交，我们确认后会联系你。';
-          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = result.json.temporaryPassword || '已有账号，请使用原密码'; credentialBox.hidden = false; }
+          saveCart([]); form.hidden = true; doneMsg.textContent = uiCopy(result.json.message || '申请已提交，我们确认后会联系你。');
+          if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = uiCopy(result.json.temporaryPassword || '已有账号，请使用原密码'); credentialBox.hidden = false; }
           doneBox.hidden = false;
           if (!reduceMotion) doneBox.classList.add('is-in');
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
         }
-        throw new Error((result.json && result.json.message) || '提交失败，请稍后重试。');
+        throw new Error(uiCopy((result.json && result.json.message) || '提交失败，请稍后重试。'));
       })
       .catch(function (error) {
-        showFormError(error.message || '提交失败，请稍后重试。'); submitBtn.disabled = false; submitBtn.textContent = '提交 ' + cartIds.length + ' 台设备申请'; errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showFormError(error.message || uiCopy('提交失败，请稍后重试。')); submitBtn.disabled = false; submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application'); errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
   });
 })();

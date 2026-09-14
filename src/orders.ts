@@ -147,7 +147,7 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
   if (!rows.length) return []
   const ids = rows.map((row) => value(row, 'id')).filter(Boolean)
   const placeholders = ids.map(() => '?').join(',')
-  const [contractRows, refundRows] = await Promise.all([
+  const [initialContractRows, refundRows] = await Promise.all([
     (async () => {
       try {
         return (await env.RENT.prepare(`SELECT * FROM contracts WHERE orderId IN (${placeholders})`).bind(...ids).all<Record<string, unknown>>()).results ?? []
@@ -163,8 +163,22 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
       }
     })(),
   ])
+  const contractRows = [...initialContractRows]
+  const contractIds = rows.map((row) => value(row, 'contractId', 'contract_id')).filter(Boolean)
+  if (contractIds.length && !contractRows.length) {
+    const contractIdPlaceholders = contractIds.map(() => '?').join(',')
+    try {
+      const fallbackRows = (await env.RENT.prepare(`SELECT * FROM contracts WHERE id IN (${contractIdPlaceholders})`).bind(...contractIds).all<Record<string, unknown>>()).results ?? []
+      contractRows.push(...fallbackRows)
+    } catch {
+      // Older deployments may not have an orders.contractId column or may not expose contracts by id.
+    }
+  }
   const contracts = new Map<string, Record<string, unknown>>()
+  const contractsById = new Map<string, Record<string, unknown>>()
   for (const row of contractRows) {
+    const contractId = value(row, 'id')
+    if (contractId) contractsById.set(contractId, row)
     const orderId = value(row, 'orderId', 'order_id', 'rentalId', 'rental_id')
     if (orderId && !contracts.has(orderId)) contracts.set(orderId, row)
   }
@@ -180,7 +194,7 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
     const refund = refunds.get(id)
     const refundPending = ['pending', 'processing'].includes(value(refund || {}, 'status').toLowerCase())
       || ['REFUND_PENDING', 'PARTIALLY_DEDUCTED'].includes(value(row, 'deposit_status', 'depositStatus').toUpperCase())
-    const contractRow = contracts.get(id)
+    const contractRow = contracts.get(id) || contractsById.get(value(row, 'contractId', 'contract_id'))
     const contractStatus = value(contractRow || {}, 'status').toLowerCase()
     const contractData = contractRow ? parseContractData(contractRow) : {}
     const contractId = value(contractRow || {}, 'id')
@@ -198,12 +212,18 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
           ? `${appUrl}/contract/view/${encodeURIComponent(contractId)}`
           : undefined,
     } : undefined
+    const contractPending = contractStatus === 'pending_sign'
+    const contractSigned = ['signed', 'completed'].includes(contractStatus)
     const statusLabel = refundPending && !['cancelled', 'canceled'].includes(rawStatus)
       ? '待退款'
-      : contractStatus === 'pending_sign'
-        ? '待签署'
-        : contractStatus && ['signed', 'completed'].includes(contractStatus) && ['approved', 'awaiting_signature', 'pending_payment'].includes(rawStatus)
-          ? '已签署'
+      : contractPending && ['approved', 'awaiting_signature'].includes(rawStatus)
+        ? '已确认 · 待签署'
+        : contractPending
+          ? '待签署'
+          : contractSigned && ['approved', 'pending_pickup'].includes(rawStatus)
+            ? '已签署 · 待取货'
+          : contractSigned && ['awaiting_signature', 'pending_payment'].includes(rawStatus)
+            ? '已签署'
           : ORDER_STATUS_LABELS[rawStatus] || rawStatus || '处理中'
 
     return {

@@ -82,11 +82,11 @@ export function renderPage(opts: PageOptions): string {
 </head>
 <body>
 ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, opts.contact)}
-<aside class="site-announcement" data-site-announcement hidden data-no-translate aria-label="最新通告">
+<aside class="site-announcement" data-site-announcement hidden aria-label="最新消息">
   <div class="wrap site-announcement-inner">
     <span class="site-announcement-label">最新消息</span>
     <a class="site-announcement-link" data-site-announcement-link href="/announcements">
-      <strong data-site-announcement-title></strong><span>查看详情 <span aria-hidden="true">→</span></span>
+      <strong data-site-announcement-title></strong><span data-site-announcement-action>查看详情 <span aria-hidden="true">→</span></span>
     </a>
   </div>
 </aside>
@@ -103,6 +103,13 @@ ${renderSiteFooter(opts.contact)}
   var originalTitle = document.title;
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
+  var activeAnnouncementNotice = null;
+  function cleanChinesePunctuation(value) { return String(value || '').replace(/。/g, ''); }
+  function formatSentenceBreaks(value, node) {
+    var text = String(value || '');
+    if (/[；;]/.test(text) && node && node.parentElement) node.parentElement.classList.add('has-sentence-break');
+    return text.replace(/[；;]/g, '\\n');
+  }
   function englishFor(value) {
     var lookup = String(value || '').replace(/\\s+/g, ' ').trim();
     var translated = englishCopy[lookup] || '';
@@ -121,12 +128,13 @@ ${renderSiteFooter(opts.contact)}
   function translateTextNode(node) {
     if (!node || !node.parentElement || node.parentElement.closest('script,style,[data-no-translate]')) return;
     var current = node.nodeValue || '';
-    if (/\\p{Script=Han}/u.test(current)) originalText.set(node, current);
+    if (/\\p{Script=Han}/u.test(current) && !originalText.has(node)) originalText.set(node, current);
     var source = originalText.get(node) || current;
     var trimmed = source.trim();
     if (!trimmed) return;
     var translated = currentLanguage === 'en' ? englishFor(trimmed) : trimmed;
     var next = source.slice(0, source.indexOf(trimmed)) + translated + source.slice(source.indexOf(trimmed) + trimmed.length);
+    next = formatSentenceBreaks(cleanChinesePunctuation(next), node);
     if (node.nodeValue !== next) node.nodeValue = next;
   }
   function translateElement(element) {
@@ -136,7 +144,7 @@ ${renderSiteFooter(opts.contact)}
       var current = element.getAttribute(attribute);
       if (current && /\\p{Script=Han}/u.test(current)) saved[attribute] = current;
       var source = saved[attribute];
-      if (source) element.setAttribute(attribute, currentLanguage === 'en' ? englishFor(source) : source);
+      if (source) element.setAttribute(attribute, cleanChinesePunctuation(currentLanguage === 'en' ? englishFor(source) : source));
     });
     originalAttributes.set(element, saved);
   }
@@ -152,11 +160,54 @@ ${renderSiteFooter(opts.contact)}
   }
   var translations = {
     skip: ['跳到主要内容', 'Skip to main content'], menuOpen: ['打开菜单', 'Open menu'], language: ['语言', 'Language'],
-    navProducts: ['产品目录', 'Products'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系我们', 'Contact us'], navLookup: ['订单查询', 'Order Details'],
+    navProducts: ['产品目录', 'Products'], navGiftCards: ['礼品卡', 'Gift cards'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navContact: ['联系我们', 'Contact us'], navLookup: ['订单查询', 'Order Details'],
     cart: ['购物车', 'Cart'], account: ['账号中心', 'Account'], footerIntro: ['为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。', 'Reliable computer rentals for study, work, creative projects and short-term needs. Browse live inventory and apply for the time you need.'],
-    footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'],
-    footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help']
+    footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'], giftCards: ['礼品卡', 'Gift cards'],
+    footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help'],
+    giftCardEyebrow: ['GEEKSLOPE · 礼品卡', 'GEEKSLOPE · Gift cards'], giftCardIntro: ['购买一张 GeekSlope Square eGift Card，用于设备租赁；也可以随时查询余额或给现有礼品卡加值。', 'Buy a GeekSlope Square eGift Card for device rentals, or check and reload an existing card anytime.'], giftCardOpen: ['打开礼品卡页面', 'Open gift card page'], giftCardRent: ['查看租赁设备', 'View rental devices'],
+    giftCardKicker: ['SQUARE EGIFT CARD', 'SQUARE EGIFT CARD'], giftCardHeading: ['三个入口，一个礼品卡页面', 'Three actions, one gift card page'], giftCardDescription: ['Square 托管支付、收件人与礼品卡交付。点击任一入口后，会在 Square 页面完成对应操作。', 'Square handles payment, recipient details and delivery. Select an action to continue on Square.'],
+    giftCardBuy: ['购买礼品卡', 'Buy a gift card'], giftCardCheck: ['查询余额', 'Check balance'], giftCardAdd: ['Add money', 'Add money'],
+    giftCardBuyText: ['选择金额、填写收件人和祝福语，付款后由 Square 发送数字礼品卡。', 'Choose an amount, add the recipient and message, then Square sends the digital gift card after payment.'],
+    giftCardCheckText: ['打开礼品卡页面，输入 16 位卡号和 PIN（如有）查看实时余额。', 'Open the gift card page and enter the 16-digit card number and PIN, if applicable, to view the live balance.'],
+    giftCardAddText: ['已有礼品卡？在 Square 页面选择 Reload card，为卡片增加新的金额。', 'Already have a card? Select Reload card on Square to add more value.'],
+    giftCardNoteKicker: ['HOW IT WORKS', 'HOW IT WORKS'], giftCardNoteTitle: ['礼品卡可以用于 GeekSlope 租赁', 'Use your gift card for GeekSlope rentals'],
+    giftCardNoteText: ['购买完成后，请保留礼品卡邮件中的卡号。下单或付款时选择 Square 礼品卡即可使用；余额不足时，可按页面提示完成差额支付。', 'Keep the card number from the gift card email. Select Square gift card when ordering or paying; if the balance is not enough, follow the prompts to pay the remainder.']
   };
+  function renderCouponCallouts() {
+    document.querySelectorAll('[data-coupon-callout]').forEach(function (callout) {
+      var english = currentLanguage === 'en';
+      var prefix = callout.querySelector('[data-coupon-prefix]');
+      var benefit = callout.querySelector('[data-coupon-benefit]');
+      var cta = callout.querySelector('[data-coupon-cta]');
+      if (prefix) prefix.textContent = callout.getAttribute(english ? 'data-coupon-prefix-en' : 'data-coupon-prefix-zh') || '';
+      if (benefit) benefit.textContent = callout.getAttribute(english ? 'data-coupon-benefit-en' : 'data-coupon-benefit-zh') || '';
+      if (cta) cta.textContent = callout.getAttribute(english ? 'data-coupon-cta-en' : 'data-coupon-cta-zh') || '';
+    });
+  }
+  function renderCouponMessages() {
+    document.querySelectorAll('[data-coupon-message]').forEach(function (message) {
+      message.textContent = message.getAttribute(currentLanguage === 'en' ? 'data-coupon-message-en' : 'data-coupon-message-zh') || '';
+    });
+  }
+  function renderAnnouncementNotice(notice) {
+    var announcement = document.querySelector('[data-site-announcement]');
+    if (!announcement || !notice) return;
+    var title = announcement.querySelector('[data-site-announcement-title]');
+    var link = announcement.querySelector('[data-site-announcement-link]');
+    var action = announcement.querySelector('[data-site-announcement-action]');
+    if (!title || !link) return;
+    var english = currentLanguage === 'en';
+    var isCoupon = notice.kind === 'coupon' && notice.couponCode;
+    var benefit = english ? (notice.couponBenefitEn || notice.couponBenefitZh || '') : (notice.couponBenefitZh || '');
+    title.textContent = isCoupon
+      ? (english ? '🎉 New offer live! Enter promo code ' : '🎉 新优惠上线！使用优惠码 ') + notice.couponCode + (benefit ? ' ' + benefit : '')
+      : (!notice.isAdminAnnouncement && english ? englishFor(notice.title || '最新通告') : (notice.title || '最新通告'));
+    link.href = isCoupon
+      ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
+      : '/announcements/' + encodeURIComponent(notice.id);
+    if (action) action.firstChild.textContent = (isCoupon ? (english ? 'Browse devices ' : '去挑选设备 ') : (english ? 'View details ' : '查看详情 '));
+    announcement.hidden = false;
+  }
   function setLanguage(language) {
     var english = language === 'en';
     currentLanguage = english ? 'en' : 'zh';
@@ -170,6 +221,9 @@ ${renderSiteFooter(opts.contact)}
     });
     document.querySelectorAll('[data-language]').forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-language') === (english ? 'en' : 'zh')); });
     translateTree(document.body);
+    renderAnnouncementNotice(activeAnnouncementNotice);
+    renderCouponCallouts();
+    renderCouponMessages();
     document.title = english ? englishFor(originalTitle) : originalTitle;
     var descriptionMeta = document.querySelector('meta[name="description"]');
     if (descriptionMeta) descriptionMeta.setAttribute('content', english ? englishFor(originalDescription) : originalDescription);
@@ -188,7 +242,6 @@ ${renderSiteFooter(opts.contact)}
   document.querySelectorAll('[data-language]').forEach(function (button) { button.addEventListener('click', function () { setLanguage(button.getAttribute('data-language') || 'zh'); }); });
   setLanguage(savedLanguage);
   new MutationObserver(function (mutations) {
-    if (currentLanguage !== 'en') return;
     mutations.forEach(function (mutation) {
       if (mutation.type === 'characterData') translateTextNode(mutation.target);
       mutation.addedNodes.forEach(translateTree);
@@ -225,19 +278,8 @@ ${renderSiteFooter(opts.contact)}
       .then(function (data) {
         var notice = data && data.notices && data.notices[0];
         if (!notice) return;
-        var title = announcement.querySelector('[data-site-announcement-title]');
-        var link = announcement.querySelector('[data-site-announcement-link]');
-        if (!title || !link) return;
-        var isCoupon = notice.kind === 'coupon' && notice.couponCode;
-        title.textContent = isCoupon
-          ? '🎉 新优惠上线！使用优惠码 ' + notice.couponCode + ' ' + (notice.couponBenefitZh || '')
-          : (notice.title || '最新通告');
-        link.href = isCoupon
-          ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
-          : '/announcements/' + encodeURIComponent(notice.id);
-        var action = link.querySelector('span');
-        if (action) action.firstChild.textContent = isCoupon ? '去挑选设备 ' : '查看详情 ';
-        announcement.hidden = false;
+        activeAnnouncementNotice = notice;
+        renderAnnouncementNotice(notice);
       })
       .catch(function () {});
   }
@@ -267,22 +309,25 @@ ${renderSiteFooter(opts.contact)}
 
   var CART_KEY = 'geekslope-cart-v1';
   function cleanIds(ids) {
-    return ids.filter(function (id, index) { return typeof id === 'string' && id && ids.indexOf(id) === index; }).slice(0, 10);
+    var clean = ids.filter(function (id, index) { return typeof id === 'string' && id && ids.indexOf(id) === index; }).slice(0, 10);
+    var validProductIds = window.__GeekSlopeCartValidProductIds;
+    return Array.isArray(validProductIds) ? clean.filter(function (id) { return validProductIds.indexOf(id) >= 0; }) : clean;
   }
   function readCartState() {
     try {
       var value = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-      if (Array.isArray(value)) return { ids: cleanIds(value), term: null };
-      return { ids: cleanIds(Array.isArray(value.items) ? value.items : []), term: value.term && typeof value.term === 'object' ? value.term : null };
-    } catch (_) { return { ids: [], term: null }; }
+      if (Array.isArray(value)) return { ids: cleanIds(value), term: null, terms: {} };
+      return { ids: cleanIds(Array.isArray(value.items) ? value.items : []), term: value.term && typeof value.term === 'object' ? value.term : null, terms: value.terms && typeof value.terms === 'object' ? value.terms : {} };
+    } catch (_) { return { ids: [], term: null, terms: {} }; }
   }
   function readCart() { return readCartState().ids; }
-  function writeCart(ids, term) {
+  function writeCart(ids, term, terms) {
     var clean = cleanIds(ids);
-    var state = { items: clean, term: term === undefined ? readCartState().term : term };
+    var previous = readCartState();
+    var state = { items: clean, term: term === undefined ? previous.term : term, terms: terms === undefined ? previous.terms : terms };
     try { localStorage.setItem(CART_KEY, JSON.stringify(state)); } catch (_) {}
     renderCart(clean);
-    window.dispatchEvent(new CustomEvent('geekslope:cart-change', { detail: { ids: clean, term: state.term } }));
+    window.dispatchEvent(new CustomEvent('geekslope:cart-change', { detail: { ids: clean, term: state.term, terms: state.terms } }));
     return clean;
   }
   function renderCart(ids) {
@@ -303,7 +348,9 @@ ${renderSiteFooter(opts.contact)}
     var state = readCartState();
     var ids = state.ids;
     if (ids.indexOf(id) < 0) ids.push(id);
-    return writeCart(ids, term === undefined ? state.term : term);
+    var terms = state.terms || {};
+    if (term !== undefined) terms[id] = term;
+    return writeCart(ids, undefined, terms);
   }
   function removeFromCart(id) { return writeCart(readCart().filter(function (item) { return item !== id; })); }
   function setCartTerm(term) { return writeCart(readCart(), term); }

@@ -1,15 +1,10 @@
 // 产品目录。实时读库，按类别分组展示全部在售设备。
 
 import { esc } from '../layout'
-import { bestDiscountedDailyOffer, monthlyRentalRate, weeklyRentalRate, type Product } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, type Product } from '../db'
 
 function card(p: Product): string {
-  const dailyOffer = bestDiscountedDailyOffer(p.pricePerDay, p.weeklyDiscountPercent, p.monthlyDiscountPercent)
-  const daily = p.pricePerDay > 0
-    ? dailyOffer
-      ? `<del class="price-original">$${p.pricePerDay.toFixed(2)}/day</del><strong>$${dailyOffer.rate.toFixed(2)}/day</strong><small>${dailyOffer.label}</small>`
-      : `$${p.pricePerDay}/day`
-    : '询价'
+  const daily = p.pricePerDay > 0 ? `$${p.pricePerDay}/day` : '询价'
   const weeklyOriginal = p.pricePerDay * 7
   const monthlyOriginal = p.pricePerDay * 30
   const weekly = p.pricePerDay > 0 ? `$${weeklyRentalRate(p.pricePerDay, p.weeklyDiscountPercent)}/week` : '—'
@@ -29,9 +24,9 @@ function card(p: Product): string {
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">
-      <div><div class="lbl">日租</div><div class="val">${typeof daily === 'string' && daily.startsWith('<') ? daily : esc(daily)}</div></div>
-      <div><div class="lbl">周租</div><div class="val">${p.weeklyDiscountPercent > 0 ? `<del class="price-original">$${weeklyOriginal.toFixed(2)}/week</del>` : ''}${esc(weekly)} <small>${p.weeklyDiscountPercent > 0 ? `折后${p.weeklyDiscountPercent}%` : '7 天参考'}</small></div></div>
-      <div><div class="lbl">月租</div><div class="val">${p.monthlyDiscountPercent > 0 ? `<del class="price-original">$${monthlyOriginal.toFixed(2)}/month</del>` : ''}${esc(monthly)} <small>${p.monthlyDiscountPercent > 0 ? `折后${p.monthlyDiscountPercent}%` : '参考'}</small></div></div>
+      <div><div class="lbl">日租</div><div class="val">${esc(daily)}</div></div>
+      <div><div class="lbl">周租</div><div class="val">${p.weeklyDiscountPercent > 0 ? `<del class="price-original">$${weeklyOriginal.toFixed(2)}/week</del>` : ''}${esc(weekly)}</div></div>
+      <div><div class="lbl">月租</div><div class="val">${p.monthlyDiscountPercent > 0 ? `<del class="price-original">$${monthlyOriginal.toFixed(2)}/month</del>` : ''}${esc(monthly)}</div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}</div>` : ''}
     <div class="card-actions">
