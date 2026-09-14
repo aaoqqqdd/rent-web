@@ -422,11 +422,6 @@ export function renderApply(data: ApplyData): string {
                 <input type="hidden" id="stripeSetupIntentId" name="stripeSetupIntentId">
               </div>
             </div>
-            ${squareGiftCardEnabled ? `<div class="square-gift-card-setup" id="square-gift-card-setup" hidden>
-              <div class="stripe-setup-head"><div><label>Square 礼品卡</label><p>请填写礼品卡号。提交申请时会安全绑定到 Square，审核通过后再扣款。</p></div><span>SECURE / SQUARE</span></div>
-              <div id="square-gift-card-element"></div>
-              <p id="square-gift-card-message" class="hint" aria-live="polite">选择 Square 礼品卡后加载安全输入框…</p>
-            </div>` : ''}
             <div class="refund-method-fixed">
               <input type="hidden" name="refundMethod" value="original">
               <span>押金退还方式</span>
@@ -434,7 +429,11 @@ export function renderApply(data: ApplyData): string {
               <small>默认方式，提交后不可修改。</small>
             </div>
           </div>
-        </div>
+          ${squareGiftCardEnabled ? `<div class="form-card square-gift-card-setup" id="square-gift-card-setup">
+              <div class="stripe-setup-head"><div><label>Square 礼品卡</label></div><span>SECURE / SQUARE</span></div>
+              <div id="square-gift-card-element"></div>
+              <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
+            </div>` : ''}
       </div>
 
       <div class="field legal-agreement">
@@ -888,9 +887,20 @@ export function renderApply(data: ApplyData): string {
       var payments = window.Square.payments(squareGiftCardConfig.applicationId, squareGiftCardConfig.locationId);
       return payments.giftCard().then(function (instance) {
         squareGiftCard = instance;
-        return squareGiftCard.attach('#square-gift-card-element').then(function () {
-          if (squareGiftCardMessage) squareGiftCardMessage.textContent = uiText('请输入礼品卡号，提交申请时会安全绑定。', 'Enter the gift card number. It will be securely linked when you submit the application.');
-          return instance;
+        return squareGiftCard.configure({
+          style: {
+            '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
+            '.input-container.is-focus': { borderColor: '#7c6cff' },
+            '.input-container.is-error': { borderColor: '#ff7185' },
+            '.message-text': { color: '#9ca3b7', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', fontSize: '12px' },
+            '.message-icon': { color: '#737b91' },
+            '.message-text.is-error': { color: '#ff7185' },
+            '.message-icon.is-error': { color: '#ff7185' },
+            input: { color: '#171a24', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
+            'input::placeholder': { color: '#737b91' },
+          },
+        }).then(function () {
+          return squareGiftCard.attach('#square-gift-card-element');
         });
       });
     }).catch(function (error) {
@@ -906,7 +916,6 @@ export function renderApply(data: ApplyData): string {
     stripePaymentBox.hidden = useBalance;
     stripeSetupBox.hidden = useBalance;
     walletBox.hidden = useBalance || useSquare || walletBox.getAttribute('data-available') !== 'true';
-    if (squareGiftCardSetup) squareGiftCardSetup.hidden = !useSquare;
     if (useSquare && !squareGiftCard) loadSquareGiftCard().catch(function () {});
   }
   function lookupBalance() {
@@ -934,6 +943,7 @@ export function renderApply(data: ApplyData): string {
   });
   paymentMethodInputs.forEach(function (input) { input.addEventListener('change', function () { updatePaymentMethodVisibility(); refreshSummary(); }); });
   updatePaymentMethodVisibility();
+  if (squareGiftCardSetup) loadSquareGiftCard().catch(function () {});
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
     .then(readJsonResponse)
     .then(function (result) {
