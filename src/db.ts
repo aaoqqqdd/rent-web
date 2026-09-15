@@ -69,6 +69,8 @@ export interface PublicNotice {
   isAdminAnnouncement?: boolean
   title: string
   message: string
+  titleEn?: string
+  messageEn?: string
   createdAt: string
   couponCode?: string
   expiresAt?: string
@@ -260,7 +262,21 @@ function decodeNoticeEntities(value: string): string {
  * 直接展示在公开通告页会露出 "PC Rental | |" 这类占位符残留。这里从原始
  * 模板中只提取被更新的协议名称，重新拼出面向全体访客的公告文案。
  */
-function buildPolicyUpdateNotice(raw: string): { title: string; message: string } {
+const POLICY_NAME_EN: Record<string, string> = {
+  '用户协议': 'User terms',
+  '服务条款': 'Service terms',
+  '退款政策': 'Refund policy',
+  '隐私政策': 'Privacy policy',
+  'Cookie 政策': 'Cookie policy',
+  '软件使用协议': 'Software use agreement',
+  '投诉与争议解决政策': 'Complaints and dispute resolution policy',
+  '可接受使用政策': 'Acceptable use policy',
+  '澳大利亚消费者法下的权利': 'Rights under Australian Consumer Law',
+  '设备租赁协议': 'Device rental agreement',
+  '相关条款': 'the relevant terms',
+}
+
+function buildPolicyUpdateNotice(raw: string): { title: string; message: string; titleEn: string; messageEn: string } {
   const decoded = decodeNoticeEntities(raw)
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n')
@@ -275,7 +291,16 @@ function buildPolicyUpdateNotice(raw: string): { title: string; message: string 
     '',
     '如果您不同意更新后的内容，请停止使用相关服务，并可通过联系我们获取进一步协助。',
   ].join('\n')
-  return { title, message }
+  const policyNameEn = POLICY_NAME_EN[policyName] || policyName
+  const titleEn = `${policyNameEn} has been updated`
+  const messageEn = [
+    `We have updated the ${policyNameEn}.`,
+    '',
+    `The latest version is published on the relevant page of this website and takes effect from the date of publication. By continuing to use our services, you confirm that you have read and agree to the updated ${policyNameEn}.`,
+    '',
+    'If you do not agree to the updated terms, please stop using the relevant services. Contact us for further assistance.',
+  ].join('\n')
+  return { title, message, titleEn, messageEn }
 }
 
 export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNotice[]> {
@@ -330,6 +355,8 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       const policyInfo = isPublicUpdate ? buildPolicyUpdateNotice(String(row.message ?? '')) : null
       const title = policyInfo ? policyInfo.title : String(row.title ?? '最新通告')
       const message = policyInfo ? policyInfo.message : String(row.message ?? '')
+      const titleEn = policyInfo?.titleEn
+      const messageEn = policyInfo?.messageEn
       // Notifications are stored once per recipient. Collapse the normalized
       // copies so the public site shows one update instead of one card per user.
       const timeKey = String(row.created_at ?? '').replace('T', ' ').slice(0, 16)
@@ -342,6 +369,8 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         isAdminAnnouncement: type === 'announcement',
         title,
         message,
+        titleEn,
+        messageEn,
         createdAt: String(row.created_at ?? ''),
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
       })

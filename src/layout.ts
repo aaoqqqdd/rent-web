@@ -189,6 +189,19 @@ ${renderSiteFooter(opts.contact)}
       message.textContent = message.getAttribute(currentLanguage === 'en' ? 'data-coupon-message-en' : 'data-coupon-message-zh') || '';
     });
   }
+  function renderNoticeTexts() {
+    var english = currentLanguage === 'en';
+    document.querySelectorAll('[data-notice-title]').forEach(function (node) {
+      node.textContent = node.getAttribute(english ? 'data-notice-title-en' : 'data-notice-title-zh') || '';
+    });
+    document.querySelectorAll('[data-notice-message]').forEach(function (node) {
+      var text = node.getAttribute(english ? 'data-notice-message-en' : 'data-notice-message-zh') || '';
+      node.innerHTML = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/&lt;strong&gt;([^<]+)&lt;\\/strong&gt;/g, '<strong>$1</strong>')
+        .replace(/\\n/g, '<br>');
+    });
+  }
   function renderAnnouncementNotice(notice) {
     var announcement = document.querySelector('[data-site-announcement]');
     if (!announcement || !notice) return;
@@ -201,6 +214,7 @@ ${renderSiteFooter(opts.contact)}
     var benefit = english ? (notice.couponBenefitEn || notice.couponBenefitZh || '') : (notice.couponBenefitZh || '');
     title.textContent = isCoupon
       ? (english ? '🎉 New offer live! Enter promo code ' : '🎉 新优惠上线！使用优惠码 ') + notice.couponCode + (benefit ? ' ' + benefit : '')
+      : english && notice.titleEn ? notice.titleEn
       : (!notice.isAdminAnnouncement && english ? englishFor(notice.title || '最新通告') : (notice.title || '最新通告'));
     link.href = isCoupon
       ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
@@ -224,6 +238,7 @@ ${renderSiteFooter(opts.contact)}
     renderAnnouncementNotice(activeAnnouncementNotice);
     renderCouponCallouts();
     renderCouponMessages();
+    renderNoticeTexts();
     document.title = english ? englishFor(originalTitle) : originalTitle;
     var descriptionMeta = document.querySelector('meta[name="description"]');
     if (descriptionMeta) descriptionMeta.setAttribute('content', english ? englishFor(originalDescription) : originalDescription);
