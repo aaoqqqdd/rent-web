@@ -654,7 +654,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .response-note i { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--secondary); box-shadow: 0 0 10px var(--secondary); }
 .response-note strong { color: var(--fg); }.response-note p { margin-top: 4px; }
 .contact-form h2 { margin-top: 10px; font-size: 30px; }.form-intro { margin: 8px 0 24px; color: var(--muted-fg); font-size: 13px; }
-.contact-tally { min-width: 0; overflow: hidden; border: 0; background: transparent; }
+.contact-tally { min-width: 0; overflow: hidden; }
 .contact-tally iframe { display: block; width: 100%; min-height: 1050px; border: 0; }
 .info-grid { display: grid; gap: 16px; }.info-grid.three { grid-template-columns: repeat(3, 1fr); }
 .info-card { padding: 25px; border: 1px solid var(--border); border-radius: 13px; background: var(--bg); }

@@ -182,7 +182,9 @@ export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: 
     <div class="contact-option"><span>自取 / 归还</span><strong>${esc(config.pickupLocations.length ? `${config.pickupLocations.length} 个可选地点` : '联系客服确认')}</strong><small>${esc(pickupSummary(config))}</small></div>
     <div class="response-note"><i></i><div><strong>建议提供</strong><p>设备或用途、开始与结束日期、所在 suburb、必须运行的软件。</p></div></div>
   </div>
-  <div class="contact-form contact-tally" aria-label="邮件询价表单">
+  <div class="form-card contact-form contact-tally" aria-label="邮件询价表单">
+    <div class="kicker">邮件咨询</div>
+    <h2>联系我们</h2>
     <iframe
       src="https://tally.so/embed/q498Dg?alignLeft=1&amp;hideTitle=1&amp;transparentBackground=1&amp;formEventsForwarding=1"
       title="邮件询价表单"
