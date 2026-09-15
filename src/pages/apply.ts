@@ -23,6 +23,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     name: product.name,
     model: product.model,
     categoryLabel: product.categoryLabel,
+    available: product.available,
     day: product.pricePerDay,
     weeklyDiscountPercent: product.weeklyDiscountPercent,
     monthlyDiscountPercent: product.monthlyDiscountPercent,
@@ -60,8 +61,9 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var availabilityFailed = false;
   var availabilityKey = '';
   function today() {
-    var date = new Date();
-    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    var values = {}; parts.forEach(function (part) { if (part.type !== 'literal') values[part.type] = part.value; });
+    return values.year + '-' + values.month + '-' + values.day;
   }
   function addDays(value, amount) {
     var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount);
@@ -79,10 +81,17 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
     var item = availability[id] || {};
     return (item.unavailableDates || []).indexOf(date) >= 0
-      || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
+      || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'))
+      || periodPassed(date, 'AM');
+  }
+  function periodPassed(date, period) {
+    var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0);
+    var minute = Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0);
+    return date === today() && hour * 60 + minute >= (period === 'AM' ? 12 * 60 : 23 * 60);
   }
   function termRangeUnavailable(id, start, end) {
-    for (var day = start; day && day <= end; day = addDays(day, 1)) if (dateUnavailable(id, day)) return true;
+    for (var day = start; day && day <= end; day = addDays(day, 1)) if (dateUnavailable(id, day) || periodPassed(day, 'AM')) return true;
     return false;
   }
   function nextAvailableDate(id, date) {
@@ -128,7 +137,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function normalizeTerm(id, value) {
     var fallback = defaultTerm(id); value = value && typeof value === 'object' ? value : {};
-    return { startDate: parseDate(value.startDate) || fallback.startDate, endDate: parseDate(value.endDate) || fallback.endDate, startPeriod: 'AM', endPeriod: 'AM' };
+    return { startDate: parseDate(value.startDate) || fallback.startDate, endDate: parseDate(value.endDate) || fallback.endDate, startPeriod: value.startPeriod === 'PM' ? 'PM' : fallback.startPeriod, endPeriod: value.endPeriod === 'PM' ? 'PM' : fallback.endPeriod };
   }
   function read() {
     try {
@@ -240,7 +249,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     control.append(input, toggle, picker); field.append(label, control); return field;
   }
   function termError(id, term) {
-    if (!parseDate(term.startDate) || !parseDate(term.endDate)) return '请输入有效日期（格式：dd/mm/yyyy）。'; if (term.startDate < today()) return '取货日期不能早于今天。'; if (termDays(term) < minimumDays) return '租期不能少于 ' + minimumDays + ' 天。'; if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return '该设备在所选租期内不可用，请选择其他日期。'; return '';
+    if (!map.get(id)?.available) return '当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。'; if (!parseDate(term.startDate) || !parseDate(term.endDate)) return '请输入有效日期（格式：dd/mm/yyyy）。'; if (term.startDate < today()) return '取货日期不能早于今天。'; if (termDays(term) < minimumDays) return '租期不能少于 ' + minimumDays + ' 天。'; if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return '该设备在所选租期或时段不可用，请选择其他日期。'; return '';
   }
   function termEditor(id, term) {
     var wrap = document.createElement('div'); wrap.className = 'device-term-editor'; var head = document.createElement('div'); head.className = 'device-term-editor-head'; var title = document.createElement('strong'); title.textContent = '本设备租期'; head.appendChild(title); wrap.appendChild(head);
@@ -292,6 +301,7 @@ export function renderApply(data: ApplyData): string {
     id: product.id,
     name: product.name,
     model: product.model,
+    available: product.available,
     day: product.pricePerDay,
     weeklyDiscountPercent: product.weeklyDiscountPercent,
     monthlyDiscountPercent: product.monthlyDiscountPercent,
@@ -581,8 +591,9 @@ export function renderApply(data: ApplyData): string {
   }
 
   function todayStr() {
-    var date = new Date();
-    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    var values = {}; parts.forEach(function (part) { if (part.type !== 'literal') values[part.type] = part.value; });
+    return values.year + '-' + values.month + '-' + values.day;
   }
   function addDays(dateString, amount) {
     var date = new Date(dateString + 'T00:00:00');
@@ -720,7 +731,7 @@ export function renderApply(data: ApplyData): string {
   }
   function termFor(id) {
     var value = cartTerms[id] || cartState.legacy || {}; var start = value.startDate || today; if (start < today) start = today;
-    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: 'AM', endPeriod: 'AM' };
+    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: value.startPeriod === 'PM' ? 'PM' : 'AM', endPeriod: value.endPeriod === 'PM' ? 'PM' : 'AM' };
   }
   function termDays(term) {
     var half = Math.round((Date.parse(term.endDate + 'T00:00:00Z') - Date.parse(term.startDate + 'T00:00:00Z')) / 86400000) * 2 + (term.endPeriod === 'PM' ? 1 : 0) - (term.startPeriod === 'PM' ? 1 : 0);
@@ -757,6 +768,7 @@ export function renderApply(data: ApplyData): string {
     return false;
   }
   function termError(id, term) {
+    if (!productMap.get(id)?.available) return uiCopy('当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。');
     if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return uiCopy('请为每台设备填写有效租期。');
     if (term.startDate < today || termDays(term) < MIN_DAYS) return uiText('每台设备的租期不能少于 ' + MIN_DAYS + ' 天。', 'Each device must be rented for at least ' + MIN_DAYS + ' day(s).');
     if (termRangeUnavailable(id, term)) return uiCopy('该设备在所选租期或时段不可用。');
@@ -1182,8 +1194,7 @@ export function renderApply(data: ApplyData): string {
     if (!code) { couponState = 'empty'; appliedDiscount = 0; hint.textContent = uiCopy('请先输入优惠码。'); return; }
     couponState = 'checking';
     hint.textContent = uiCopy('正在校验优惠码…');
-    var params = new URLSearchParams({ deviceIds: JSON.stringify(cartIds), terms: deviceTermsInput.value, days: '0', code: code });
-    fetch(COUPON_ENDPOINT + '?' + params.toString(), { headers: { Accept: 'application/json' } })
+    fetch(COUPON_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceIds: cartIds, terms: deviceTermsInput.value, days: 0, code: code, email: contactEmail.value.trim() }) })
       .then(readJsonResponse)
       .then(function (result) {
         if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '优惠码无效。'));

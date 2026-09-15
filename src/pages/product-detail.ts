@@ -60,6 +60,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
           <div class="field detail-date-field"><label for="detail-end-date">归还日期</label><div class="detail-date-control"><input type="text" id="detail-end-date" class="detail-date-input" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" required><button type="button" class="detail-date-picker-toggle" id="detail-end-date-toggle" aria-label="打开归还日期日历" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></button><div class="date-picker detail-date-picker" id="detail-end-date-picker" hidden></div></div></div>
         </div>
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
+        <p class="hint detail-date-message" id="detail-date-message" aria-live="polite"></p>
       </div>
       <div class="detail-actions">
         <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button">加入购物车并查看</button>
@@ -119,13 +120,16 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var startPicker = document.getElementById('detail-start-date-picker');
   var endPicker = document.getElementById('detail-end-date-picker');
   var button = document.getElementById('detail-add-cart');
+  var dateMessage = document.getElementById('detail-date-message');
+  var productAvailable = ${product.available ? 'true' : 'false'};
   var minimumDays = ${config.minimumRentalDays};
   var globalUnavailableDates = ${scriptJson(config.unavailableDates)};
   var globalUnavailableTimeSlots = ${scriptJson(config.unavailableTimeSlots)};
   var availability = {};
   var availabilityReady = false;
   var openPickerState = null;
-  var today = new Date();
+  var melbourneToday = function () { var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()); var values = {}; parts.forEach(function (part) { if (part.type !== 'literal') values[part.type] = part.value; }); return values.year + '-' + values.month + '-' + values.day; };
+  var today = melbourneToday();
   var dateString = function (date) { return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); };
   var formatDate = function (value) {
     var parts = String(value || '').split('-');
@@ -155,6 +159,10 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var invalidDateMessage = '请输入有效日期（格式：dd/mm/yyyy）。';
   var pastDateMessage = '日期不能早于今天。';
   var unavailableDateMessage = '该设备在此日期不可用，请选择其他日期。';
+  var cutoffMessage = '上午取货/归还截止 12:00，下午时段截止 23:00，请改选下一可用日期。';
+  var currentMelbourneMinutes = function () { var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()); var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0); };
+  var periodPassed = function (value, period) { return value === today && currentMelbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60); };
+  var showDateMessage = function (message, isError) { if (dateMessage) { dateMessage.textContent = message || ''; dateMessage.dataset.state = isError ? 'error' : ''; } };
   var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
   var clearChildren = function (node) { while (node && node.firstChild) node.removeChild(node.firstChild); };
   var isUnavailable = function (value) {
@@ -162,7 +170,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var item = availability[${JSON.stringify(product.id)}] || {};
     var globalSlots = globalUnavailableTimeSlots[value] || [];
     var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[value] || []) : [];
-    return (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || (value === dateString(today) && currentMelbourneMinutes() >= 23 * 60);
+    return (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || periodPassed(value, 'AM');
   };
   var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
   var periodUnavailable = function (date, period) {
@@ -173,7 +181,6 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service'];
     return occupied.indexOf(period) >= 0 || group.every(function (slot) { return slots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
   };
-  var currentMelbourneMinutes = function () { var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()); var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0); };
   var pickerDateDisabled = function (role, value) {
     if (!availabilityReady || value < start.min || isUnavailable(value)) return true;
     if (role !== 'end') return false;
@@ -235,13 +242,15 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     if (!startValue) {
       start.setCustomValidity(invalidDateMessage);
       end.setCustomValidity(invalidDateMessage);
+      showDateMessage(invalidDateMessage, true);
       return;
     }
     if (initial && isUnavailable(startValue)) {
       startValue = nextAvailable(startValue);
       setDateValue(start, startValue);
     }
-    start.setCustomValidity(startValue < start.min ? pastDateMessage : isUnavailable(startValue) ? unavailableDateMessage : '');
+    var startError = startValue < start.min ? pastDateMessage : periodPassed(startValue, 'AM') ? cutoffMessage : isUnavailable(startValue) ? unavailableDateMessage : '';
+    start.setCustomValidity(startError);
     end.min = nextAvailable(addDays(startValue, minimumDays));
     end.dataset.minIso = end.min;
     var endValue = readDateValue(end);
@@ -249,15 +258,17 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       endValue = end.min;
       setDateValue(end, endValue);
     }
-    end.setCustomValidity(!endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : isUnavailable(endValue) ? unavailableDateMessage : '');
+    var endError = !endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : periodPassed(endValue, 'AM') ? cutoffMessage : isUnavailable(endValue) ? unavailableDateMessage : '';
+    end.setCustomValidity(endError);
+    showDateMessage(startError || endError, Boolean(startError || endError));
   };
-  start.min = dateString(today); setDateValue(start, start.min);
+  start.min = today; setDateValue(start, start.min);
   end.min = addDays(start.min, minimumDays); setDateValue(end, end.min);
   start.disabled = true; end.disabled = true; startToggle.disabled = false; endToggle.disabled = false; button.disabled = true;
   fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify([${JSON.stringify(product.id)}])), { headers: { Accept: 'application/json' } })
     .then(function (response) { return response.json(); })
-    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); refreshOpenPicker(); })
-    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = false; applyDateRules(true); refreshOpenPicker(); });
+    .then(function (result) { availability = result.availability || {}; availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = !productAvailable; applyDateRules(true); refreshOpenPicker(); })
+    .catch(function () { availabilityReady = true; start.disabled = false; end.disabled = false; startToggle.disabled = false; endToggle.disabled = false; button.disabled = !productAvailable; applyDateRules(true); refreshOpenPicker(); });
   start.addEventListener('input', function () { start.value = maskDate(start.value); applyDateRules(false); });
   end.addEventListener('input', function () { end.value = maskDate(end.value); applyDateRules(false); });
   start.addEventListener('change', function () { applyDateRules(false); });
@@ -278,7 +289,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     applyDateRules(false);
     var startValue = readDateValue(start);
     var endValue = readDateValue(end);
-    if (!startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
+    if (!productAvailable || !startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
     window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: startValue, endDate: endValue, startPeriod: 'AM', endPeriod: 'AM' });
     location.href = ${JSON.stringify(applyHref)};
   });
