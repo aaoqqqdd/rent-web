@@ -655,7 +655,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .response-note strong { color: var(--fg); }.response-note p { margin-top: 4px; }
 .contact-form h2 { margin-top: 10px; font-size: 30px; }.form-intro { margin: 8px 0 24px; color: var(--muted-fg); font-size: 13px; }
 .contact-tally { min-width: 0; overflow: hidden; }
-.contact-tally iframe { display: block; width: 100%; min-height: 1050px; border: 0; }
+.contact-tally iframe { display: block; width: 100%; height: 520px; min-height: 0; border: 0; }
 .info-grid { display: grid; gap: 16px; }.info-grid.three { grid-template-columns: repeat(3, 1fr); }
 .info-card { padding: 25px; border: 1px solid var(--border); border-radius: 13px; background: var(--bg); }
 .info-card > span { color: var(--secondary); font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
@@ -956,7 +956,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .apply-expectations { grid-template-columns: 1fr; }
   .apply-expectations > div { min-height: auto; }
   .form-card { padding: 22px 18px; }
-  .contact-tally iframe { min-height: 1320px; }
+  .contact-tally iframe { height: 720px; }
   .apply-progress { gap: 5px; justify-content: space-between; }
   .apply-progress b { width: 14px; }
   .apply-progress span { gap: 4px; font-size: 9px; }

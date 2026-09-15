@@ -190,7 +190,7 @@ export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: 
       title="邮件询价表单"
       loading="lazy"
       width="100%"
-      height="1050"
+      height="520"
       frameborder="0"
       marginheight="0"
       marginwidth="0"
