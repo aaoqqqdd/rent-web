@@ -28,19 +28,27 @@ function couponMessageAttrs(notice: PublicNotice): string {
     return ` data-coupon-message data-coupon-message-zh="${esc(notice.message)}" data-coupon-message-en="${esc(notice.couponMessageEn || notice.message)}"`
 }
 
+function noticeTitleAttrs(notice: PublicNotice): string {
+    return notice.titleEn ? ` data-notice-title data-notice-title-zh="${esc(notice.title)}" data-notice-title-en="${esc(notice.titleEn)}"` : ''
+}
+
+function noticeMessageAttrs(notice: PublicNotice): string {
+    return notice.messageEn ? ` data-notice-message data-notice-message-zh="${esc(notice.message)}" data-notice-message-en="${esc(notice.messageEn)}"` : ''
+}
+
 function noticeCard(notice: PublicNotice): string {
     const isCoupon = notice.kind === 'coupon' && Boolean(notice.couponCode)
-    const noTranslate = notice.isAdminAnnouncement ? ' data-no-translate' : ''
+    const noTranslate = notice.isAdminAnnouncement || notice.titleEn ? ' data-no-translate' : ''
     const href = isCoupon ? `/products?coupon=${encodeURIComponent(notice.couponCode || '')}` : `/announcements/${encodeURIComponent(notice.id)}`
     const title = isCoupon ? `🎉 新优惠上线！使用优惠码 ${notice.couponCode} ${notice.couponBenefitZh || ''}` : notice.title
     const couponTitle = isCoupon
       ? `<h2 data-coupon-callout data-coupon-prefix-zh="🎉 新优惠上线！使用优惠码" data-coupon-prefix-en="🎉 New offer live! Enter promo code" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}"><span data-coupon-prefix>🎉 新优惠上线！使用优惠码</span> <strong>${esc(notice.couponCode || '')}</strong> <em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em></h2>`
-      : `<h2${noTranslate}>${esc(title)}</h2>`
+      : `<h2${noTranslate}${noticeTitleAttrs(notice)}>${esc(title)}</h2>`
     return `<a class="notice-card" href="${href}">
   <span class="notice-card-kind">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</span>
   ${couponTitle}
   <time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time>
-  <p${noTranslate}${couponMessageAttrs(notice)}>${noticeMessage(notice.message)}</p>
+  <p${noTranslate}${couponMessageAttrs(notice)}${noticeMessageAttrs(notice)}>${noticeMessage(notice.message)}</p>
   <span class="text-link">${isCoupon ? '去挑选设备' : '查看详情'} <span aria-hidden="true">→</span></span>
 </a>`
 }
@@ -62,17 +70,18 @@ export function renderAnnouncements(notices: PublicNotice[]): string {
 
 export function renderAnnouncementDetail(notice: PublicNotice | null): string {
     if (!notice) return '<section class="section"><div class="wrap"> <div class="empty-state"><strong>通告不存在或已失效</strong><p>这条消息可能已经撤回，或优惠码已过期。</p><a class="btn btn-primary" href="/announcements">返回通告列表</a></div></div></section>'
+    const noTranslate = notice.isAdminAnnouncement || notice.titleEn ? ' data-no-translate' : ''
     return `<section class="page-hero compact">
   <div class="wrap">
     <div class="kicker">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</div>
-    <h1${notice.isAdminAnnouncement ? ' data-no-translate' : ''}>${esc(notice.title)}</h1>
+    <h1${noTranslate}${noticeTitleAttrs(notice)}>${esc(notice.title)}</h1>
     <p>${esc(noticeDate(notice.createdAt))}</p>
   </div>
 </section>
 <section class="section">
   <div class="wrap notice-detail-wrap">
     <article class="notice-detail">
-      <div class="notice-detail-message"${notice.isAdminAnnouncement ? ' data-no-translate' : ''}${couponMessageAttrs(notice)}>${noticeMessage(notice.message)}</div>
+      <div class="notice-detail-message"${noTranslate}${couponMessageAttrs(notice)}${noticeMessageAttrs(notice)}>${noticeMessage(notice.message)}</div>
       ${notice.kind === 'coupon' && notice.couponCode ? `<div class="coupon-callout" data-coupon-callout data-coupon-prefix-zh="🎉 新优惠上线！使用优惠码" data-coupon-prefix-en="🎉 New offer live! Enter promo code" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}" data-coupon-cta-zh="去挑选设备" data-coupon-cta-en="Browse devices"><span data-coupon-prefix>🎉 新优惠上线！使用优惠码</span><strong>${esc(notice.couponCode)}</strong><em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em><a class="coupon-callout-link" href="/products?coupon=${encodeURIComponent(notice.couponCode)}"><span data-coupon-cta>去挑选设备</span> <span aria-hidden="true">→</span></a></div>` : ''}
     </article>
     <a class="text-link" href="/announcements">← 返回通告列表</a>

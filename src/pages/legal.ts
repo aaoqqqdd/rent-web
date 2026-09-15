@@ -76,8 +76,8 @@ function sanitizeDocument(html: string): string {
   })
 }
 
-export function renderLegalDocument(data: LegalPageData): string {
-  let content = data.document.content
+function fillTemplate(raw: string, data: LegalPageData): string {
+  let content = raw
   for (const [key, value] of Object.entries(renderVariables(data))) {
     // 同时兼容编辑器中把下划线写成 `\_` 的 Markdown 转义形式。
     const placeholderKey = key.replace(/_/g, '\\\\?_')
@@ -86,12 +86,18 @@ export function renderLegalDocument(data: LegalPageData): string {
   if (data.rentalTemplate) {
     content = content.replace(/\$?\{[a-z0-9_]+\}/gi, '<span class="doc-blank">——</span>')
   }
-  const safeContent = content
-    ? sanitizeDocument(content)
-    : '<p class="legal-empty">该文档暂未发布，请联系客服获取最新内容。</p>'
+  return content
+}
+
+export function renderLegalDocument(data: LegalPageData): string {
+  const safeContentZh = fillTemplate(data.document.content, data) || null
+  const safeContentEn = fillTemplate(data.document.contentEn, data) || null
   const notice = data.rentalTemplate
     ? '<p class="legal-notice">以下为标准《设备租赁协议》范本。带 —— 的位置将在下单后按实际合同数据填写，最终以您签署的租赁合同为准。</p>'
     : ''
+  const emptyNotice = '<p class="legal-empty">该文档暂未发布，请联系客服获取最新内容。</p>'
+  const englishUnavailableNotice =
+    '<p class="legal-notice" data-no-translate>An English version of this page is not available yet. Showing the original Chinese text below.</p>'
 
   return /* html */ `
 <section class="section">
@@ -99,7 +105,18 @@ export function renderLegalDocument(data: LegalPageData): string {
     <div class="kicker">${esc(data.code)}</div>
     <h1>${esc(data.title)}</h1>
     ${notice}
-    <div class="legal-document__content">${safeContent}</div>
+    <div class="legal-document__content" data-legal-lang="zh" data-no-translate>${safeContentZh ? sanitizeDocument(safeContentZh) : emptyNotice}</div>
+    <div class="legal-document__content" data-legal-lang="en" data-no-translate hidden>${
+      safeContentEn ? sanitizeDocument(safeContentEn) : englishUnavailableNotice + (safeContentZh ? sanitizeDocument(safeContentZh) : emptyNotice)
+    }</div>
   </div>
-</section>`
+</section>
+<script>(function () {
+  var zh = document.querySelector('[data-legal-lang="zh"]');
+  var en = document.querySelector('[data-legal-lang="en"]');
+  if (!zh || !en) return;
+  function apply(language) { var english = language === 'en'; zh.hidden = english; en.hidden = !english; }
+  window.addEventListener('geekslope:language-change', function (event) { apply(event.detail.language); });
+  if (window.GeekSlopeI18n) apply(window.GeekSlopeI18n.language());
+})();</script>`
 }
