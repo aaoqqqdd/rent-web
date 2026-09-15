@@ -389,7 +389,6 @@ export function renderApply(data: ApplyData): string {
             <div class="stripe-setup-head"><div><label>礼品卡</label></div></div>
             <div class="square-gift-card-input-row">
               <div id="square-gift-card-element"></div>
-              <button type="button" class="btn btn-ghost" id="square-gift-card-check" disabled>验证礼品卡余额</button>
             </div>
             <div class="square-gift-card-preview" id="square-gift-card-preview" hidden>
               <div><span>礼品卡余额</span><strong id="square-gift-card-balance">AUD $0.00</strong></div>
@@ -547,8 +546,8 @@ export function renderApply(data: ApplyData): string {
   var paymentMethodOptions = document.getElementById('payment-method-options');
   var squareGiftCardSetup = document.getElementById('square-gift-card-setup');
   var squareGiftCardMessage = document.getElementById('square-gift-card-message');
-  var squareGiftCardCheck = document.getElementById('square-gift-card-check');
   var squareGiftCardPreview = document.getElementById('square-gift-card-preview');
+  var squareGiftCardAutoVerifyTimer = null;
   var addressSearch = document.getElementById('delivery-address-search');
   var addressSuggestions = document.getElementById('address-suggestions');
   var addressStatus = document.getElementById('address-search-status');
@@ -929,7 +928,6 @@ export function renderApply(data: ApplyData): string {
             },
           });
         }).then(function () {
-          if (squareGiftCardCheck) squareGiftCardCheck.disabled = false;
           if (squareGiftCard && squareGiftCard.addEventListener) {
             squareGiftCard.addEventListener('input', function () {
               squareGiftCardNonce = '';
@@ -938,6 +936,8 @@ export function renderApply(data: ApplyData): string {
               if (squareGiftCardPreview) squareGiftCardPreview.hidden = true;
               if (squareGiftCardMessage) squareGiftCardMessage.textContent = '';
               refreshSummary();
+              if (squareGiftCardAutoVerifyTimer) clearTimeout(squareGiftCardAutoVerifyTimer);
+              squareGiftCardAutoVerifyTimer = setTimeout(autoVerifySquareGiftCard, 600);
             });
           }
         });
@@ -968,9 +968,8 @@ export function renderApply(data: ApplyData): string {
     document.getElementById('square-gift-card-remaining').textContent = 'AUD $' + remaining.toFixed(2);
     squareGiftCardPreview.hidden = false;
   }
-  if (squareGiftCardCheck) squareGiftCardCheck.addEventListener('click', function () {
-    squareGiftCardCheck.disabled = true;
-    squareGiftCardMessage.textContent = uiCopy('正在验证礼品卡余额…');
+  function autoVerifySquareGiftCard() {
+    if (squareGiftCardMessage) squareGiftCardMessage.textContent = uiCopy('正在验证礼品卡余额…');
     squareGiftCardToken()
       .then(function (nonce) {
         return fetch(squareGiftCardPreviewEndpoint, {
@@ -978,7 +977,11 @@ export function renderApply(data: ApplyData): string {
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ nonce: nonce }),
         }).then(readJsonResponse).then(function (result) {
-          if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '礼品卡验证失败。'));
+          if (!result.ok || !result.json || !result.json.ok) {
+            var serverError = new Error(uiCopy((result.json && result.json.message) || '礼品卡验证失败。'));
+            serverError.fromServer = true;
+            throw serverError;
+          }
           squareGiftCardNonce = nonce;
           squareGiftCardBalance = Number(result.json.balance || 0);
           squareGiftCardVerified = true;
@@ -997,11 +1000,11 @@ export function renderApply(data: ApplyData): string {
         squareGiftCardBalance = null;
         squareGiftCardVerified = false;
         if (squareGiftCardPreview) squareGiftCardPreview.hidden = true;
-        squareGiftCardMessage.textContent = paymentError(error, uiCopy('礼品卡验证失败，请检查卡号后重试。'));
+        // Tokenize fails while the card number is still incomplete; stay quiet instead of alarming the user mid-typing.
+        squareGiftCardMessage.textContent = error && error.fromServer ? paymentError(error, uiCopy('礼品卡验证失败，请检查卡号后重试。')) : '';
         refreshSummary();
-      })
-      .finally(function () { squareGiftCardCheck.disabled = false; });
-  });
+      });
+  }
   function updatePaymentMethodVisibility() {
     var useBalance = balancePaymentInput.checked && !balancePaymentInput.disabled;
     paymentMethodOptions.hidden = balanceOption.hidden;
