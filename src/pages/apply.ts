@@ -917,7 +917,7 @@ export function renderApply(data: ApplyData): string {
         return squareGiftCard.attach('#square-gift-card-element').then(function () {
           return squareGiftCard.configure({
             style: {
-              '.input-container': { borderColor: '#353b4d', borderRadius: '8px', backgroundColor: '#0b0e15' },
+              '.input-container': { borderColor: '#353b4d', borderRadius: '8px' },
               '.input-container.is-focus': { borderColor: '#7c6cff' },
               '.input-container.is-error': { borderColor: '#ff7185' },
               '.message-text': { color: '#9ca3b7' },
