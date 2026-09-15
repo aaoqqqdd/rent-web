@@ -142,7 +142,7 @@ export function renderRentalGuide(config: RentalConfig): string {
 <section class="section closing"><div class="wrap"><div class="kicker">下一步</div><h2>规则看明白了，就去选一台。</h2><p>申请前请同时阅读<a href="/service-terms" class="inline-link">服务条款</a>和<a href="/refund-policy" class="inline-link">退款政策</a>。不确定配置、档期或配送范围时，可以先问顾问。</p><div class="hero-actions"><a class="btn btn-primary btn-lg" href="/products">浏览设备</a><a class="btn btn-ghost btn-lg" href="/about#contact">先咨询</a></div></div></section>`
 }
 
-export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: string, initialSubject: string): string {
+export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: string): string {
   const phoneHref = contact.phone.replace(/[^+\d]/g, '')
   return /* html */ `
 <section class="page-hero compact about-hero"><div class="wrap about-hero-grid">
@@ -182,48 +182,21 @@ export function renderAbout(contact: SiteContact, config: RentalConfig, appUrl: 
     <div class="contact-option"><span>自取 / 归还</span><strong>${esc(config.pickupLocations.length ? `${config.pickupLocations.length} 个可选地点` : '联系客服确认')}</strong><small>${esc(pickupSummary(config))}</small></div>
     <div class="response-note"><i></i><div><strong>建议提供</strong><p>设备或用途、开始与结束日期、所在 suburb、必须运行的软件。</p></div></div>
   </div>
-  <form class="form-card contact-form" id="contact-form">
-    <div class="kicker">邮件咨询</div><h2>整理一封询价邮件</h2><p class="form-intro">填写后会打开你的邮件应用；内容不会在本网站保存或发送。</p>
-    <div class="row2"><div class="field"><label for="inquiry-name">怎么称呼你</label><input id="inquiry-name" name="name" autocomplete="name" required></div><div class="field"><label for="inquiry-phone">联系电话（选填）</label><input id="inquiry-phone" name="phone" autocomplete="tel"></div></div>
-    <div class="field"><label for="inquiry-subject">想咨询什么</label><select id="inquiry-subject" name="subject">${initialSubject ? `<option selected>${esc(initialSubject)}</option>` : ''}<option>帮我推荐设备</option><option>查询设备档期</option><option>确认配送范围</option><option>续租或已有订单</option><option>其他问题</option></select></div>
-    <div class="row2"><div class="field"><label for="inquiry-start">预计开始日期</label><input type="date" id="inquiry-start" name="start" lang="en-AU"></div><div class="field"><label for="inquiry-end">预计结束日期</label><input type="date" id="inquiry-end" name="end" lang="en-AU"></div></div>
-    <div class="field"><label for="inquiry-message">用途、软件或其他要求</label><textarea id="inquiry-message" name="message" placeholder="例如：在 Carlton 使用 7 天，需要运行 Premiere Pro，希望 32GB 内存…" required></textarea></div>
-    <button class="btn btn-primary btn-lg" type="submit">在邮件应用中继续</button>
-  </form>
+  <div class="contact-form contact-tally" aria-label="邮件询价表单">
+    <iframe
+      src="https://tally.so/embed/q498Dg?alignLeft=1&amp;hideTitle=1&amp;transparentBackground=1&amp;formEventsForwarding=1"
+      title="邮件询价表单"
+      loading="lazy"
+      width="100%"
+      height="1050"
+      frameborder="0"
+      marginheight="0"
+      marginwidth="0"
+    ></iframe>
+  </div>
 </div></section>
 <section class="section alt"><div class="wrap"><div class="section-head tight"><div><div class="kicker">自助入口</div><h2>也许你可以直接完成</h2></div></div><div class="info-grid three"><a class="info-card linked" href="/products"><span>找设备</span><h3>搜索实时库存</h3><p>按类型、配置、价格和现货状态筛选。</p></a><a class="info-card linked" href="/rental-guide#faq"><span>查规则</span><h3>查看常见问题</h3><p>了解押金、配送、续租与故障处理。</p></a><a class="info-card linked" href="${esc(appUrl)}/login"><span>已有订单</span><h3>进入租赁系统</h3><p>查看进度、签署合同或完成付款。</p></a></div></div></section>
-<script>
-(() => {
-  var form = document.getElementById('contact-form');
-  var inquiryStart = document.getElementById('inquiry-start');
-  var inquiryEnd = document.getElementById('inquiry-end');
-  var now = new Date();
-  var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-  function formatDate(value) {
-    var parts = String(value || '').split('-');
-    return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : (value || '待定');
-  }
-  inquiryStart.min = today;
-  inquiryEnd.min = today;
-  function validateInquiryDates() {
-    inquiryEnd.min = inquiryStart.value || today;
-    inquiryEnd.setCustomValidity(inquiryStart.value && inquiryEnd.value && inquiryEnd.value < inquiryStart.value
-      ? '结束日期不能早于开始日期。'
-      : '');
-  }
-  inquiryStart.addEventListener('change', validateInquiryDates);
-  inquiryEnd.addEventListener('change', validateInquiryDates);
-  form.addEventListener('submit', function (event) {
-    event.preventDefault();
-    validateInquiryDates();
-    if (!form.reportValidity()) return;
-    var data = new FormData(form);
-    var subject = data.get('subject');
-    var body = ['姓名：' + data.get('name'), '联系电话：' + (data.get('phone') || '未填写'), '预计租期：' + formatDate(data.get('start')) + ' 至 ' + formatDate(data.get('end')), '', String(data.get('message'))].join('\\n');
-    location.href = 'mailto:${esc(contact.email)}?subject=' + encodeURIComponent('[${esc(contact.name)} 咨询] ' + subject) + '&body=' + encodeURIComponent(body);
-  });
-})();
-</script>`
+`
 }
 
 export function renderNotFound(): string {

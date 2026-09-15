@@ -681,7 +681,7 @@ app.get('/about', (c) =>
     return renderPage({
       title: `关于 ${contact.name}｜墨尔本电脑租赁与本地支持`,
       description: `${contact.name} 为墨尔本学习、工作和创作项目提供透明、灵活的电脑租赁与本地支持，可在线咨询设备配置与档期。`,
-      body: renderAbout(contact, config, appUrl(c.env), c.req.query('subject') || ''),
+      body: renderAbout(contact, config, appUrl(c.env)),
       contact,
       appUrl: appUrl(c.env),
       path: '/about',
