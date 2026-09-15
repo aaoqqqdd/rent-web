@@ -79,6 +79,27 @@ app.use('*', async (c, next) => {
   await next()
 })
 
+app.use('*', async (c, next) => {
+  c.header('X-Content-Type-Options', 'nosniff')
+  c.header('X-Frame-Options', 'DENY')
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  c.header('Cross-Origin-Opener-Policy', 'same-origin')
+  c.header('Cross-Origin-Resource-Policy', 'same-origin')
+  c.header('X-Permitted-Cross-Domain-Policies', 'none')
+  if (new URL(c.req.url).protocol === 'https:') c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  c.header('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://tally.so https://web.squarecdn.com https://sandbox.web.squarecdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://challenges.cloudflare.com https://api.stripe.com https://photon.komoot.io https://nominatim.openstreetmap.org https://connect.squareup.com https://connect.squareupsandbox.com https://tally.so; frame-src https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://climate.stripe.com https://tally.so; form-action 'self' https://app.squareup.com")
+
+  const contentLength = Number(c.req.header('Content-Length') || 0)
+  if (Number.isFinite(contentLength) && contentLength > 128 * 1024) return c.text('Request body too large', 413)
+  if (c.req.method === 'POST') {
+    const origin = c.req.header('Origin')
+    const requestOrigin = new URL(c.req.url).origin
+    if ((origin && origin !== requestOrigin) || c.req.header('Sec-Fetch-Site') === 'cross-site') return c.text('Invalid request origin', 403)
+  }
+  await next()
+})
+
 function appUrl(env: Env): string {
   return (env.APP_URL || 'https://rent.ydnw6zt6vj.workers.dev').replace(/\/$/, '')
 }
@@ -190,18 +211,26 @@ app.get('/api/address/autocomplete', async (c) => {
   return c.json({ suggestions, message: suggestions.length ? undefined : '没有找到墨尔本地址，请继续输入或手工填写。' }, 200, { 'cache-control': 'no-store' })
 })
 
-app.get('/api/coupons/rental-cart-preview', async (c) => {
+app.on(['GET', 'POST'], '/api/coupons/rental-cart-preview', async (c) => {
+  const body = c.req.method === 'POST' ? await parseRequestBody(c) : null
+  const rawDeviceIds = body?.deviceIds ?? c.req.query('deviceIds') ?? '[]'
   let deviceIds: string[] = []
-  try {
-    const parsed = JSON.parse(String(c.req.query('deviceIds') || '[]'))
-    deviceIds = Array.isArray(parsed) ? parsed.map((value) => String(value).trim()).filter(Boolean) : []
-  } catch {
-    deviceIds = String(c.req.query('deviceIds') || '').split(',').map((value) => value.trim()).filter(Boolean)
+  if (Array.isArray(rawDeviceIds)) {
+    deviceIds = rawDeviceIds.map((value) => String(value).trim()).filter(Boolean)
+  } else {
+    try {
+      const parsed = JSON.parse(String(rawDeviceIds))
+      deviceIds = Array.isArray(parsed) ? parsed.map((value) => String(value).trim()).filter(Boolean) : []
+    } catch {
+      deviceIds = String(rawDeviceIds).split(',').map((value) => value.trim()).filter(Boolean)
+    }
   }
   let terms: unknown = undefined
-  try { terms = JSON.parse(String(c.req.query('terms') || 'null')) } catch { terms = undefined }
-  const result = await previewRentalCoupon(c, [...new Set(deviceIds)], Number(c.req.query('days') || 0), String(c.req.query('code') || ''), terms)
-  return c.json(result, result.ok ? 200 : 400)
+  const rawTerms = body?.terms ?? c.req.query('terms')
+  if (rawTerms && typeof rawTerms === 'object') terms = rawTerms
+  else { try { terms = JSON.parse(String(rawTerms || 'null')) } catch { terms = undefined } }
+  const result = await previewRentalCoupon(c, [...new Set(deviceIds)], Number(body?.days ?? c.req.query('days') ?? 0), String(body?.code ?? c.req.query('code') ?? ''), terms, String(body?.email ?? ''))
+  return c.json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' })
 })
 
 app.post('/api/rental-setup-intent', async (c) => {

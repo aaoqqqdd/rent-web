@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import { getRentalConfig } from './db'
-import { combinePersonName, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
+import { combinePersonName, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import { isMelbourneAddress } from './address'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
@@ -10,6 +10,7 @@ type RentalContext = Context<{ Bindings: Env }>
 const MAX_CART_ITEMS = 10
 const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const COUPON_CODE_RE = /^[A-Z0-9_-]{1,40}$/
 const LONG_TERM_RENTAL_DAYS = 30
 
 interface RentalTerm {
@@ -34,7 +35,7 @@ function cents(value: number): number {
 }
 
 function json(c: RentalContext, status: number, payload: Record<string, unknown>): Response {
-  return c.json(payload, status as never)
+  return c.json(payload, status as never, { 'Cache-Control': 'no-store' })
 }
 
 function id(prefix: string): string {
@@ -47,6 +48,11 @@ function numberValue(...values: unknown[]): number {
     if (Number.isFinite(parsed)) return parsed
   }
   return 0
+}
+
+function normalizeCouponCode(value: unknown): string {
+  const normalized = String(value || '').trim().toUpperCase()
+  return COUPON_CODE_RE.test(normalized) ? normalized : ''
 }
 
 function parseDeviceIds(body: Record<string, unknown>): string[] {
@@ -138,6 +144,22 @@ function halfDayIndex(date: string, period: string): number {
   return Math.round(Date.parse(`${date}T00:00:00Z`) / 86400000) * 2 + (period === 'PM' ? 1 : 0)
 }
 
+function melbourneMinutesNow(): number {
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Melbourne',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value || 0)
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value || 0)
+  return (hour === 24 ? 0 : hour) * 60 + minute
+}
+
+function rentalPeriodPassed(date: string, period: 'AM' | 'PM', today: string): boolean {
+  return date === today && melbourneMinutesNow() >= (period === 'AM' ? 12 * 60 : 23 * 60)
+}
+
 function periodsOverlap(startDate: string, startPeriod: string, endDate: string, endPeriod: string, otherStartDate: string, otherStartPeriod: string, otherEndDate: string, otherEndPeriod: string): boolean {
   const start = halfDayIndex(startDate, startPeriod)
   const end = halfDayIndex(endDate, endPeriod)
@@ -155,6 +177,11 @@ function termUsesPeriod(term: RentalTerm, date: string, period: 'AM' | 'PM'): bo
 
 async function checkCouponCustomerEligibility(c: RentalContext, coupon: Record<string, unknown>, customerId: string): Promise<string | null> {
   try {
+    const recipients = await c.env.RENT.prepare(
+      'SELECT customer_id FROM marketing_campaign_recipients WHERE upper(coupon_code) = upper(?) LIMIT 2',
+    ).bind(String(coupon.code || '')).all<{ customer_id?: unknown }>()
+    const targetedCustomers = recipients.results || []
+    if (targetedCustomers.length && !targetedCustomers.some((recipient) => String(recipient.customer_id || '') === customerId)) return '该优惠码仅限指定客户使用。'
     if (Number(coupon.new_customer_only)) {
       const paid = await c.env.RENT.prepare("SELECT id FROM orders WHERE userId = ? AND payment_status = 'PAID' LIMIT 1").bind(customerId).first()
       if (paid) return '该优惠码仅限新客户使用。'
@@ -378,16 +405,31 @@ async function createAdminNotifications(c: RentalContext, orderId: string, messa
   } catch { /* notifications must not undo a successfully created order */ }
 }
 
-export async function previewRentalCoupon(c: RentalContext, deviceIds: string[], days: number, code: string, terms?: unknown): Promise<Record<string, unknown>> {
-  if (!deviceIds.length || !code) return { ok: false, message: '请先选择设备、有效租期并输入优惠码。' }
+export async function previewRentalCoupon(c: RentalContext, deviceIds: string[], days: number, code: string, terms?: unknown, customerEmail = ''): Promise<Record<string, unknown>> {
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-coupon-preview', ip, 20, 60))) return { ok: false, message: '优惠码校验请求过于频繁，请稍后重试。' }
+  const couponCode = normalizeCouponCode(code)
+  if (!deviceIds.length || !couponCode) return { ok: false, message: '请先选择设备、有效租期并输入优惠码。' }
   const devices: Record<string, unknown>[] = []
   for (const deviceId of deviceIds.slice(0, MAX_CART_ITEMS)) {
     const device = await c.env.RENT.prepare('SELECT * FROM devices WHERE id = ?').bind(deviceId).first<Record<string, unknown>>()
     if (!device) return { ok: false, message: '购物车中有设备不存在或已下架。' }
     devices.push(device)
   }
-  const coupon = await c.env.RENT.prepare("SELECT * FROM coupons WHERE code = ? COLLATE NOCASE AND active = 1 AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP) AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP) AND (max_uses IS NULL OR used_count < max_uses)").bind(code.trim().toUpperCase().slice(0, 40)).first<Record<string, unknown>>()
+  const coupon = await c.env.RENT.prepare("SELECT * FROM coupons WHERE code = ? COLLATE NOCASE AND active = 1 AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP) AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP) AND (max_uses IS NULL OR used_count < max_uses)").bind(couponCode).first<Record<string, unknown>>()
   if (!coupon) return { ok: false, message: '优惠码无效、已过期或已达到使用次数上限。' }
+  try {
+    const recipients = await c.env.RENT.prepare(
+      'SELECT email FROM marketing_campaign_recipients WHERE upper(coupon_code) = upper(?) LIMIT 2',
+    ).bind(couponCode).all<{ email?: unknown }>()
+    const targetedCustomers = recipients.results || []
+    const normalizedEmail = String(customerEmail || '').trim().toLowerCase()
+    if (targetedCustomers.length && (!EMAIL_RE.test(normalizedEmail) || !targetedCustomers.some((recipient) => String(recipient.email || '').trim().toLowerCase() === normalizedEmail))) {
+      return { ok: false, message: '该优惠码仅限指定客户使用，请填写收件邮箱后重试。' }
+    }
+  } catch {
+    // Older deployments may not have the marketing recipient table yet.
+  }
   const hasPerDeviceTerms = terms !== undefined && terms !== null && terms !== ''
   const termMap = hasPerDeviceTerms ? parseDeviceTerms({ deviceTerms: terms }, deviceIds) : {}
   const fees = devices.map((device, index) => {
@@ -414,6 +456,7 @@ export async function previewRentalCoupon(c: RentalContext, deviceIds: string[],
 
 export async function handleRentalRequest(c: RentalContext, body: Record<string, unknown>): Promise<Response> {
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-rental-request', ip, 10, 600))) return json(c, 429, { ok: false, message: '提交请求过于频繁，请稍后重试。' })
   if (!(await verifyTurnstile(c, String(body['cf-turnstile-response'] || '')))) return json(c, 400, { ok: false, message: '人机验证失败，请重试。' })
 
   const deviceIds = parseDeviceIds(body)
@@ -426,12 +469,14 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const contactName = combinePersonName(firstName, lastName)
   const contactEmail = String(body.contactEmail || '').trim().toLowerCase().slice(0, 200)
   const contactPhone = String(body.contactPhone || '').trim().slice(0, 40)
-  const couponCode = String(body.couponCode || '').trim().toUpperCase().slice(0, 40)
+  const rawCouponCode = String(body.couponCode || '').trim()
+  const couponCode = normalizeCouponCode(rawCouponCode)
   const requestedPaymentMethod = String(body.paymentMethod || '').trim()
   const paymentMethod = requestedPaymentMethod === 'balance' ? 'balance' : 'card'
   const paymentProvider = requestedPaymentMethod === 'square' ? 'square' : paymentMethod === 'card' ? 'stripe' : 'internal'
   const refundMethod = 'original'
   const agreed = ['1', 'on', 'true', 'yes'].includes(String(body.agree || '').toLowerCase())
+  if (rawCouponCode && !couponCode) return json(c, 400, { ok: false, message: '优惠码格式无效。' })
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
   if (!firstName || !lastName || !contactPhone) return json(c, 400, { ok: false, message: '请填写名、姓和联系电话。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
@@ -478,11 +523,14 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     if (!term || !validDate(term.startDate) || !validDate(term.endDate)) return json(c, 400, { ok: false, message: '请为每台设备填写有效的取货和归还日期。' })
     const period = rentalDays(term.startDate, term.endDate, term.startPeriod, term.endPeriod)
     if (term.startDate < today || term.endDate < today || period.halfDays <= 0) return json(c, 400, { ok: false, message: '请选择有效的未来租期，归还时间必须晚于取货时间。' })
+    if (rentalPeriodPassed(term.startDate, term.startPeriod, today) || rentalPeriodPassed(term.endDate, term.endPeriod, today)) {
+      return json(c, 400, { ok: false, message: '所选取货或归还时段已截止（上午 12:00、下午 23:00），请改选下一可用时段。' })
+    }
     if (period.days < config.minimumRentalDays) return json(c, 400, { ok: false, message: `每台设备的最短租赁时间为 ${config.minimumRentalDays} 天。` })
     const device = await c.env.RENT.prepare('SELECT * FROM devices WHERE id = ?').bind(deviceId).first<Record<string, unknown>>()
     const lifecycle = String(device?.lifecycle_status || device?.lifecycleStatus || '').toUpperCase()
     const available = device && (String(device.status || '').toLowerCase() === 'available' || lifecycle === 'READY' || lifecycle === 'RESERVED')
-    if (!available) return json(c, 409, { ok: false, message: '购物车中有设备当前无法租赁，请移除后重试。' })
+    if (!available) return json(c, 409, { ok: false, message: `${String(device?.name || '该设备')} 当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。` })
     const deviceUnavailableDates = new Set<string>()
     const deviceUnavailableSlots = new Set<string>()
     try {

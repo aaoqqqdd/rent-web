@@ -11,6 +11,7 @@ function card(p: Product): string {
   const monthly = p.pricePerDay > 0 ? `$${monthlyRentalRate(p.pricePerDay, p.monthlyDiscountPercent)}/month` : '—'
   const chips = p.specs.slice(0, 5).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
+  const actionHref = p.available ? detailHref : `/about?subject=${encodeURIComponent(`咨询 ${p.name}`)}#contact`
   const searchText = [p.name, p.brand, p.model, p.categoryLabel, p.cpu, p.gpu, p.ram, p.storage, p.os, p.description].join(' ').toLowerCase()
   return /* html */ `
   <article class="card product-card" data-product data-category="${esc(p.category)}" data-available="${p.available ? 'true' : 'false'}" data-price="${p.pricePerDay}" data-name="${esc(p.name.toLowerCase())}" data-search="${esc(searchText)}">
@@ -31,7 +32,7 @@ function card(p: Product): string {
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}</div>` : ''}
     <div class="card-actions">
       <a class="btn btn-ghost" href="${detailHref}">查看详情</a>
-      <a class="btn btn-primary" href="${detailHref}">选择租期</a>
+      <a class="btn btn-primary" href="${actionHref}">${p.available ? '选择租期' : '预约咨询'}</a>
     </div>
   </article>`
 }
