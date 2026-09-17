@@ -281,8 +281,8 @@ function buildPolicyUpdateNotice(raw: string): { title: string; message: string;
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>\s*<p[^>]*>/gi, '\n')
     .replace(/<[^>]*>/g, '')
-  const match = decoded.match(/协议内容[：:]\s*([^。\n]+)/)
-  const policyName = (match?.[1] || '相关条款').trim()
+  const match = decoded.match(/协议内容[：:]\s*([^。\n]+)|更新[《「]([^》」]+)[》」]/)
+  const policyName = (match?.[1] || match?.[2] || '相关条款').trim()
   const title = `${policyName}协议内容已更新`
   const message = [
     `我们已更新《${policyName}》。`,
