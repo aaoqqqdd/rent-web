@@ -44,7 +44,7 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 
 配送报价只在服务器端调用 Zoom2u，浏览器不会接触 API token。未配置 `ZOOM2U_API_TOKEN` 时，网站继续使用原来的“审核时确认运费”流程。
 
-推荐在 rent 管理后台 `/admin/settings` 的「Zoom2u 配送 API 配置」中填写 API Token、Webhook Secret、配送管理 Token、取货地址和车辆参数。rent 与 geekslope-web 两个 Worker 必须配置相同的 `SETTINGS_ENCRYPTION_KEY`，官网会从共享 D1 读取并解密这些配置。
+推荐在 rent 管理后台 `/admin/settings` 的「Zoom2u 配送 API 配置」中填写 API Token、Webhook Secret、配送管理 Token、取货地址和车辆参数。rent 与 geekslope-web 两个 Worker 必须配置相同的 `SETTINGS_ENCRYPTION_KEY`，官网会从共享 D1 读取并解密这些配置。部署时还要保留 `wrangler.jsonc` 中的 `RENT_SERVICE -> rent` Service Binding；配送 Webhook 更新状态后，官网会通过该绑定请求 rent 发送客户邮件。
 
 旧版也支持通过 Worker Secret 配置（后台配置优先）：
 
@@ -67,7 +67,7 @@ curl -X POST https://<官网域名>/api/delivery/bookings \
   -d '{"orderId":"<ORDER_ID>","direction":"outbound"}'
 ```
 
-归还设备时将 `direction` 改为 `return`。在 Zoom2u 客户后台把 Webhook 地址登记为 `https://<官网域名>/api/delivery/webhooks/zoom2u`，并使用与 `ZOOM2U_WEBHOOK_SECRET` 对应的 Authorization secret。系统会把配送状态、追踪链接、照片和签名 URL 保存到共享 D1 的 `delivery_bookings` 表。
+归还设备时将 `direction` 改为 `return`。在 Zoom2u 客户后台把 Webhook 地址登记为 `https://<官网域名>/api/delivery/webhooks/zoom2u`，并使用与 `ZOOM2U_WEBHOOK_SECRET` 对应的 Authorization secret。系统会把配送状态、追踪链接、照片和签名 URL 保存到共享 D1 的 `delivery_bookings` 表。标准状态和特殊状态会在官网、租客中心和管理员页面显示中文说明；特殊状态会锁定更新/取消操作并返回错误消息。
 
 ## 注册 / 登录页（`/login`）
 

@@ -492,7 +492,7 @@ export async function createDeliveryBooking(
     const now = new Date().toISOString()
     const booking: StoredDeliveryBooking = {
       id: bookingId, orderId, direction, providerReference: reference,
-      trackingUrl: clean(payload['tracking-link'], 500), status: clean(payload.status, 80) || 'Booked',
+      trackingUrl: clean(payload['tracking-link'] || payload.trackingLink, 500), status: deliveryStatusInfo(clean(payload.status, 80) || 'Unassigned').key,
     }
     await c.env.RENT.prepare(
       `INSERT INTO delivery_bookings (id, order_id, direction, provider, provider_reference, purchase_order_number, tracking_url, status, price, provider_payload, created_at, updated_at)
@@ -529,10 +529,10 @@ export async function handleZoom2uWebhook(c: DeliveryContext): Promise<Response>
     const nextStatus = deliveryStatusInfo(clean(data.status, 100) || clean(payload?.type, 100) || 'Updated')
     await c.env.RENT.prepare(
       `UPDATE delivery_bookings
-       SET status = ?, tracking_url = ?, proof_of_delivery_url = ?, signature_url = ?, provider_payload = ?, updated_at = ?
+       SET status = ?, tracking_url = COALESCE(?, tracking_url), proof_of_delivery_url = COALESCE(?, proof_of_delivery_url), signature_url = COALESCE(?, signature_url), provider_payload = ?, updated_at = ?
        WHERE id = ?`,
     ).bind(
-      nextStatus.key, clean(data['tracking-link'], 500) || null,
+      nextStatus.key, clean(data['tracking-link'] || data.trackingLink || data.tracking_url, 500) || null,
       clean(data.proofOfDeliveryPhotoUrl, 500) || null, clean(data.signatureUrl, 500) || null,
       jsonPayload(payload), new Date().toISOString(), booking.id,
     ).run()
