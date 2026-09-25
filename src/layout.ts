@@ -98,6 +98,9 @@ ${renderSiteFooter(opts.contact)}
 (() => {
   var englishCopy = ${englishCopy};
   var englishPatterns = ${englishPatterns}.map(function (entry) { return [new RegExp(entry[0]), entry[1]]; });
+  var englishPhraseEntries = Object.keys(englishCopy)
+    .filter(function (source) { return source.length >= 2 && /\\p{Script=Han}/u.test(source); })
+    .sort(function (a, b) { return b.length - a.length; });
   var originalText = new WeakMap();
   var originalAttributes = new WeakMap();
   var originalTitle = document.title;
@@ -115,6 +118,13 @@ ${renderSiteFooter(opts.contact)}
     var translated = englishCopy[lookup] || '';
     for (var i = 0; !translated && i < englishPatterns.length; i += 1) {
       if (englishPatterns[i][0].test(lookup)) translated = lookup.replace(englishPatterns[i][0], englishPatterns[i][1]);
+    }
+    if (!translated) {
+      var partial = lookup;
+      englishPhraseEntries.forEach(function (source) {
+        if (partial.indexOf(source) >= 0) partial = partial.replaceAll(source, englishCopy[source]);
+      });
+      if (partial !== lookup) translated = partial;
     }
     if (!translated) return value;
     // A pattern's captured group (eg. a policy name inside a dynamic notice) is

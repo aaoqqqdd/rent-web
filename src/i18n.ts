@@ -273,7 +273,8 @@ export const ENGLISH_COPY: Record<string, string> = {
   // Supporting copy and longer explanations
   '01 / 交付前': '01 / Before delivery', '02 / 使用中': '02 / During rental', '03 / 归还时': '03 / At return', '04 / 归还后': '04 / After return',
   '下单页': 'Checkout', '下单页按实际日期即时估算': 'Estimated instantly from your selected dates', '先咨询': 'Ask first',
-  '专业': 'Professional', '推荐': 'Recommended', '热门': 'Popular', '台设备': 'devices',
+  '专业': 'Professional', '推荐': 'Recommended', '热门': 'Popular', '精选': 'Featured', '台设备': 'devices',
+  '灵活租期，按需计费': 'Flexible terms, pay as you go',
   '从选设备到归还，': 'From choosing a device to returning it,', '每一步都说清楚。': 'every step is clear.',
   '好设备不该成为，': 'Great equipment should not become', '创造力的门槛。': 'a barrier to creativity.',
   '实时库存 · 先审核后付款': 'Live inventory · reviewed before payment', '浏览设备库 →': 'Browse devices →',
@@ -429,6 +430,7 @@ export const ENGLISH_PATTERNS: Array<[string, string]> = [
   ['^(\\d+) 台设备 · (\\d+) 天 · 租金 \\$(\\d+\\.\\d{2}) · 优惠 -\\$(\\d+\\.\\d{2}) \\+ 押金 \\$(\\d+\\.\\d{2}) · 租金支付手续费 \\$(\\d+\\.\\d{2}) = 租金付款参考 \\$(\\d+\\.\\d{2})(（低于最短租期）)?$', '$1 device(s) · $2 day(s) · Rental $$$3 · discount -$$$4 + deposit $$$5 · rental payment fee $$$6 = rental payment reference $$$7$8'],
   ['^(\\d+) 台设备 · 合计 \\$(\\d+\\.\\d{2})/day · 押金 \\$(\\d+\\.\\d{2})$', '$1 device(s) · total $$$2/day · deposit $$$3'],
   ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，起租价格 \\$(.+)/day 起$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, with discounted daily rates from $$$1/day'],
+  ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，最低\\$(.+)/day起$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, with discounted daily rates from $$$1/day'],
   ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，灵活租期，按需计费$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, with flexible terms and pay-as-you-go pricing'],
   ['^© (\\d+) (.+)\\. 保留所有权利。$', '© $1 $2. All rights reserved.'],
   ['^购物车 — (.+)$', 'Cart — $1'], ['^结账 — (.+)$', 'Checkout — $1'],
