@@ -894,7 +894,7 @@ export function renderApply(data: ApplyData): string {
     return response.text().then(function (text) {
       var json;
       try { json = JSON.parse(text); } catch (_) {
-        throw new Error('支付服务返回了无法识别的响应（HTTP ' + response.status + '），请稍后重试或联系客服。');
+        throw new Error(uiCopy('支付服务返回了无法识别的响应（HTTP ' + response.status + '），请稍后重试或联系客服。'));
       }
       return { ok: response.ok, json: json };
     });
@@ -902,8 +902,8 @@ export function renderApply(data: ApplyData): string {
   function paymentError(error, fallback) {
     var message = error && error.message ? String(error.message) : '';
     return /failed to fetch|network ?error|load failed/i.test(message)
-      ? '无法连接支付服务，请检查网络后刷新页面重试。'
-      : (message || fallback);
+      ? uiCopy('无法连接支付服务，请检查网络后刷新页面重试。')
+      : uiCopy(message || fallback);
   }
   function formatFeePercentage(rate) {
     var value = Math.round(rate * 100 * 100) / 100;

@@ -17,7 +17,7 @@ export function renderGiftCards(data: GiftCardsData): string {
     <h1>把下一次升级，<em>送给值得的人。</em></h1>
     <p data-i18n="giftCardIntro">购买一张 GeekSlope Square eGift Card，用于设备租赁；也可以随时查询余额或给现有礼品卡加值。</p>
     <div class="hero-actions">
-      <a class="btn btn-primary btn-lg" href="${orderUrl}" target="_blank" rel="noopener" data-i18n="giftCardOpen">打开礼品卡页面 <span>↗</span></a>
+      <a class="btn btn-primary btn-lg" href="${orderUrl}" target="_blank" rel="noopener"><span data-i18n="giftCardOpen">打开礼品卡页面</span> <span>↗</span></a>
       <a class="btn btn-ghost btn-lg" href="/products" data-i18n="giftCardRent">查看租赁设备</a>
     </div>
   </div>

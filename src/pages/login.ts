@@ -149,7 +149,7 @@ export function renderLogin(data: LoginData): string {
   var doneMsg = document.getElementById('reg-done-msg');
 
   function fail(msg) {
-    errBox.textContent = msg;
+    errBox.textContent = window.GeekSlopeI18n ? window.GeekSlopeI18n.t(msg) : msg;
     errBox.hidden = false;
     errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -189,7 +189,7 @@ export function renderLogin(data: LoginData): string {
       .then(function (res) {
         if (res.j && res.j.ok) {
           form.hidden = true;
-          doneMsg.textContent = res.j.message || '账号已创建，请前往登录。';
+          doneMsg.textContent = window.GeekSlopeI18n ? window.GeekSlopeI18n.t(res.j.message || '账号已创建，请前往登录。') : (res.j.message || '账号已创建，请前往登录。');
           doneBox.hidden = false;
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return;
