@@ -55,10 +55,11 @@ function fromProvider(properties: Record<string, unknown>, type: string, id: unk
   return { placeId, text: formattedAddress, street, suburb, state, postcode, formattedAddress }
 }
 
-export async function autocompleteMelbourneAddresses(query: string, deliveryAreas: string[]): Promise<AddressSuggestion[]> {
+export async function autocompleteMelbourneAddresses(query: string, deliveryAreas: string[] | Promise<string[]>): Promise<AddressSuggestion[]> {
   const input = query.trim().slice(0, 120)
   if (input.length < 3) return []
   const headers = { Accept: 'application/json', 'User-Agent': 'GeekSlope-Web/1.0 Melbourne address search' }
+  const deliveryAreasPromise = Promise.resolve(deliveryAreas)
   const searchController = new AbortController()
   const providers: Array<(signal: AbortSignal) => Promise<AddressSuggestion[]>> = [
     async (signal) => {
@@ -67,7 +68,8 @@ export async function autocompleteMelbourneAddresses(query: string, deliveryArea
       clearTimeout(timeout)
       if (!response.ok) throw new Error(`Photon ${response.status}`)
       const data = await response.json() as { features?: Array<{ properties?: Record<string, unknown> }> }
-      return (data.features || []).map((feature) => fromProvider(feature.properties || {}, 'photon', feature.properties?.osm_id, deliveryAreas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
+      const areas = await deliveryAreasPromise
+      return (data.features || []).map((feature) => fromProvider(feature.properties || {}, 'photon', feature.properties?.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
     },
     async (signal) => {
       const timeout = setTimeout(() => searchController.abort(), PROVIDER_TIMEOUT_MS)
@@ -75,7 +77,8 @@ export async function autocompleteMelbourneAddresses(query: string, deliveryArea
       clearTimeout(timeout)
       if (!response.ok) throw new Error(`Nominatim ${response.status}`)
       const data = await response.json() as Array<{ address?: Record<string, unknown>; osm_type?: string; osm_id?: unknown; display_name?: string }>
-      return data.map((item) => fromProvider({ ...(item.address || {}), display_name: item.display_name }, item.osm_type || 'osm', item.osm_id, deliveryAreas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
+      const areas = await deliveryAreasPromise
+      return data.map((item) => fromProvider({ ...(item.address || {}), display_name: item.display_name }, item.osm_type || 'osm', item.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
     },
   ]
   try {
