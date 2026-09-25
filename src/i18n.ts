@@ -394,6 +394,68 @@ export const ENGLISH_COPY: Record<string, string> = {
   '订单进度与交付信息': 'Order progress and handover details',
   '输入订单编号和申请邮箱，可查看审核、签约、取货、租赁和退款状态。': 'Enter your order number and application email to check review, signing, collection, rental and refund status.',
   '查询一笔订单': 'Look up an order', '订单号和申请邮箱需要与提交时一致。': 'The order number and application email must match what you submitted.',
+
+  // Forms, order lookup and runtime feedback that must also work after a client-side
+  // language switch. Keep these exact source strings here so API responses and
+  // dynamically-created controls use the same catalogue as server-rendered copy.
+  '无法生成唯一用户 ID，请稍后重试': 'Could not generate a unique user ID. Please try again later.',
+  '请填写姓名、邮箱和密码。': 'Enter your name, email and password.',
+  '密码至少 8 位，且同时包含字母、数字和符号。': 'Use at least 8 characters with letters, numbers and symbols.',
+  '人机验证未通过，请重试。': 'Verification failed. Please try again.',
+  '注册请求过于频繁，请稍后再试。': 'Too many registration attempts. Please try again later.',
+  '该邮箱已注册，请直接登录。': 'This email is already registered. Please log in instead.',
+  '邀请码无效。': 'Invalid referral code.',
+  '账号创建成功，请使用该邮箱和密码登录。': 'Account created. Log in with this email and password.',
+  '注册失败，请稍后重试或直接联系客服。': 'Registration failed. Please try again later or contact us.',
+  '地址查询过于频繁，请稍后再试。': 'Too many address searches. Please try again later.',
+  '没有找到墨尔本地址，请继续输入或手工填写。': 'No Melbourne address was found. Continue typing or enter it manually.',
+  '信用卡验证暂不可用，请稍后重试。': 'Card verification is temporarily unavailable. Please try again later.',
+  '请求格式无效。': 'Invalid request format.',
+  '礼品卡查询过于频繁，请稍后再试。': 'Too many gift card lookups. Please try again later.',
+  '礼品卡验证失败，请检查卡号后重试。': 'Gift card verification failed. Check the card number and try again.',
+  '提交请求过于频繁，请稍后再试。': 'Too many submission attempts. Please try again later.',
+  '请求格式错误。': 'Invalid request.',
+  '请求来源无效。': 'Invalid request origin.',
+  '查询请求过于频繁，请 15 分钟后再试。': 'Too many lookup attempts. Please try again in 15 minutes.',
+  '请输入订单编号和申请邮箱。': 'Enter the order number and application email.',
+  '没有找到匹配的订单，请检查订单编号和邮箱。': 'No matching order was found. Check the order number and email.',
+  '订单查询暂不可用，请稍后重试。': 'Order lookup is temporarily unavailable. Please try again later.',
+  '这台设备不存在或已经下架。': 'This device does not exist or is no longer available.',
+  '查看网站最新通告和当前有效的租赁优惠码。': 'View the latest site announcements and current rental promo codes.',
+  '购买 GeekSlope Square 数字礼品卡、查询礼品卡余额，或给现有礼品卡加值。': 'Buy a GeekSlope Square digital gift card, check its balance, or reload an existing card.',
+  '电脑租赁流程、押金与配送说明': 'Computer rental process, deposits and delivery information',
+  '查看电脑租赁订单当前状态、合同、密码和取还详情。': 'View the current status, contract, credentials and handover details for a computer rental order.',
+
+  // Product detail and checkout copy.
+  '预约咨询': 'Enquire to reserve', '当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。': 'This device is available by enquiry only and cannot be submitted online. Remove it and contact a device adviser.',
+  '这台设备已经过基础功能检查，适合短期项目、学习、创作或临时替代使用。具体外观与随机配件以交付前确认为准。': 'This device has passed a basic functional check and suits short projects, study, creative work or temporary replacement use. Final condition and included accessories are confirmed before handover.',
+  '打开取货日期日历': 'Open pickup date calendar', '打开归还日期日历': 'Open return date calendar',
+  '请输入有效日期（格式：dd/mm/yyyy）。': 'Enter a valid date (format: dd/mm/yyyy).',
+  '日期不能早于今天。': 'The date cannot be before today.',
+  '该设备在此日期不可用，请选择其他日期。': 'This device is unavailable on this date. Choose another date.',
+  '上午取货/归还截止 12:00，下午时段截止 23:00，请改选下一可用日期。': 'Morning pickup/return closes at 12:00 and afternoon service closes at 23:00. Choose the next available date.',
+  '归还日期不能早于最短租期或今天。': 'The return date cannot be before today or the minimum rental term.',
+  '下单页会根据取还日期即时预估。月租展示价仅供长期租赁预算参考。': 'Checkout estimates the amount from your pickup and return dates. Monthly display rates are for long-term budgeting only.',
+  '归还后完成设备检查；无损坏、缺件或逾期费用时，押金按原支付方式退回。': 'The device is inspected after return; when there is no damage, missing item or overdue charge, the deposit is returned to the original payment method.',
+
+  '订单已审核通过，合同签署链接正在生成，请稍后刷新订单。': 'The order has been approved. The contract signing link is being generated; refresh the order shortly.', '临时账户密码': 'Temporary account password', 'Windows 用户名': 'Windows username', 'Windows 密码': 'Windows password', '请勿将密码分享给他人。': 'Do not share the password with anyone.',
+
+  // Checkout validation and payment service responses.
+  '（暂未开放）': '(Not currently available)', '以下设备可使用当前优惠码，选择后即可在结账时自动校验。': 'The promo code applies to the devices below. Select one to validate it at checkout.',
+  '该优惠码仅限指定客户使用。': 'This promo code is only available to selected customers.', '该优惠码仅限新客户使用。': 'This promo code is only available to new customers.', '您已达到该优惠码的最多使用次数。': 'You have reached the maximum uses for this promo code.',
+  '押金预授权失败，请更换信用卡后重试。': 'Deposit pre-authorisation failed. Try another card.', '押金预授权未完成，请更换信用卡后重试。': 'Deposit pre-authorisation was not completed. Try another card.',
+  'Stripe 尚未配置，请联系客服。': 'Stripe is not configured. Please contact us.', 'Stripe 配置不完整，请联系客服。': 'The Stripe configuration is incomplete. Please contact us.', 'Stripe 配置无效，请联系客服。': 'The Stripe configuration is invalid. Please contact us.', 'Stripe 请求失败': 'Stripe request failed', '信用卡验证信息无效，请重新验证。': 'The card verification details are invalid. Verify the card again.', '请先完成信用卡验证。': 'Complete card verification first.', 'Stripe 客户资料创建失败，请重试。': 'Could not create the Stripe customer profile. Please try again.', '信用卡支付当前未启用。': 'Card payments are currently unavailable.',
+  '优惠码校验请求过于频繁，请稍后重试。': 'Too many promo code checks. Please try again later.', '请先选择设备、有效租期并输入优惠码。': 'Select a device and valid rental term, then enter a promo code.', '购物车中有设备不存在或已下架。': 'A device in the cart no longer exists or is unavailable.', '优惠码无效、已过期或已达到使用次数上限。': 'The promo code is invalid, expired or has reached its usage limit.', '该优惠码仅限指定客户使用，请填写收件邮箱后重试。': 'This promo code is only available to selected customers. Enter the recipient email and try again.', '请为每台设备选择有效租期。': 'Choose a valid rental term for each device.', '请选择有效租期。': 'Choose a valid rental term.', '该优惠码不适用于购物车中的设备。': 'This promo code does not apply to the devices in the cart.', '人机验证失败，请重试。': 'Verification failed. Please try again.', '购物车中没有可提交的设备。': 'There are no eligible devices in the cart to submit.', '优惠码格式无效。': 'Invalid promo code format.', '邮箱格式不正确。': 'Enter a valid email address.', '请先填写并验证信用卡信息。': 'Enter and verify your card details first.', '信用卡验证失败，请重试。': 'Card verification failed. Please try again.', '账户余额支付当前未启用。': 'Account balance payment is currently unavailable.',
+  '墨尔本 CBD 门店（下单后客服确认具体地址）': 'Melbourne CBD store (the exact address is confirmed after applying)', '请选择有效的自取地点。': 'Choose a valid pickup location.', '请填写完整有效的澳洲送货地址。': 'Enter a complete and valid Australian delivery address.', '送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。': 'Delivery is limited to Melbourne and the configured service areas. Choose store pickup for other cities or suburbs.', '请为每台设备填写有效的取货和归还日期。': 'Enter valid pickup and return dates for each device.', '请选择有效的未来租期，归还时间必须晚于取货时间。': 'Choose a valid future rental term. The return time must be after pickup.', '所选取货或归还时段已截止（上午 12:00、下午 23:00），请改选下一可用时段。': 'The selected pickup or return period has closed (morning 12:00, afternoon 23:00). Choose the next available period.', '该账号当前无法下单，请联系客服。': 'This account cannot submit an application. Please contact us.', '账号创建失败，请稍后重试。': 'Could not create the account. Please try again later.', '账户余额不足以支付这笔申请。': 'The account balance is not enough for this application.', '请填写礼品卡并完成安全验证。': 'Enter the gift card details and complete verification.', '礼品卡验证或保存失败，请检查卡号后重试。': 'Gift card verification or saving failed. Check the card number and try again.', '信用卡无法用于押金预授权，请重新验证信用卡后重试。': 'This card cannot be used for deposit pre-authorisation. Verify another card and try again.', '订单创建失败，请稍后重试。': 'Could not create the order. Please try again later.', '管理员确认后会联系你安排签约与付款。': 'An administrator will contact you to arrange signing and payment after confirmation.', '账号已注册，': 'Account registered, ', '送货至': 'Deliver to', '自取点': 'Pickup point', '到店归还': 'Return in store',
+  '请填写优惠码。': 'Enter a promo code.', '无法连接支付服务，请检查网络后刷新页面重试。': 'Cannot connect to the payment service. Check your connection and refresh the page.', '待支付': 'Amount due', '包括': 'including ', '天。': ' days.', '验收后退还': 'Refunded after inspection', '先选租期': 'Choose a rental term', '并查看': 'and view', '选择后加入购物车，之后仍可在购物车中修改。': 'After choosing, add it to the cart; you can still change it in the cart.',
+
+  // Order statuses and short values returned by the shared rental database.
+  '草稿': 'Draft', '审核中': 'Under review', '已确认': 'Confirmed', '待付款': 'Awaiting payment', '待签署': 'Awaiting signature', '待退款': 'Awaiting refund', '已付款': 'Paid', '待取货': 'Awaiting pickup', '租赁中': 'On rent', '租赁中（已延期）': 'On rent (extended)', '租赁逾期': 'Overdue', '租赁已暂停': 'Suspended', '待归还': 'Awaiting return', '已归还': 'Returned', '已完成': 'Completed', '已取消': 'Cancelled', '已签署': 'Signed', '已过期': 'Expired', '处理中': 'Processing', '付款失败': 'Payment failed', '已退款': 'Refunded', '无需押金': 'No deposit required', '已支付': 'Paid', '已收取，待归还验机': 'Collected, awaiting return inspection', '部分扣除': 'Partially deducted', '部分已退款': 'Partially refunded', '已扣除': 'Deducted', '已确认 · 待签署': 'Confirmed · awaiting signature', '已签署 · 待取货': 'Signed · awaiting pickup', '付款后生成': 'Created after payment',
+
+  // Shared labels and fallback values used by database-backed copy.
+  '相关条款': 'the relevant terms', '如果您不同意更新后的内容，请停止使用相关服务，并可通过联系我们获取进一步协助。': 'If you do not agree with the updated content, please stop using the relevant services. Contact us for further assistance.', '最新通告': 'Latest announcement', '百分比折扣': 'percentage discount', '固定金额折扣': 'fixed amount discount', '指定设备适用': 'applies to selected devices', '送货上门仅限墨尔本 CBD 及周边地区，运费由客服在审核时确认。': 'Delivery is limited to Melbourne CBD and nearby areas; fees are confirmed during review.', '尽快联系客服并提供订单编号。付款前取消不涉及退款；已付款订单会按订单状态、已签合同和退款政策处理。': 'Contact us as soon as possible and provide your order number. Cancellation before payment does not involve a refund; paid orders are handled according to their status, signed contract and refund policy.', '租赁关键信息': 'Key rental information', '租期选择说明': 'Choosing a rental term', '澳大利亚地图，墨尔本本地配送范围': 'Map of Australia showing the local Melbourne delivery area', '邮件询价表单': 'Email enquiry form', '待定': 'To be confirmed', '账号密码': 'Account password',
+  '你的订单': 'Your order', '购物车，0 件设备': 'Cart, 0 devices', '墨尔本电脑租赁服务': 'Melbourne computer rental service', '电脑、游戏本与工作站租赁': 'Computer, gaming laptop and workstation rental', '墨尔本电脑租赁设备库': 'Melbourne computer rental catalogue', '墨尔本 CBD 及周边地区': 'Melbourne CBD and nearby areas', '墨尔本 CBD': 'Melbourne CBD',
+
 }
 
 // Dynamic values are handled after exact-copy lookup. Keep these rules specific so
@@ -430,7 +492,7 @@ export const ENGLISH_PATTERNS: Array<[string, string]> = [
   ['^(\\d+) 台设备 · (\\d+) 天 · 租金 \\$(\\d+\\.\\d{2}) · 优惠 -\\$(\\d+\\.\\d{2}) \\+ 押金 \\$(\\d+\\.\\d{2}) · 租金支付手续费 \\$(\\d+\\.\\d{2}) = 租金付款参考 \\$(\\d+\\.\\d{2})(（低于最短租期）)?$', '$1 device(s) · $2 day(s) · Rental $$$3 · discount -$$$4 + deposit $$$5 · rental payment fee $$$6 = rental payment reference $$$7$8'],
   ['^(\\d+) 台设备 · 合计 \\$(\\d+\\.\\d{2})/day · 押金 \\$(\\d+\\.\\d{2})$', '$1 device(s) · total $$$2/day · deposit $$$3'],
   ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，起租价格 \\$(.+)/day 起$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, with discounted daily rates from $$$1/day'],
-  ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，最低\\$(.+)/day起$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, with discounted daily rates from $$$1/day'],
+  ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，最低\\$(.+)/天起$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, with discounted daily rates from $$$1/day'],
   ['^给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，灵活租期，按需计费$', 'Computers for coursework, short projects, gaming weekends and creative sprints. Specifications and inventory are live, with flexible terms and pay-as-you-go pricing'],
   ['^© (\\d+) (.+)\\. 保留所有权利。$', '© $1 $2. All rights reserved.'],
   ['^购物车 — (.+)$', 'Cart — $1'], ['^结账 — (.+)$', 'Checkout — $1'],

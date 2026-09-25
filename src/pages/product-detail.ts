@@ -160,9 +160,11 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var pastDateMessage = '日期不能早于今天。';
   var unavailableDateMessage = '该设备在此日期不可用，请选择其他日期。';
   var cutoffMessage = '上午取货/归还截止 12:00，下午时段截止 23:00，请改选下一可用日期。';
+  var localize = function (value) { return window.GeekSlopeI18n ? window.GeekSlopeI18n.t(value) : value; };
+  var englishCalendar = function () { return window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en'; };
   var currentMelbourneMinutes = function () { var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()); var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0); };
   var periodPassed = function (value, period) { return value === today && currentMelbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60); };
-  var showDateMessage = function (message, isError) { if (dateMessage) { dateMessage.textContent = message || ''; dateMessage.dataset.state = isError ? 'error' : ''; } };
+  var showDateMessage = function (message, isError) { if (dateMessage) { dateMessage.textContent = message ? localize(message) : ''; dateMessage.dataset.state = isError ? 'error' : ''; } };
   var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
   var clearChildren = function (node) { while (node && node.firstChild) node.removeChild(node.firstChild); };
   var isUnavailable = function (value) {
@@ -192,14 +194,16 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var monthIndex = month.getMonth();
     clearChildren(picker);
     var head = document.createElement('div'); head.className = 'date-picker-head';
-    var title = document.createElement('strong'); title.textContent = year + '年' + (monthIndex + 1) + '月';
+    var title = document.createElement('strong'); title.textContent = englishCalendar()
+      ? new Intl.DateTimeFormat('en-AU', { month: 'long', year: 'numeric' }).format(month)
+      : year + '年' + (monthIndex + 1) + '月';
     var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'date-picker-nav'; previous.textContent = '‹';
     var next = document.createElement('button'); next.type = 'button'; next.className = 'date-picker-nav'; next.textContent = '›';
     previous.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); var month = new Date(year, monthIndex - 1, 1); if (openPickerState) openPickerState.month = month; renderPicker(picker, input, toggle, role, month); });
     next.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); var month = new Date(year, monthIndex + 1, 1); if (openPickerState) openPickerState.month = month; renderPicker(picker, input, toggle, role, month); });
     head.append(previous, title, next); picker.appendChild(head);
     var week = document.createElement('div'); week.className = 'date-picker-week';
-    ['一', '二', '三', '四', '五', '六', '日'].forEach(function (label) { var cell = document.createElement('span'); cell.textContent = label; week.appendChild(cell); });
+    (englishCalendar() ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['一', '二', '三', '四', '五', '六', '日']).forEach(function (label) { var cell = document.createElement('span'); cell.textContent = label; week.appendChild(cell); });
     picker.appendChild(week);
     var grid = document.createElement('div'); grid.className = 'date-picker-grid';
     var first = new Date(year, monthIndex, 1); var offset = (first.getDay() + 6) % 7;
@@ -240,8 +244,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       setDateValue(start, startValue);
     }
     if (!startValue) {
-      start.setCustomValidity(invalidDateMessage);
-      end.setCustomValidity(invalidDateMessage);
+      start.setCustomValidity(localize(invalidDateMessage));
+      end.setCustomValidity(localize(invalidDateMessage));
       showDateMessage(invalidDateMessage, true);
       return;
     }
@@ -250,7 +254,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       setDateValue(start, startValue);
     }
     var startError = startValue < start.min ? pastDateMessage : periodPassed(startValue, 'AM') ? cutoffMessage : isUnavailable(startValue) ? unavailableDateMessage : '';
-    start.setCustomValidity(startError);
+    start.setCustomValidity(startError ? localize(startError) : '');
     end.min = nextAvailable(addDays(startValue, minimumDays));
     end.dataset.minIso = end.min;
     var endValue = readDateValue(end);
@@ -259,7 +263,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       setDateValue(end, endValue);
     }
     var endError = !endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : periodPassed(endValue, 'AM') ? cutoffMessage : isUnavailable(endValue) ? unavailableDateMessage : '';
-    end.setCustomValidity(endError);
+    end.setCustomValidity(endError ? localize(endError) : '');
     showDateMessage(startError || endError, Boolean(startError || endError));
   };
   start.min = today; setDateValue(start, start.min);
@@ -277,6 +281,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   endToggle.addEventListener('click', function () { openPicker(endPicker, end, endToggle, 'end'); });
   start.addEventListener('focus', function () { openPicker(startPicker, start, startToggle, 'start'); });
   end.addEventListener('focus', function () { openPicker(endPicker, end, endToggle, 'end'); });
+  window.addEventListener('geekslope:language-change', function () { applyDateRules(false); refreshOpenPicker(); });
   document.addEventListener('click', function (event) {
     [
       [startPicker, startToggle],

@@ -63,7 +63,7 @@ export interface Env {
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
 const CSS_TTL = 86400
-const HTML_CACHE_VERSION = '20260913-pricing-display-v16'
+const HTML_CACHE_VERSION = '20260926-i18n-v17'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -578,10 +578,10 @@ async function renderLoginPage(
   return c.html(html, (opts.status ?? 200) as 200, { 'cache-control': 'private, no-store' })
 }
 
-app.get('/login', (c) => c.redirect(`${appUrl(c.env)}/login`, 302))
+app.get('/login', (c) => renderLoginPage(c, {}))
 
 // rent 主应用里 /register 是独立注册页；这里统一收敛到本站的 /login 页注册面板。
-app.get('/register', (c) => c.redirect(`${appUrl(c.env)}/login`, 302))
+app.get('/register', (c) => renderLoginPage(c, { tab: 'register' }))
 
 const LEGAL_PAGES: Array<{
   paths: string[]

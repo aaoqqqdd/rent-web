@@ -103,6 +103,7 @@ ${renderSiteFooter(opts.contact)}
     .sort(function (a, b) { return b.length - a.length; });
   var originalText = new WeakMap();
   var originalAttributes = new WeakMap();
+  var i18nTextNodes = new WeakMap();
   var originalTitle = document.title;
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
@@ -131,6 +132,7 @@ ${renderSiteFooter(opts.contact)}
     // copied into the replacement as-is; translate any Chinese it still carries.
     translated = translated.replace(/\\p{Script=Han}+/gu, function (segment) { return englishCopy[segment] || segment; });
     return translated
+      .replaceAll('、', ', ')
       .replaceAll('墨尔本 CBD 及周边地区', 'Melbourne CBD and nearby areas')
       .replaceAll('墨尔本 CBD', 'Melbourne CBD')
       .replaceAll('墨尔本', 'Melbourne');
@@ -173,7 +175,7 @@ ${renderSiteFooter(opts.contact)}
     navProducts: ['产品目录', 'Products'], navGiftCards: ['礼品卡', 'Gift cards'], navGuide: ['租赁说明', 'Rental guide'], navAbout: ['关于我们', 'About us'], navLookup: ['订单查询', 'Order Details'],
     cart: ['购物车', 'Cart'], account: ['账号中心', 'Account'], footerIntro: ['为学习、工作、创作和临时项目提供可靠的电脑租赁。先看实时设备，再按实际使用时间申请。', 'Reliable computer rentals for study, work, creative projects and short-term needs. Browse live inventory and apply for the time you need.'],
     footerProducts: ['产品', 'Products'], gaming: ['游戏笔记本', 'Gaming laptops'], ultrabook: ['轻薄商务本', 'Ultrabooks'], workstation: ['台式工作站', 'Workstations'], allProducts: ['全部产品', 'All products'], giftCards: ['礼品卡', 'Gift cards'],
-    footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help'],
+    footerServices: ['服务', 'Services'], rentalGuide: ['租赁说明', 'Rental guide'], faq: ['常见问题', 'FAQ'], contactUs: ['联系我们', 'Contact us'], terms: ['条款', 'Legal'], userTerms: ['用户协议', 'User terms'], serviceTerms: ['服务条款', 'Service terms'], refundPolicy: ['退款政策', 'Refund policy'], privacy: ['隐私政策', 'Privacy'], cookiePolicy: ['Cookie 政策', 'Cookie policy'], footerContact: ['联系我们', 'Contact'], getHelp: ['获取帮助', 'Get help'],
     giftCardEyebrow: ['GEEKSLOPE · 礼品卡', 'GEEKSLOPE · Gift cards'], giftCardIntro: ['购买一张 GeekSlope Square eGift Card，用于设备租赁；也可以随时查询余额或给现有礼品卡加值。', 'Buy a GeekSlope Square eGift Card for device rentals, or check and reload an existing card anytime.'], giftCardOpen: ['打开礼品卡页面', 'Open gift card page'], giftCardRent: ['查看租赁设备', 'View rental devices'],
     giftCardKicker: ['SQUARE EGIFT CARD', 'SQUARE EGIFT CARD'], giftCardHeading: ['三个入口，一个礼品卡页面', 'Three actions, one gift card page'], giftCardDescription: ['Square 托管支付、收件人与礼品卡交付。点击任一入口后，会在 Square 页面完成对应操作。', 'Square handles payment, recipient details and delivery. Select an action to continue on Square.'],
     giftCardBuy: ['购买礼品卡', 'Buy a gift card'], giftCardCheck: ['查询余额', 'Check balance'], giftCardAdd: ['给礼品卡加值', 'Add money'],
@@ -212,6 +214,19 @@ ${renderSiteFooter(opts.contact)}
         .replace(/\\n/g, '<br>');
     });
   }
+  function setI18nText(element, value) {
+    // Keep inline icons, counters and arrows intact when a translated element
+    // contains child elements (for example, the gift-card CTA arrow).
+    var saved = i18nTextNodes.get(element);
+    if (!saved || !element.contains(saved.node)) {
+      var textNode = Array.prototype.slice.call(element.childNodes).find(function (node) { return node.nodeType === Node.TEXT_NODE && /\S/.test(node.nodeValue || ''); });
+      if (!textNode) { element.textContent = value; return; }
+      var source = textNode.nodeValue || '';
+      saved = { node: textNode, prefix: (source.match(/^\s*/) || [''])[0], suffix: (source.match(/\s*$/) || [''])[0] };
+      i18nTextNodes.set(element, saved);
+    }
+    saved.node.nodeValue = saved.prefix + value + saved.suffix;
+  }
   function renderAnnouncementNotice(notice) {
     var announcement = document.querySelector('[data-site-announcement]');
     if (!announcement || !notice) return;
@@ -238,7 +253,7 @@ ${renderSiteFooter(opts.contact)}
     document.documentElement.lang = english ? 'en-AU' : 'zh-CN';
     document.querySelectorAll('[data-i18n]').forEach(function (node) {
       var key = node.getAttribute('data-i18n'); var value = translations[key];
-      if (value) node.textContent = value[english ? 1 : 0];
+      if (value) setI18nText(node, value[english ? 1 : 0]);
     });
     document.querySelectorAll('[data-i18n-attr]').forEach(function (node) {
       String(node.getAttribute('data-i18n-attr') || '').split(',').forEach(function (item) { var parts = item.split(':'); var value = translations[parts[1]]; if (value) node.setAttribute(parts[0], value[english ? 1 : 0]); });
@@ -252,6 +267,8 @@ ${renderSiteFooter(opts.contact)}
     document.title = english ? englishFor(originalTitle) : originalTitle;
     var descriptionMeta = document.querySelector('meta[name="description"]');
     if (descriptionMeta) descriptionMeta.setAttribute('content', english ? englishFor(originalDescription) : originalDescription);
+    var openGraphLocale = document.querySelector('meta[property="og:locale"]');
+    if (openGraphLocale) openGraphLocale.setAttribute('content', english ? 'en_AU' : 'zh_CN');
     try { localStorage.setItem('geekslope-language', english ? 'en' : 'zh'); } catch (_) {}
     window.dispatchEvent(new CustomEvent('geekslope:language-change', { detail: { language: currentLanguage } }));
   }
