@@ -573,6 +573,8 @@ export function renderApply(data: ApplyData): string {
   var addressStatus = document.getElementById('address-search-status');
   var addressTimer = null;
   var addressRequest = null;
+  var addressCache = new Map();
+  var addressRequestSequence = 0;
   var activeAddressSuggestion = -1;
   var activeInlineErrors = [];
 
@@ -693,19 +695,29 @@ export function renderApply(data: ApplyData): string {
       window.clearTimeout(addressTimer);
       if (addressRequest) addressRequest.abort();
       var query = addressSearch.value.trim();
+      var requestSequence = ++addressRequestSequence;
       if (query.length < 3) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入至少 3 个字符开始联想。'); return; }
+      var cachedSuggestions = addressCache.get(query.toLowerCase());
+      if (cachedSuggestions) {
+        renderAddressSuggestions(cachedSuggestions);
+        setAddressStatus(cachedSuggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', cachedSuggestions.length ? 'ready' : 'empty');
+        return;
+      }
       setAddressStatus('正在查找墨尔本地址…', 'loading');
       addressTimer = window.setTimeout(function () {
         addressRequest = new AbortController();
         fetch('/api/address/autocomplete?q=' + encodeURIComponent(query), { headers: { Accept: 'application/json' }, signal: addressRequest.signal })
           .then(readJsonResponse)
           .then(function (result) {
+            if (requestSequence !== addressRequestSequence) return;
             if (!result.ok) throw new Error((result.json && result.json.error) || '地址联想暂时不可用。');
-            renderAddressSuggestions(result.json.suggestions || []);
-            setAddressStatus(result.json.suggestions && result.json.suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', result.json.suggestions && result.json.suggestions.length ? 'ready' : 'empty');
+            var suggestions = result.json.suggestions || [];
+            addressCache.set(query.toLowerCase(), suggestions);
+            renderAddressSuggestions(suggestions);
+            setAddressStatus(suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', suggestions.length ? 'ready' : 'empty');
           })
           .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(''); showFormError(error.message || '地址联想暂时不可用，请手工填写。', addressSearch); } });
-      }, 300);
+      }, 180);
     });
     addressSearch.addEventListener('keydown', function (event) {
       var options = addressSuggestions.querySelectorAll('button[role="option"]');

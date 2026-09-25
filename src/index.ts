@@ -219,11 +219,26 @@ app.get('/api/device-availability', async (c) => {
 app.get('/api/address/autocomplete', async (c) => {
   const query = String(c.req.query('q') || '').trim()
   if (query.length < 3) return c.json({ suggestions: [] }, 200, { 'cache-control': 'no-store' })
+  const cacheUrl = new URL(c.req.url)
+  cacheUrl.searchParams.set('__address_cache_v', '2')
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
+  const cache = caches.default
+  const cached = await cache.match(cacheKey)
+  if (cached) return cached
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
   if (!(await enforceRateLimit(c.env, 'web-address-autocomplete', ip, 30, 60))) return c.json({ error: '地址查询过于频繁，请稍后再试。' }, 429)
   const config = await getRentalConfig(c.env)
   const suggestions = await autocompleteMelbourneAddresses(query, config.deliveryAreas)
-  return c.json({ suggestions, message: suggestions.length ? undefined : '没有找到墨尔本地址，请继续输入或手工填写。' }, 200, { 'cache-control': 'no-store' })
+  const payload = JSON.stringify({ suggestions, message: suggestions.length ? undefined : '没有找到墨尔本地址，请继续输入或手工填写。' })
+  const response = new Response(payload, {
+    status: 200,
+    headers: {
+      'content-type': 'application/json; charset=UTF-8',
+      'cache-control': 'public, max-age=300, s-maxage=900',
+    },
+  })
+  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()))
+  return response
 })
 
 app.post('/api/delivery/quote', async (c) => {
