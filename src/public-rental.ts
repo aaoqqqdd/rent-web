@@ -4,6 +4,7 @@ import { combinePersonName, enforceRateLimit, ensurePersonNameColumns, generateT
 import { isMelbourneAddress } from './address'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
+import { markDeliveryQuoteUsed, validateDeliveryQuote } from './delivery'
 
 type RentalContext = Context<{ Bindings: Env }>
 
@@ -464,6 +465,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (deviceIds.length > MAX_CART_ITEMS) return json(c, 400, { ok: false, message: `单次最多提交 ${MAX_CART_ITEMS} 台设备。` })
   const deviceTerms = parseDeviceTerms(body, deviceIds)
   const deliveryMethod = body.deliveryMethod === 'Delivery' ? 'Delivery' : 'Pickup'
+  const deliveryQuoteId = String(body.deliveryQuoteId || '').trim()
   const firstName = sanitizePlainText(body.firstName, 100)
   const lastName = sanitizePlainText(body.lastName, 100)
   const contactName = combinePersonName(firstName, lastName)
@@ -580,6 +582,13 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     rentalPlans.set(deviceId, { term, period })
   }
 
+  let deliveryFee = 0
+  if (deliveryMethod === 'Delivery') {
+    const quote = await validateDeliveryQuote(c, deliveryQuoteId, location, deviceIds.length)
+    if (!quote.ok) return json(c, 400, { ok: false, message: quote.message })
+    deliveryFee = quote.price
+  }
+
   const fees = devices.map((device) => calculateRentalFee(device, rentalPlans.get(String(device.id))!.period.days))
   const discounts = devices.map(() => 0)
   let coupon: Record<string, unknown> | null = null
@@ -621,7 +630,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     if (eligibilityError) return json(c, 400, { ok: false, message: eligibilityError })
   }
   const accountEligible = String(user.account_type || 'formal') === 'formal' && String(user.role || 'CUSTOMER') === 'CUSTOMER'
-  const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], 0)
+  const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], deliveryFee)
   if (paymentMethod === 'balance' && (!accountEligible || numberValue(user.balance) < totalBeforePayment)) return json(c, 400, { ok: false, message: '账户余额不足以支付这笔申请。' })
   let squareGiftCardId = ''
   if (paymentProvider === 'square') {
@@ -651,6 +660,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
 
   const batch = id('web')
   const orderIds: string[] = []
+  const sharedDeliveryFee = devices.length ? Number((deliveryFee / devices.length).toFixed(2)) : 0
   let depositAuthError = ''
   try {
     for (let index = 0; index < devices.length; index += 1) {
@@ -659,12 +669,15 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       const orderId = id('o')
       const orderNo = `OD-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().replaceAll('-', '').slice(0, 6).toUpperCase()}`
       const deposit = numberValue(device.depositAmount, device.deposit_amount)
-      const total = Number((fees[index] + deposit - discounts[index]).toFixed(2))
+      const orderDeliveryFee = index === devices.length - 1
+        ? Number((deliveryFee - sharedDeliveryFee * Math.max(0, devices.length - 1)).toFixed(2))
+        : sharedDeliveryFee
+      const total = Number((fees[index] + deposit + orderDeliveryFee - discounts[index]).toFixed(2))
       const note = `【官网申请 ${batch}】联系人：${contactName} / 电话：${contactPhone} / ${deliveryMethod === 'Delivery' ? '送货至' : '自取点'}：${location}${body.rentalNote ? `\n客户备注：${String(body.rentalNote).trim().slice(0, 350)}` : ''}`.slice(0, 500)
       await c.env.RENT.prepare(
         `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupTimeSlot, returnTimeSlot, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, 0, ?, ?, ?, ?)`,
-      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, null, null, location, deliveryMethod, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, ?, ?, ?, ?, ?)`,
+      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, null, null, location, deliveryMethod, orderDeliveryFee, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
       orderIds.push(orderId)
       // payment_provider 在共享主站中区分 Stripe 卡与礼品卡；旧数据库没有该列时，
       // 保留 card / balance 的历史兼容路径，但不能静默丢弃客户明确选择的 Square。
@@ -700,15 +713,20 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     if (orderIds.length) await c.env.RENT.batch(orderIds.map((orderId) => c.env.RENT.prepare('DELETE FROM orders WHERE id = ?').bind(orderId)))
     return json(c, 402, { ok: false, message: depositAuthError })
   }
+  try {
+    await markDeliveryQuoteUsed(c, deliveryQuoteId)
+  } catch (error) {
+    console.error('Delivery quote finalization failed', error)
+  }
   const totalRent = fees.reduce((sum, fee) => sum + fee, 0)
   const totalDeposit = devices.reduce((sum, device) => sum + numberValue(device.depositAmount, device.deposit_amount), 0)
   const totalDiscount = discounts.reduce((sum, discount) => sum + discount, 0)
-  await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
+  await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${deliveryFee ? `，配送费 AUD$${deliveryFee.toFixed(2)}` : ''}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
   const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
   const paymentBreakdown = paymentProvider === 'stripe'
     ? firstOrder?.deposit_payment_mode === 'PREAUTH'
-      ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
-      : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金 AUD$${(totalRent - totalDiscount).toFixed(2)} 将在审核通过后自动从同一张卡扣取。`
+      ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权；租金${deliveryFee ? `及配送费合计 AUD$${(totalRent + deliveryFee - totalDiscount).toFixed(2)}` : ` AUD$${(totalRent - totalDiscount).toFixed(2)}`} 将在审核通过后自动从同一张卡扣取。`
+      : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金${deliveryFee ? `及配送费合计 AUD$${(totalRent + deliveryFee - totalDiscount).toFixed(2)}` : ` AUD$${(totalRent - totalDiscount).toFixed(2)}`} 将在审核通过后自动从同一张卡扣取。`
     : paymentProvider === 'square'
       ? firstOrder?.deposit_payment_mode === 'PREAUTH'
         ? `礼品卡将在审核通过并签约后用于支付租金及服务费；押金 AUD$${totalDeposit.toFixed(2)} 已在另一张信用卡上预授权。`

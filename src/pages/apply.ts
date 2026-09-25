@@ -11,6 +11,7 @@ interface ApplyData {
   appUrl: string
   turnstileSiteKey: string
   squareGiftCardConfig: { applicationId: string; locationId: string; environment: 'sandbox' | 'production'; squareProcessingFeeRate: number } | null
+  deliveryQuoteEnabled: boolean
 }
 
 function scriptJson(value: unknown): string {
@@ -276,7 +277,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
 }
 
 export function renderApply(data: ApplyData): string {
-  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardConfig } = data
+  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardConfig, deliveryQuoteEnabled } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
   const deliveryAreas = config.deliveryAreas.join('、')
@@ -376,6 +377,7 @@ export function renderApply(data: ApplyData): string {
               </div>
               <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
               <p class="hint">${esc(config.deliveryNote)}${deliveryAreas ? `<br>可配送区域：${esc(deliveryAreas)}` : ''}</p>
+              ${deliveryQuoteEnabled ? '<input type="hidden" id="deliveryQuoteId" name="deliveryQuoteId"><p class="hint" id="delivery-quote-hint" aria-live="polite">填写完整地址后，我们会实时获取配送报价。</p>' : '<p class="hint">运费会在审核时确认。</p>'}
             </div>
           </div>
 
@@ -486,6 +488,8 @@ export function renderApply(data: ApplyData): string {
   var AVAILABILITY_FAILED = false;
   var DELIVERY_AREAS = ${scriptJson(config.deliveryAreas)};
   var COUPON_ENDPOINT = '/api/coupons/rental-cart-preview';
+  var DELIVERY_QUOTE_ENDPOINT = '/api/delivery/quote';
+  var DELIVERY_QUOTE_ENABLED = ${deliveryQuoteEnabled ? 'true' : 'false'};
   var productMap = new Map(PRODUCTS.map(function (product) { return [product.id, product]; }));
   window.__GeekSlopeCartValidProductIds = PRODUCTS.map(function (product) { return product.id; });
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -522,6 +526,12 @@ export function renderApply(data: ApplyData): string {
   var deliveryFields = document.getElementById('delivery-fields');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
+  var deliveryQuoteId = '';
+  var deliveryQuoteAmount = 0;
+  var deliveryQuoteSpeed = 'Same day';
+  var deliveryQuoteMessage = '';
+  var deliveryQuoteState = DELIVERY_QUOTE_ENABLED ? 'idle' : 'disabled';
+  var deliveryQuoteTimer = 0;
   var couponState = 'empty';
   var checkoutBlocked = false;
   var stripe = null;
@@ -785,13 +795,15 @@ export function renderApply(data: ApplyData): string {
   }
   function calculateRentalPayable() {
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
+    var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
+    var paymentBase = Math.max(0, rentTotal + deliveryFee - appliedDiscount);
     var paymentFee = selectedPaymentMethod === 'card'
-      ? Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100
+      ? Math.round(paymentBase * stripeFeeRate * 100) / 100
       : selectedPaymentMethod === 'square'
-        ? Math.round(Math.max(0, rentTotal - appliedDiscount) * squareProcessingFeeRate * 100) / 100
+        ? Math.round(paymentBase * squareProcessingFeeRate * 100) / 100
         : 0;
-    return Math.max(0, rentTotal - appliedDiscount) + paymentFee;
+    return paymentBase + paymentFee;
   }
   function refreshSummary() {
     updatePaymentMethodNote();
@@ -799,14 +811,16 @@ export function renderApply(data: ApplyData): string {
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
-    var total = Math.max(0, rentTotal + depositTotal - appliedDiscount);
+    var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
+    var total = Math.max(0, rentTotal + depositTotal + deliveryFee - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
+    var paymentBase = Math.max(0, rentTotal + deliveryFee - appliedDiscount);
     var paymentFee = selectedPaymentMethod === 'card'
-      ? Math.round(Math.max(0, rentTotal - appliedDiscount) * stripeFeeRate * 100) / 100
+      ? Math.round(paymentBase * stripeFeeRate * 100) / 100
       : selectedPaymentMethod === 'square'
-        ? Math.round(Math.max(0, rentTotal - appliedDiscount) * squareProcessingFeeRate * 100) / 100
-      : 0;
-    var rentalPayable = Math.max(0, rentTotal - appliedDiscount) + paymentFee;
+        ? Math.round(paymentBase * squareProcessingFeeRate * 100) / 100
+        : 0;
+    var rentalPayable = paymentBase + paymentFee;
     var giftCardDeduction = selectedPaymentMethod === 'square' && squareGiftCardBalance !== null
       ? Math.min(squareGiftCardBalance, rentalPayable)
       : 0;
@@ -823,6 +837,7 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
+      + (method.value === 'Delivery' ? summaryRow(uiText('配送费', 'Delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : uiText('待报价', 'Quote pending')) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
       + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '')
       + (selectedPaymentMethod === 'square' && squareGiftCardVerified ? summaryRow(uiText('礼品卡预计扣减', 'Estimated gift card deduction'), '-$' + giftCardDeduction.toFixed(2), 'summary-discount') : '')
@@ -1165,15 +1180,74 @@ export function renderApply(data: ApplyData): string {
       var message = paymentError(error, uiCopy('安全付款组件暂不可用，请联系客服。'));
       setCardMessage(''); showFormError(message, stripeSetupBox);
     });
-  ['change', 'input'].forEach(function (eventName) { [deviceTermsInput].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); }); }); });
+  ['change', 'input'].forEach(function (eventName) { [deviceTermsInput].forEach(function (element) { element.addEventListener(eventName, function () { markCouponDirty(); refreshSummary(); scheduleDeliveryQuote(false); }); }); });
   method.addEventListener('change', function () {
     var delivery = method.value === 'Delivery'; deliveryFields.hidden = !delivery; pickupField.hidden = delivery;
     var pickupLocation = document.getElementById('pickupLocation');
     pickupLocation.disabled = delivery || ${hasPickupLocations ? 'false' : 'true'};
     pickupLocation.required = !delivery && ${hasPickupLocations ? 'true' : 'false'};
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) { document.getElementById(id).required = delivery; });
+    if (!delivery) {
+      deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteSpeed = 'Same day'; deliveryQuoteMessage = ''; deliveryQuoteState = DELIVERY_QUOTE_ENABLED ? 'idle' : 'disabled';
+      var quoteInput = document.getElementById('deliveryQuoteId'); if (quoteInput) quoteInput.value = '';
+      var quoteHint = document.getElementById('delivery-quote-hint'); if (quoteHint) quoteHint.textContent = uiCopy('切换到送货上门后会自动获取配送报价。');
+    }
     validateDeliveryAddress(false);
+    refreshSummary();
   });
+  function quoteReadyDateTime() {
+    if (!cartIds.length) return '';
+    var term = termFor(cartIds[0]);
+    var time = term.startPeriod === 'PM' ? '14:00:00' : '09:00:00';
+    var local = new Date(term.startDate + 'T' + time);
+    return Number.isFinite(local.getTime()) ? local.toISOString() : '';
+  }
+  function requestDeliveryQuote(showError) {
+    if (!DELIVERY_QUOTE_ENABLED || method.value !== 'Delivery') return;
+    var street = document.getElementById('deliveryStreet').value.trim();
+    var suburb = document.getElementById('deliverySuburb').value.trim();
+    var state = document.getElementById('deliveryState').value.trim();
+    var postcode = document.getElementById('deliveryPostcode').value.trim();
+    var hint = document.getElementById('delivery-quote-hint');
+    if (!street || !suburb || !/^\d{4}$/.test(postcode) || !isMelbourneDeliveryAddress()) {
+      deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteSpeed = 'Same day'; deliveryQuoteMessage = ''; deliveryQuoteState = 'idle';
+      var staleInput = document.getElementById('deliveryQuoteId'); if (staleInput) staleInput.value = '';
+      if (hint) hint.textContent = uiCopy('填写完整且在服务范围内的地址后，我们会获取配送报价。');
+      refreshSummary(); return;
+    }
+    deliveryQuoteState = 'loading'; deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteMessage = '';
+    var quoteInput = document.getElementById('deliveryQuoteId'); if (quoteInput) quoteInput.value = '';
+    if (hint) hint.textContent = uiCopy('正在获取配送报价…');
+    refreshSummary();
+    fetch(DELIVERY_QUOTE_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({
+      deliveryStreet: street, deliverySuburb: suburb, deliveryState: state, deliveryPostcode: postcode,
+      deviceCount: cartIds.length, contactName: fullContactName(), contactEmail: contactEmail.value.trim(), contactPhone: document.getElementById('contactPhone').value.trim(), readyDateTime: quoteReadyDateTime(),
+    }) }).then(readJsonResponse).then(function (result) {
+      if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '配送报价失败，请稍后重试。'));
+      deliveryQuoteId = String(result.json.quoteId || ''); deliveryQuoteAmount = Number(result.json.price || 0); deliveryQuoteSpeed = String(result.json.deliverySpeed || 'Same day'); deliveryQuoteMessage = ''; deliveryQuoteState = deliveryQuoteId && Number.isFinite(deliveryQuoteAmount) ? 'ready' : 'error';
+      if (quoteInput) quoteInput.value = deliveryQuoteId;
+      if (hint) hint.textContent = deliveryQuoteState === 'ready' ? uiText('预计配送费：AUD$' + deliveryQuoteAmount.toFixed(2) + '（' + deliveryQuoteSpeed + '）。提交申请前请注意报价有效期。', 'Estimated delivery: AUD$' + deliveryQuoteAmount.toFixed(2) + ' (' + deliveryQuoteSpeed + '). The quote expires shortly.') : uiCopy('配送报价无效，请重试。');
+      clearCheckoutError(); refreshSummary();
+    }).catch(function (error) {
+      deliveryQuoteState = 'error'; deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteSpeed = 'Same day'; deliveryQuoteMessage = '配送报价失败，请稍后重试。';
+      if (quoteInput) quoteInput.value = '';
+      if (hint) hint.textContent = uiCopy(deliveryQuoteMessage);
+      if (showError) showFormError(error.message || uiCopy('配送报价失败，请稍后重试。'), hint);
+      refreshSummary();
+    });
+  }
+  function renderDeliveryQuoteHint() {
+    var hint = document.getElementById('delivery-quote-hint');
+    if (!hint) return;
+    if (deliveryQuoteState === 'ready') hint.textContent = uiText('预计配送费：AUD$' + deliveryQuoteAmount.toFixed(2) + '（' + deliveryQuoteSpeed + '）。提交申请前请注意报价有效期。', 'Estimated delivery: AUD$' + deliveryQuoteAmount.toFixed(2) + ' (' + deliveryQuoteSpeed + '). The quote expires shortly.');
+    else if (deliveryQuoteState === 'loading') hint.textContent = uiCopy('正在获取配送报价…');
+    else if (deliveryQuoteState === 'error') hint.textContent = uiCopy(deliveryQuoteMessage || '配送报价失败，请稍后重试。');
+    else if (method.value === 'Delivery') hint.textContent = uiCopy('填写完整且在服务范围内的地址后，我们会获取配送报价。');
+  }
+  function scheduleDeliveryQuote(showError) {
+    if (!DELIVERY_QUOTE_ENABLED || method.value !== 'Delivery') return;
+    window.clearTimeout(deliveryQuoteTimer); deliveryQuoteTimer = window.setTimeout(function () { requestDeliveryQuote(showError); }, 500);
+  }
   function validateDeliveryAddress(showError) {
     var suburb = document.getElementById('deliverySuburb');
     if (method.value !== 'Delivery') { suburb.setCustomValidity(''); return true; }
@@ -1189,7 +1263,7 @@ export function renderApply(data: ApplyData): string {
   function validateContactFields(showError) { return true; }
   ['input', 'change'].forEach(function (eventName) {
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) {
-      document.getElementById(id).addEventListener(eventName, function () { validateDeliveryAddress(true); });
+      document.getElementById(id).addEventListener(eventName, function () { validateDeliveryAddress(true); scheduleDeliveryQuote(true); });
     });
   });
   method.dispatchEvent(new Event('change'));
@@ -1214,6 +1288,8 @@ export function renderApply(data: ApplyData): string {
   document.getElementById('couponCode').addEventListener('input', markCouponDirty);
   window.addEventListener('geekslope:language-change', function () {
     renderCart();
+    renderDeliveryQuoteHint();
+    refreshSummary();
     if (walletBox.dataset.methods) {
       var methods = walletBox.dataset.methods;
       document.getElementById('stripe-wallet-title').textContent = methods.indexOf(' / ') >= 0 ? uiText('快捷支付', 'Express checkout') : methods;
@@ -1295,6 +1371,9 @@ export function renderApply(data: ApplyData): string {
     }
     var termValidationError = validateTerms();
     if (termValidationError) { showFormError(termValidationError, document.getElementById('agree')); return; }
+    if (method.value === 'Delivery' && DELIVERY_QUOTE_ENABLED && (deliveryQuoteState !== 'ready' || !deliveryQuoteId)) {
+      showFormError(uiCopy('请先获取有效的配送报价。'), document.getElementById('delivery-quote-hint')); requestDeliveryQuote(true); return;
+    }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
     if (saveContactInfo.checked) {
@@ -1302,6 +1381,7 @@ export function renderApply(data: ApplyData): string {
     }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
     payload.deviceTerms = deviceTermsInput.value;
+    if (method.value === 'Delivery' && DELIVERY_QUOTE_ENABLED) payload.deliveryQuoteId = deliveryQuoteId;
     if (selectedPaymentMethod === 'square') payload.squareGiftCardNonce = squareGiftCardNonce;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
