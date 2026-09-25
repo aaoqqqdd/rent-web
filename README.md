@@ -44,7 +44,7 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 
 配送报价只在服务器端调用 Zoom2u，浏览器不会接触 API token。未配置 `ZOOM2U_API_TOKEN` 时，网站继续使用原来的“审核时确认运费”流程。
 
-推荐在 rent 管理后台 `/admin/settings` 的「Zoom2u 配送 API 配置」中填写 API Token、Webhook Secret、配送管理 Token、取货地址和车辆参数。rent 与 geekslope-web 两个 Worker 必须配置相同的 `SETTINGS_ENCRYPTION_KEY`，官网会从共享 D1 读取并解密这些配置。部署时还要保留 `wrangler.jsonc` 中的 `RENT_SERVICE -> rent` Service Binding；配送 Webhook 更新状态后，官网会通过该绑定请求 rent 发送客户邮件。
+推荐在 rent 管理后台 `/admin/settings` 的「Zoom2u Integration」中按原始字段填写 `Your Zoom2U API key`、`Your Customer API key` 和 `Your Web Hook Url`；Webhook Authorization Secret、内部配送管理 token、取货地址和车辆参数在高级 / 内部配置中填写。rent 与 rent-web 两个 Worker 必须配置相同的 `SETTINGS_ENCRYPTION_KEY`，官网会从共享 D1 读取并解密这些配置。部署时还要保留 `wrangler.jsonc` 中的 `RENT_SERVICE -> rent` Service Binding；配送 Webhook 更新状态后，官网会通过该绑定请求 rent 发送客户邮件。
 
 旧版也支持通过 Worker Secret 配置（后台配置优先）：
 
