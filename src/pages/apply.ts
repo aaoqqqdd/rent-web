@@ -1069,7 +1069,12 @@ export function renderApply(data: ApplyData): string {
           fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         },
       };
-      var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance });
+      var stripeLocale = 'en';
+      try {
+        var storedLanguage = localStorage.getItem('geekslope-language');
+        if (storedLanguage === 'zh' || (!storedLanguage && /^zh(?:-|$)/i.test(navigator.language || ''))) stripeLocale = 'zh';
+      } catch (_) {}
+      var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance, locale: stripeLocale });
       var walletElement = walletElements.create('expressCheckout', {
         emailRequired: true,
         phoneNumberRequired: true,
@@ -1123,7 +1128,7 @@ export function renderApply(data: ApplyData): string {
             walletMessage.textContent = ''; showFormError(message, walletBox);
           });
       });
-      stripeElements = stripe.elements({ appearance: appearance });
+      stripeElements = stripe.elements({ appearance: appearance, locale: stripeLocale });
       var cardElement = stripeElements.create('card', {
         hidePostalCode: true,
         disableLink: true,
