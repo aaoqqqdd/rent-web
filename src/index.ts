@@ -29,7 +29,8 @@ import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcem
 import { renderGiftCards } from './pages/gift-cards'
 import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
 import { getPublicSquareGiftCardConfig, inspectSquareGiftCardNonce } from './squareGiftCard'
-import { autocompleteMelbourneAddresses } from './address'
+import { autocompleteMelbourneAddresses, isMelbourneAddress } from './address'
+import { createDeliveryBooking, deliveryAdminTokenConfigured, deliveryQuotesEnabled, handleZoom2uWebhook, quoteDelivery, verifyDeliveryAdminToken } from './delivery'
 import { listOrdersForUser, lookupOrderByCredentials } from './orders'
 import {
   clearedSessionCookie,
@@ -48,6 +49,7 @@ import {
 
 export interface Env {
   RENT: D1Database
+  RENT_SERVICE?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> }
   APP_URL?: string
   CONTACT_PHONE?: string
   CONTACT_EMAIL?: string
@@ -59,6 +61,19 @@ export interface Env {
   // 未配置时 /register 跳过人机校验（与 rent 公开接口行为一致）。
   TURNSTILE_SECRET_KEY?: string
   SQUARE_GIFT_CARD_URL?: string
+  // Zoom2u：API token 和 webhook secret 请使用 wrangler secret put。
+  ZOOM2U_API_TOKEN?: string
+  ZOOM2U_WEBHOOK_SECRET?: string
+  DELIVERY_ADMIN_TOKEN?: string
+  ZOOM2U_API_BASE_URL?: string
+  ZOOM2U_PICKUP_ADDRESS?: string
+  ZOOM2U_PICKUP_CONTACT_NAME?: string
+  ZOOM2U_PICKUP_EMAIL?: string
+  ZOOM2U_PICKUP_PHONE?: string
+  ZOOM2U_PICKUP_NOTES?: string
+  ZOOM2U_DELIVERY_SPEED?: string
+  ZOOM2U_VEHICLE_TYPE?: string
+  ZOOM2U_PACKAGE_TYPE?: string
 }
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
@@ -210,6 +225,45 @@ app.get('/api/address/autocomplete', async (c) => {
   const suggestions = await autocompleteMelbourneAddresses(query, config.deliveryAreas)
   return c.json({ suggestions, message: suggestions.length ? undefined : '没有找到墨尔本地址，请继续输入或手工填写。' }, 200, { 'cache-control': 'no-store' })
 })
+
+app.post('/api/delivery/quote', async (c) => {
+  const body = await parseRequestBody(c)
+  if (!body) return c.json({ ok: false, message: '请求格式无效。' }, 400)
+  if (!(await deliveryQuotesEnabled(c))) return c.json({ ok: false, message: '在线配送报价尚未启用。', code: 'not_configured' }, 503)
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-delivery-quote', ip, 20, 600))) return c.json({ ok: false, message: '配送报价请求过于频繁，请稍后再试。' }, 429)
+  const street = String(body.deliveryStreet || '').trim().slice(0, 160)
+  const suburb = String(body.deliverySuburb || '').trim().slice(0, 80)
+  const state = String(body.deliveryState || '').trim().toUpperCase()
+  const postcode = String(body.deliveryPostcode || '').trim()
+  const config = await getRentalConfig(c.env)
+  if (!street || !suburb || state !== 'VIC' || !/^\d{4}$/.test(postcode)) return c.json({ ok: false, message: '请填写完整有效的墨尔本送货地址。' }, 400)
+  if (!isMelbourneAddress(suburb, state, `${street}, ${suburb} ${state} ${postcode}`, config.deliveryAreas)) return c.json({ ok: false, message: '该地址不在当前墨尔本配送范围内。' }, 400)
+  const deviceCount = Math.max(1, Math.min(10, Math.floor(Number(body.deviceCount) || 1)))
+  const result = await quoteDelivery(c, {
+    address: { street, suburb, state, postcode },
+    contactName: String(body.contactName || '').trim().slice(0, 120),
+    contactEmail: String(body.contactEmail || '').trim().slice(0, 160),
+    contactPhone: String(body.contactPhone || '').trim().slice(0, 80),
+    deviceCount,
+    readyDateTime: String(body.readyDateTime || '').trim(),
+  })
+  return c.json(result, result.ok ? 200 : result.code === 'provider_error' ? 502 : 400, { 'Cache-Control': 'no-store' })
+})
+
+app.post('/api/delivery/bookings', async (c) => {
+  if (!(await deliveryAdminTokenConfigured(c))) return c.json({ ok: false, message: '配送管理接口尚未配置。' }, 503)
+  const token = c.req.header('X-Delivery-Admin-Token') || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '') || ''
+  if (!(await verifyDeliveryAdminToken(c, token))) return c.json({ ok: false, message: '无权创建配送订单。' }, 401)
+  const body = await parseRequestBody(c)
+  if (!body) return c.json({ ok: false, message: '请求格式无效。' }, 400)
+  const direction = body.direction === 'return' ? 'return' : body.direction === 'outbound' ? 'outbound' : ''
+  if (!direction) return c.json({ ok: false, message: 'direction 必须是 outbound 或 return。' }, 400)
+  const result = await createDeliveryBooking(c, String(body.orderId || '').trim(), direction, String(body.readyDateTime || '').trim())
+  return c.json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' })
+})
+
+app.post('/api/delivery/webhooks/zoom2u', (c) => handleZoom2uWebhook(c))
 
 app.on(['GET', 'POST'], '/api/coupons/rental-cart-preview', async (c) => {
   const body = c.req.method === 'POST' ? await parseRequestBody(c) : null
@@ -531,6 +585,7 @@ app.get('/checkout', (c) =>
       appUrl: appUrl(c.env),
       turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
       squareGiftCardConfig,
+      deliveryQuoteEnabled: await deliveryQuotesEnabled(c),
     })
     return renderPage({
       title: `结账 — ${contact.name}`,

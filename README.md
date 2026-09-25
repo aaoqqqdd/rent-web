@@ -10,6 +10,8 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 - **展示信息实时从数据库获取**：设备名称、配置、价格、库存、公司资料与公开法务文档，全部实时读自 rent 的 D1 库（`systemSettings` + `devices`）
 - 深色 + 青色主色、网格背景的落地页
 - `/apply` 下单：访客**注册账号 + 提交租赁申请**，订单进入 `pending_approval`，管理员在 rent 后台确认后再安排签约与付款
+- **Zoom2u 配送报价**：配置 `ZOOM2U_API_TOKEN` 后，送货地址会通过服务器端 API 实时报价；报价写入共享 D1，提交时重新校验地址、设备数量和有效期
+- **Zoom2u 派单接口**：管理员确认并付款后，可用受保护的 `/api/delivery/bookings` 创建取货 / 归还配送单；`/api/delivery/webhooks/zoom2u` 接收状态和 POD 更新
 - `/gift-cards` 礼品卡入口：跳转到 Square eGift Card order site，支持购买、查询余额和 Reload / Add money
 - 边缘缓存（`caches.default`）：HTML 60 秒、CSS 1 天
 
@@ -37,6 +39,35 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 4. 管理员在 rent 后台确认订单后，走既有 staff 建合同流程，生成 `/contract/sign` 链接让客户在线签署并付款。
 
 > 官网不实现登录态；账号一旦注册，客户可直接用同一邮箱 / 密码登录 rent 查看进度、付款、签约。
+
+## Zoom2u 配送接入
+
+配送报价只在服务器端调用 Zoom2u，浏览器不会接触 API token。未配置 `ZOOM2U_API_TOKEN` 时，网站继续使用原来的“审核时确认运费”流程。
+
+推荐在 rent 管理后台 `/admin/settings` 的「Zoom2u 配送 API 配置」中填写 API Token、Webhook Secret、配送管理 Token、取货地址和车辆参数。rent 与 geekslope-web 两个 Worker 必须配置相同的 `SETTINGS_ENCRYPTION_KEY`，官网会从共享 D1 读取并解密这些配置。部署时还要保留 `wrangler.jsonc` 中的 `RENT_SERVICE -> rent` Service Binding；配送 Webhook 更新状态后，官网会通过该绑定请求 rent 发送客户邮件。
+
+旧版也支持通过 Worker Secret 配置（后台配置优先）：
+
+```bash
+npx wrangler secret put ZOOM2U_API_TOKEN
+npx wrangler secret put ZOOM2U_PICKUP_ADDRESS
+npx wrangler secret put ZOOM2U_WEBHOOK_SECRET
+npx wrangler secret put DELIVERY_ADMIN_TOKEN
+npx wrangler deploy --minify
+```
+
+同时配置 `ZOOM2U_PICKUP_ADDRESS`（完整街道地址）。可选设置配送速度、车辆和包裹类型；电脑通常使用 `Same day` + `Car` 或 `Van` + `Box`。
+
+管理员确认订单并准备交付后，通过内部接口创建派单：
+
+```bash
+curl -X POST https://<官网域名>/api/delivery/bookings \
+  -H "Authorization: Bearer <DELIVERY_ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"orderId":"<ORDER_ID>","direction":"outbound"}'
+```
+
+归还设备时将 `direction` 改为 `return`。在 Zoom2u 客户后台把 Webhook 地址登记为 `https://<官网域名>/api/delivery/webhooks/zoom2u`，并使用与 `ZOOM2U_WEBHOOK_SECRET` 对应的 Authorization secret。系统会把配送状态、追踪链接、照片和签名 URL 保存到共享 D1 的 `delivery_bookings` 表。标准状态和特殊状态会在官网、租客中心和管理员页面显示中文说明；特殊状态会锁定更新/取消操作并返回错误消息。
 
 ## 注册 / 登录页（`/login`）
 

@@ -2,6 +2,19 @@
 
 import type { Env } from './index'
 import { hashPassword } from './auth'
+import { deliveryStatusInfo } from './deliveryStatus'
+
+export interface DeliveryBookingView {
+  id: string
+  direction: 'outbound' | 'return'
+  status: string
+  statusLabel: string
+  statusDescription: string
+  locked: boolean
+  providerReference: string
+  trackingUrl?: string
+  updatedAt: string
+}
 
 export interface OrderContractView {
   id: string
@@ -50,6 +63,7 @@ export interface OrderView {
   contract?: OrderContractView
   windowsUsername?: string
   windowsPassword?: string
+  deliveryBookings: DeliveryBookingView[]
 }
 
 export interface PublicOrderLookupResult {
@@ -147,7 +161,7 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
   if (!rows.length) return []
   const ids = rows.map((row) => value(row, 'id')).filter(Boolean)
   const placeholders = ids.map(() => '?').join(',')
-  const [initialContractRows, refundRows] = await Promise.all([
+  const [initialContractRows, refundRows, deliveryRows] = await Promise.all([
     (async () => {
       try {
         return (await env.RENT.prepare(`SELECT * FROM contracts WHERE orderId IN (${placeholders})`).bind(...ids).all<Record<string, unknown>>()).results ?? []
@@ -158,6 +172,13 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
     (async () => {
       try {
         return (await env.RENT.prepare(`SELECT * FROM payment_refunds WHERE order_id IN (${placeholders}) ORDER BY created_at DESC`).bind(...ids).all<Record<string, unknown>>()).results ?? []
+      } catch {
+        return []
+      }
+    })(),
+    (async () => {
+      try {
+        return (await env.RENT.prepare(`SELECT id, order_id, direction, status, provider_reference, tracking_url, updated_at FROM delivery_bookings WHERE order_id IN (${placeholders}) ORDER BY created_at DESC`).bind(...ids).all<Record<string, unknown>>()).results ?? []
       } catch {
         return []
       }
@@ -186,6 +207,24 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
   for (const row of refundRows) {
     const orderId = value(row, 'order_id', 'orderId')
     if (orderId && !refunds.has(orderId)) refunds.set(orderId, row)
+  }
+  const deliveries = new Map<string, DeliveryBookingView[]>()
+  for (const row of deliveryRows) {
+    const orderId = value(row, 'order_id', 'orderId')
+    if (!orderId) continue
+    const info = deliveryStatusInfo(value(row, 'status'))
+    const booking: DeliveryBookingView = {
+      id: value(row, 'id'),
+      direction: value(row, 'direction') === 'return' ? 'return' : 'outbound',
+      status: value(row, 'status'),
+      statusLabel: info.label,
+      statusDescription: info.description,
+      locked: info.special,
+      providerReference: value(row, 'provider_reference', 'providerReference'),
+      trackingUrl: value(row, 'tracking_url', 'trackingUrl') || undefined,
+      updatedAt: value(row, 'updated_at', 'updatedAt'),
+    }
+    deliveries.set(orderId, [...(deliveries.get(orderId) || []), booking])
   }
 
   return rows.map((row) => {
@@ -263,6 +302,7 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
       },
       contract,
       ...contractData,
+      deliveryBookings: deliveries.get(id) || [],
     }
   })
 }

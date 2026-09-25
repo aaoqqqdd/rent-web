@@ -19,6 +19,12 @@
 			"database_id": "65a5ded3-ffd8-4627-8ea4-9d8ced480b93"
 		}
 	],
+	"services": [
+		{
+			"binding": "RENT_SERVICE",
+			"service": "rent"
+		}
+	],
 	"vars": {
 		// rent 主应用的公开地址，用于登录、账号中心和后续签约付款跳转。
 		"APP_URL": "https://rent.ydnw6zt6vj.workers.dev",
@@ -37,6 +43,15 @@
 	//   STRIPE_PUBLISHABLE_KEY / STRIPE_SECRET_KEY —— 也可直接配置 Stripe（secret 请使用 wrangler secret）
 	//   TURNSTILE_SECRET_KEY（secret）—— /register 注册接口的服务端人机校验密钥。
 	//     未配置则跳过校验（与 rent 公开接口一致）。与 TURNSTILE_SITE_KEY 配套。
+	//   ZOOM2U_API_TOKEN（secret）—— Zoom2u API Bearer token；配置后 /checkout 会实时获取配送报价。
+	//   ZOOM2U_WEBHOOK_SECRET（secret）—— Zoom2u 后台登记 Webhook 时使用的 Authorization 值。
+	//   DELIVERY_ADMIN_TOKEN（secret）—— 创建真实配送订单的内部管理接口令牌。
+	//   ZOOM2U_PICKUP_ADDRESS —— 完整取货地址；不配置时尝试使用 companyDetails.address。
+	//   ZOOM2U_PICKUP_CONTACT_NAME / ZOOM2U_PICKUP_EMAIL / ZOOM2U_PICKUP_PHONE / ZOOM2U_PICKUP_NOTES
+	//   ZOOM2U_DELIVERY_SPEED —— Same day（默认）、3 hour 或 VIP。
+	//   ZOOM2U_VEHICLE_TYPE —— Car（默认）、Van 或 Bike；电脑配送通常建议 Car/Van。
+	//   ZOOM2U_PACKAGE_TYPE —— Box（默认）、Custom、Bag 或 Documents。
+	//   ZOOM2U_API_BASE_URL —— 仅测试环境覆盖 Zoom2u API 地址。
 	//
 	// rent 主应用侧需要相应配置：
 	//   PUBLIC_WEB_ORIGIN = 本站部署 origin，当前 https://rent-web.ydnw6zt6vj.workers.dev
