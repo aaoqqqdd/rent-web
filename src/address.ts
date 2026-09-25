@@ -8,6 +8,8 @@ export interface AddressSuggestion {
   formattedAddress: string
 }
 
+const PROVIDER_TIMEOUT_MS = 1800
+
 const MELBOURNE_ALIASES = ['melbourne', 'docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne']
 const STATE_NAMES: Record<string, string> = {
   victoria: 'VIC', vic: 'VIC',
@@ -57,27 +59,36 @@ export async function autocompleteMelbourneAddresses(query: string, deliveryArea
   const input = query.trim().slice(0, 120)
   if (input.length < 3) return []
   const headers = { Accept: 'application/json', 'User-Agent': 'GeekSlope-Web/1.0 Melbourne address search' }
-  const providers: Array<() => Promise<AddressSuggestion[]>> = [
-    async () => {
-      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, limit: '8', lang: 'en' })}`, { headers })
+  const searchController = new AbortController()
+  const providers: Array<(signal: AbortSignal) => Promise<AddressSuggestion[]>> = [
+    async (signal) => {
+      const timeout = setTimeout(() => searchController.abort(), PROVIDER_TIMEOUT_MS)
+      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, limit: '6', lang: 'en' })}`, { headers, signal })
+      clearTimeout(timeout)
       if (!response.ok) throw new Error(`Photon ${response.status}`)
       const data = await response.json() as { features?: Array<{ properties?: Record<string, unknown> }> }
       return (data.features || []).map((feature) => fromProvider(feature.properties || {}, 'photon', feature.properties?.osm_id, deliveryAreas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
     },
-    async () => {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, format: 'jsonv2', addressdetails: '1', limit: '8', countrycodes: 'au' })}`, { headers })
+    async (signal) => {
+      const timeout = setTimeout(() => searchController.abort(), PROVIDER_TIMEOUT_MS)
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, format: 'jsonv2', addressdetails: '1', limit: '6', countrycodes: 'au' })}`, { headers, signal })
+      clearTimeout(timeout)
       if (!response.ok) throw new Error(`Nominatim ${response.status}`)
       const data = await response.json() as Array<{ address?: Record<string, unknown>; osm_type?: string; osm_id?: unknown; display_name?: string }>
       return data.map((item) => fromProvider({ ...(item.address || {}), display_name: item.display_name }, item.osm_type || 'osm', item.osm_id, deliveryAreas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
     },
   ]
-  for (const provider of providers) {
-    try {
-      const suggestions = await provider()
-      if (suggestions.length) return suggestions
-    } catch {
-      // Try the fallback provider before returning a non-blocking empty result.
-    }
+  try {
+    // Ask both providers at once and use the first provider that returns usable results.
+    // This avoids waiting for a slow primary provider before trying the fallback.
+    return await Promise.any(providers.map((provider) => provider(searchController.signal).then((suggestions) => {
+      if (!suggestions.length) throw new Error('No address suggestions')
+      return suggestions
+    })))
+  } catch {
+    // Both providers failed, timed out, or returned no usable Melbourne addresses.
+    return []
+  } finally {
+    searchController.abort()
   }
-  return []
 }
