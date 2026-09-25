@@ -62,7 +62,9 @@ interface StoredDeliveryBooking {
 
 interface DeliveryRuntimeConfig {
   apiToken: string
+  customerApiKey: string
   webhookSecret: string
+  webhookUrl: string
   adminToken: string
   apiBaseUrl: string
   pickupAddress: string
@@ -110,14 +112,17 @@ async function readStoredDeliveryConfig(env: Env): Promise<StoredDeliveryConfig>
 
 async function getDeliveryRuntimeConfig(c: DeliveryContext): Promise<DeliveryRuntimeConfig> {
   const stored = await readStoredDeliveryConfig(c.env)
-  const [apiToken, webhookSecret, adminToken] = await Promise.all([
+  const [apiToken, customerApiKey, webhookSecret, adminToken] = await Promise.all([
     decryptStoredDeliveryValue(c.env, stored.apiToken),
+    decryptStoredDeliveryValue(c.env, stored.customerApiKey),
     decryptStoredDeliveryValue(c.env, stored.webhookSecret),
     decryptStoredDeliveryValue(c.env, stored.adminToken),
   ])
   return {
     apiToken: apiToken || clean(c.env.ZOOM2U_API_TOKEN, 500),
+    customerApiKey,
     webhookSecret: webhookSecret || clean(c.env.ZOOM2U_WEBHOOK_SECRET, 500),
+    webhookUrl: clean(stored.webhookUrl, 500),
     adminToken: adminToken || clean(c.env.DELIVERY_ADMIN_TOKEN, 500),
     apiBaseUrl: clean(stored.apiBaseUrl || c.env.ZOOM2U_API_BASE_URL || ZOOM2U_BASE_URL, 180).replace(/\/$/, ''),
     pickupAddress: clean(stored.pickupAddress || c.env.ZOOM2U_PICKUP_ADDRESS, 300),
@@ -511,10 +516,26 @@ export async function createDeliveryBooking(
 }
 
 export async function handleZoom2uWebhook(c: DeliveryContext): Promise<Response> {
-  const expected = (await getDeliveryRuntimeConfig(c)).webhookSecret
-  if (!expected) return c.json({ ok: false, message: 'Webhook 未配置。' }, 503)
-  const actual = clean(c.req.header('Authorization'), 600)
-  if (!(await sameSecret(actual, expected)) && !(await sameSecret(actual, `Basic ${expected}`))) return c.json({ ok: false }, 401)
+  const config = await getDeliveryRuntimeConfig(c)
+  const expected = [config.webhookSecret, config.customerApiKey].filter(Boolean)
+  if (!expected.length) return c.json({ ok: false, message: 'Webhook 未配置。' }, 503)
+  const supplied = [
+    clean(c.req.header('Authorization'), 600),
+    clean(c.req.header('X-Customer-API-Key'), 600),
+    clean(c.req.header('Customer-API-Key'), 600),
+    clean(c.req.header('X-Zoom2u-Customer-API-Key'), 600),
+  ].filter(Boolean)
+  let valid = false
+  for (const secret of expected) {
+    for (const value of supplied) {
+      if (await sameSecret(value, secret) || await sameSecret(value, `Basic ${secret}`)) {
+        valid = true
+        break
+      }
+    }
+    if (valid) break
+  }
+  if (!valid) return c.json({ ok: false }, 401)
   const payload = await c.req.json().catch(() => null) as Record<string, unknown> | null
   const data = payload?.data && typeof payload.data === 'object' ? payload.data as Record<string, unknown> : payload || {}
   const purchaseOrderNumber = clean(data.PurchaseOrderNumber || data.purchaseOrderNumber, 120)
