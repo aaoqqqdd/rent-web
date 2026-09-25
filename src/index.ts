@@ -227,8 +227,8 @@ app.get('/api/address/autocomplete', async (c) => {
   if (cached) return cached
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
   if (!(await enforceRateLimit(c.env, 'web-address-autocomplete', ip, 30, 60))) return c.json({ error: '地址查询过于频繁，请稍后再试。' }, 429)
-  const config = await getRentalConfig(c.env)
-  const suggestions = await autocompleteMelbourneAddresses(query, config.deliveryAreas)
+  const configPromise = getRentalConfig(c.env)
+  const suggestions = await autocompleteMelbourneAddresses(query, configPromise.then((config) => config.deliveryAreas))
   const payload = JSON.stringify({ suggestions, message: suggestions.length ? undefined : '没有找到墨尔本地址，请继续输入或手工填写。' })
   const response = new Response(payload, {
     status: 200,
