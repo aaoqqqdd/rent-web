@@ -80,7 +80,7 @@ export function renderRentalGuide(config: RentalConfig): string {
 
 <section class="section" id="delivery">
   <div class="wrap delivery-grid">
-    <div><div class="kicker">取还范围</div><h2>墨尔本本地交付</h2><p>${esc(config.deliveryNote)} 当前可配送区域包括：${esc(deliveryAreas)}。</p><p>具体配送时段、费用和地址是否可服务，会在订单审核时确认。其他墨尔本郊区请选择到店自取。</p><p>当前可选自取 / 归还地点：</p>${pickupLocations}</div>
+    <div><div class="kicker">取还范围</div><h2>墨尔本本地交付</h2><p>${esc(config.deliveryNote)} 当前可配送区域包括：${esc(deliveryAreas)}。</p><p>填写完整地址后会先获取预估配送费；具体配送时段、地址是否可服务和最终费用会在订单审核时确认。其他墨尔本郊区请选择到店自取。</p><p>当前可选自取 / 归还地点：</p>${pickupLocations}</div>
     <div class="map-card" aria-label="澳大利亚地图，墨尔本本地配送范围">
       <svg class="australia-map" viewBox="285 195 230 148" role="img" aria-labelledby="australia-map-title australia-map-desc">
         <title id="australia-map-title">澳大利亚与墨尔本位置</title>

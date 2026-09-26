@@ -577,7 +577,7 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     unavailableTimeSlots: {},
     pickupLocations: [],
     deliveryAreas: ['墨尔本 CBD', 'Docklands', 'Southbank', 'South Yarra', 'Carlton', 'East Melbourne'],
-    deliveryNote: '送货上门仅限墨尔本 CBD 及周边地区，运费由客服在审核时确认。',
+    deliveryNote: '送货上门仅限墨尔本 CBD 及周边地区，填写完整地址后立即获取预估配送费，最终以确认订单为准。',
   }
   try {
     const rows = await env.RENT.prepare(
