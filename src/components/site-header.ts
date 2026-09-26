@@ -13,7 +13,7 @@ export function renderSiteHeader(options: HeaderOptions, contact: SiteContact): 
     const active = (path: string): string => options.path === path || options.path.startsWith(`${path}/`) ? ' aria-current="page"' : ''
     const accountAction = options.user
         ? /* html */ `<span class="nav-account"><a class="btn btn-primary header-account" href="/sso/start">进入用户中心</a><a class="nav-logout" href="/logout">退出</a></span>`
-        : /* html */ `<a class="btn btn-primary header-account" href="/login">登录 / 注册</a>`
+        : /* html */ `<a class="btn btn-primary header-account" href="https://rent.ydnw6zt6vj.workers.dev/admin/settings">登录 / 注册</a>`
     return /* html */ `
 <a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
 <header class="site-header">
