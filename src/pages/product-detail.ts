@@ -107,7 +107,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     <div class="info-grid three">
       <article class="info-card"><span>租金</span><h3>按实际租期计算</h3><p>下单页会根据取还日期即时预估。月租展示价仅供长期租赁预算参考。</p></article>
       <article class="info-card"><span>押金</span><h3>验收无误后退还</h3><p>归还后完成设备检查；无损坏、缺件或逾期费用时，押金按原支付方式退回。</p></article>
-      <article class="info-card"><span>配送</span><h3>审核时确认</h3><p>${esc(config.deliveryNote)} ${esc(pickupText)}。</p></article>
+      <article class="info-card"><span>配送</span><h3>地址填写后即时预估</h3><p>结账时填写完整送货地址，会立刻获取预估配送费；最终以确认订单为准。${esc(pickupText)}。</p></article>
     </div>
   </div>
 </section>`
