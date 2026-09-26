@@ -8,9 +8,11 @@ export interface AddressSuggestion {
   formattedAddress: string
 }
 
-const PROVIDER_TIMEOUT_MS = 1800
+const PROVIDER_TIMEOUT_MS = 1500
+const MELBOURNE_VIEWBOX = '144.4,-38.2,145.5,-37.4'
 
-const MELBOURNE_ALIASES = ['melbourne', 'docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne']
+const MELBOURNE_ALIASES = ['docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne']
+const MELBOURNE_CBD_POSTCODES = ['3000', '3001', '3004']
 const STATE_NAMES: Record<string, string> = {
   victoria: 'VIC', vic: 'VIC',
   'new south wales': 'NSW', nsw: 'NSW',
@@ -30,11 +32,11 @@ export function normalizeAddressText(value: unknown): string {
 export function isMelbourneAddress(suburb: string, state: string, fullAddress: string, deliveryAreas: string[]): boolean {
   if (state.trim().toUpperCase() !== 'VIC') return false
   const text = normalizeAddressText(`${suburb} ${fullAddress}`)
+  const isMelbourneCbd = text.includes('melbourne') && MELBOURNE_CBD_POSTCODES.some((postcode) => text.includes(postcode))
   const configured = [...MELBOURNE_ALIASES, ...deliveryAreas]
     .map(normalizeAddressText)
     .filter(Boolean)
-    .map((value) => value.replace(/^melbourne\s+cbd$/, 'melbourne'))
-  return configured.some((area) => text.includes(area))
+  return configured.some((area) => area === 'cbd' || area === 'melbourne cbd' ? isMelbourneCbd : text.includes(area))
 }
 
 function stateCode(value: unknown): string {
@@ -45,11 +47,15 @@ function stateCode(value: unknown): string {
 function fromProvider(properties: Record<string, unknown>, type: string, id: unknown, deliveryAreas: string[]): AddressSuggestion | null {
   const street = [properties.housenumber, properties.house_number, properties.street, properties.road]
     .filter(Boolean).join(' ')
-  const suburb = String(properties.suburb || properties.locality || properties.neighbourhood || properties.district || properties.city || properties.town || '').trim()
+  const rawSuburb = String(properties.suburb || properties.locality || properties.neighbourhood || properties.district || properties.city || properties.town || '').trim()
   const city = String(properties.city || properties.town || properties.municipality || '').trim()
   const state = stateCode(properties.state)
   const postcode = String(properties.postcode || '').trim()
-  const formattedAddress = [street, suburb, state, postcode].filter(Boolean).join(', ') || String(properties.display_name || '').trim()
+  const suburb = isMelbourneAddress(rawSuburb, state, `${rawSuburb} ${postcode}`, deliveryAreas)
+    ? rawSuburb
+    : isMelbourneAddress(city, state, `${city} ${postcode}`, deliveryAreas) ? city : rawSuburb
+  const formattedParts = [street, rawSuburb, city, state, postcode].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index)
+  const formattedAddress = formattedParts.join(', ') || String(properties.display_name || '').trim()
   if (!formattedAddress || !isMelbourneAddress(suburb, state, `${formattedAddress} ${city}`, deliveryAreas)) return null
   const placeId = `${type}_${id || formattedAddress}`.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 300)
   return { placeId, text: formattedAddress, street, suburb, state, postcode, formattedAddress }
@@ -64,7 +70,7 @@ export async function autocompleteMelbourneAddresses(query: string, deliveryArea
   const providers: Array<(signal: AbortSignal) => Promise<AddressSuggestion[]>> = [
     async (signal) => {
       const timeout = setTimeout(() => searchController.abort(), PROVIDER_TIMEOUT_MS)
-      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, limit: '6', lang: 'en' })}`, { headers, signal })
+      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, limit: '4', lang: 'en', bbox: MELBOURNE_VIEWBOX })}`, { headers, signal })
       clearTimeout(timeout)
       if (!response.ok) throw new Error(`Photon ${response.status}`)
       const data = await response.json() as { features?: Array<{ properties?: Record<string, unknown> }> }
@@ -73,7 +79,7 @@ export async function autocompleteMelbourneAddresses(query: string, deliveryArea
     },
     async (signal) => {
       const timeout = setTimeout(() => searchController.abort(), PROVIDER_TIMEOUT_MS)
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, format: 'jsonv2', addressdetails: '1', limit: '6', countrycodes: 'au' })}`, { headers, signal })
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, format: 'jsonv2', addressdetails: '1', limit: '4', countrycodes: 'au', viewbox: MELBOURNE_VIEWBOX, bounded: '1' })}`, { headers, signal })
       clearTimeout(timeout)
       if (!response.ok) throw new Error(`Nominatim ${response.status}`)
       const data = await response.json() as Array<{ address?: Record<string, unknown>; osm_type?: string; osm_id?: unknown; display_name?: string }>

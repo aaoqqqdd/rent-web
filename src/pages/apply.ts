@@ -624,8 +624,13 @@ export function renderApply(data: ApplyData): string {
   function isMelbourneDeliveryAddress() {
     if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
     var text = normalizeAddress((addressSearch && addressSearch.value || '') + ' ' + document.getElementById('deliverySuburb').value);
-    var areas = ['melbourne', 'docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne'].concat(DELIVERY_AREAS || []);
-    return areas.map(normalizeAddress).filter(Boolean).some(function (area) { return text.indexOf(area.replace('melbourne cbd', 'melbourne')) >= 0; });
+    var postcode = document.getElementById('deliveryPostcode').value.trim();
+    var areas = ['docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne'].concat(DELIVERY_AREAS || []);
+    return areas.map(normalizeAddress).filter(Boolean).some(function (area) {
+      return (area === 'cbd' || area === 'melbourne cbd')
+        ? text.indexOf('melbourne') >= 0 && /^(3000|3001|3004)$/.test(postcode)
+        : text.indexOf(area) >= 0;
+    });
   }
   function removeInlineError(target) {
     var host = target ? errorHost(target) : null;
@@ -722,7 +727,7 @@ export function renderApply(data: ApplyData): string {
             setAddressStatus(suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', suggestions.length ? 'ready' : 'empty');
           })
           .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(''); showFormError(error.message || '地址联想暂时不可用，请手工填写。', addressSearch); } });
-      }, 180);
+      }, 80);
     });
     addressSearch.addEventListener('keydown', function (event) {
       var options = addressSuggestions.querySelectorAll('button[role="option"]');
@@ -856,7 +861,7 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
-      + (method.value === 'Delivery' ? summaryRow(uiText('配送费', 'Delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : uiText('待报价', 'Quote pending')) : '')
+      + (method.value === 'Delivery' ? summaryRow(uiText('配送费', 'Delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : deliveryQuoteState === 'loading' ? uiText('报价中…', 'Getting quote…') : uiText('填写地址后报价', 'Enter address to quote')) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
       + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '')
       + (selectedPaymentMethod === 'square' && squareGiftCardVerified ? summaryRow(uiText('礼品卡预计扣减', 'Estimated gift card deduction'), '-$' + giftCardDeduction.toFixed(2), 'summary-discount') : '')
@@ -1235,10 +1240,10 @@ export function renderApply(data: ApplyData): string {
     var state = document.getElementById('deliveryState').value.trim();
     var postcode = document.getElementById('deliveryPostcode').value.trim();
     var hint = document.getElementById('delivery-quote-hint');
-    if (!street || !suburb || !/^\d{4}$/.test(postcode) || !isMelbourneDeliveryAddress()) {
+    if (!street || !suburb || !/^\\d{4}$/.test(postcode) || !isMelbourneDeliveryAddress()) {
       deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteSpeed = 'Same day'; deliveryQuoteMessage = ''; deliveryQuoteState = 'idle';
       var staleInput = document.getElementById('deliveryQuoteId'); if (staleInput) staleInput.value = '';
-      if (hint) hint.textContent = uiCopy('填写完整且在服务范围内的地址后，我们会获取配送报价。');
+      if (hint) hint.textContent = uiCopy('选择完整地址后立即获取预估配送费。');
       refreshSummary(); return;
     }
     deliveryQuoteState = 'loading'; deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteMessage = '';
