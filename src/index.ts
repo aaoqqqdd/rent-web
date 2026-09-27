@@ -219,8 +219,10 @@ app.get('/api/device-availability', async (c) => {
 app.get('/api/address/autocomplete', async (c) => {
   const query = String(c.req.query('q') || '').trim()
   if (query.length < 3) return c.json({ suggestions: [] }, 200, { 'cache-control': 'no-store' })
+  const cacheQuery = query.toLowerCase().replace(/\s+/g, ' ').slice(0, 120)
   const cacheUrl = new URL(c.req.url)
-  cacheUrl.searchParams.set('__address_cache_v', '4')
+  cacheUrl.searchParams.set('q', cacheQuery)
+  cacheUrl.searchParams.set('__address_cache_v', '5')
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
   const cache = caches.default
   const cached = await cache.match(cacheKey)

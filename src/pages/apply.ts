@@ -705,9 +705,10 @@ export function renderApply(data: ApplyData): string {
       window.clearTimeout(addressTimer);
       if (addressRequest) addressRequest.abort();
       var query = addressSearch.value.trim();
+      var queryKey = query.toLowerCase().replace(/\s+/g, ' ');
       var requestSequence = ++addressRequestSequence;
       if (query.length < 3) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入至少 3 个字符开始联想。'); return; }
-      var cachedSuggestions = addressCache.get(query.toLowerCase());
+      var cachedSuggestions = addressCache.get(queryKey);
       if (cachedSuggestions) {
         renderAddressSuggestions(cachedSuggestions);
         setAddressStatus(cachedSuggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', cachedSuggestions.length ? 'ready' : 'empty');
@@ -722,12 +723,19 @@ export function renderApply(data: ApplyData): string {
             if (requestSequence !== addressRequestSequence) return;
             if (!result.ok) throw new Error((result.json && result.json.error) || '地址联想暂时不可用。');
             var suggestions = result.json.suggestions || [];
-            addressCache.set(query.toLowerCase(), suggestions);
+            addressCache.set(queryKey, suggestions);
             renderAddressSuggestions(suggestions);
             setAddressStatus(suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', suggestions.length ? 'ready' : 'empty');
           })
-          .catch(function (error) { if (error.name !== 'AbortError') { closeAddressSuggestions(); setAddressStatus(''); showFormError(error.message || '地址联想暂时不可用，请手工填写。', addressSearch); } });
-      }, 80);
+          .catch(function (error) {
+            if (error.name === 'AbortError' || requestSequence !== addressRequestSequence) return;
+            closeAddressSuggestions();
+            var message = error && error.message ? String(error.message) : '';
+            if (/failed to fetch|network ?error|load failed/i.test(message)) message = '';
+            setAddressStatus(message || '地址联想暂时不可用，请手工填写。', 'error');
+          })
+          .finally(function () { if (requestSequence === addressRequestSequence) addressRequest = null; });
+      }, 250);
     });
     addressSearch.addEventListener('keydown', function (event) {
       var options = addressSuggestions.querySelectorAll('button[role="option"]');

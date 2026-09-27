@@ -66,38 +66,39 @@ export async function autocompleteMelbourneAddresses(query: string, deliveryArea
   if (input.length < 3) return []
   const headers = { Accept: 'application/json', 'User-Agent': 'GeekSlope-Web/1.0 Melbourne address search' }
   const deliveryAreasPromise = Promise.resolve(deliveryAreas)
-  const searchController = new AbortController()
   const providers: Array<(signal: AbortSignal) => Promise<AddressSuggestion[]>> = [
     async (signal) => {
-      const timeout = setTimeout(() => searchController.abort(), PROVIDER_TIMEOUT_MS)
       const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, limit: '4', lang: 'en', bbox: MELBOURNE_VIEWBOX })}`, { headers, signal })
-      clearTimeout(timeout)
       if (!response.ok) throw new Error(`Photon ${response.status}`)
       const data = await response.json() as { features?: Array<{ properties?: Record<string, unknown> }> }
       const areas = await deliveryAreasPromise
       return (data.features || []).map((feature) => fromProvider(feature.properties || {}, 'photon', feature.properties?.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
     },
     async (signal) => {
-      const timeout = setTimeout(() => searchController.abort(), PROVIDER_TIMEOUT_MS)
       const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, format: 'jsonv2', addressdetails: '1', limit: '4', countrycodes: 'au', viewbox: MELBOURNE_VIEWBOX, bounded: '1' })}`, { headers, signal })
-      clearTimeout(timeout)
       if (!response.ok) throw new Error(`Nominatim ${response.status}`)
       const data = await response.json() as Array<{ address?: Record<string, unknown>; osm_type?: string; osm_id?: unknown; display_name?: string }>
       const areas = await deliveryAreasPromise
       return data.map((item) => fromProvider({ ...(item.address || {}), display_name: item.display_name }, item.osm_type || 'osm', item.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
     },
   ]
+  const controllers: AbortController[] = []
   try {
     // Ask both providers at once and use the first provider that returns usable results.
     // This avoids waiting for a slow primary provider before trying the fallback.
-    return await Promise.any(providers.map((provider) => provider(searchController.signal).then((suggestions) => {
-      if (!suggestions.length) throw new Error('No address suggestions')
-      return suggestions
-    })))
+    return await Promise.any(providers.map((provider) => {
+      const controller = new AbortController()
+      controllers.push(controller)
+      const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS)
+      return provider(controller.signal).then((suggestions) => {
+        if (!suggestions.length) throw new Error('No address suggestions')
+        return suggestions
+      }).finally(() => clearTimeout(timeout))
+    }))
   } catch {
     // Both providers failed, timed out, or returned no usable Melbourne addresses.
     return []
   } finally {
-    searchController.abort()
+    controllers.forEach((controller) => controller.abort())
   }
 }
