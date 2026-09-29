@@ -11,7 +11,7 @@ export interface AddressSuggestion {
 const PROVIDER_TIMEOUT_MS = 1500
 const MELBOURNE_VIEWBOX = '144.4,-38.2,145.5,-37.4'
 
-const MELBOURNE_ALIASES = ['docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne']
+const MELBOURNE_ALIASES = ['melbourne', 'docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne']
 const MELBOURNE_CBD_POSTCODES = ['3000', '3001', '3004']
 const STATE_NAMES: Record<string, string> = {
   victoria: 'VIC', vic: 'VIC',
