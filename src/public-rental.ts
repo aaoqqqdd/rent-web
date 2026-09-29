@@ -13,8 +13,7 @@ const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const COUPON_CODE_RE = /^[A-Z0-9_-]{1,40}$/
 const LONG_TERM_RENTAL_DAYS = 30
-const PICKUP_TIME_SLOTS = new Set(['morning_service', 'morning', 'afternoon', 'evening_service'])
-const SERVICE_FEE_TIME_SLOTS = new Set(['morning_service', 'evening_service'])
+const LEGACY_PICKUP_TIME_SLOTS = new Set(['morning_service', 'morning', 'afternoon', 'evening_service'])
 
 interface RentalTerm {
   startDate: string
@@ -163,14 +162,58 @@ function rentalPeriodPassed(date: string, period: 'AM' | 'PM', today: string): b
   return date === today && melbourneMinutesNow() >= (period === 'AM' ? 12 * 60 : 23 * 60)
 }
 
-function timeSlotPeriod(slot: string): 'AM' | 'PM' {
-  return slot === 'afternoon' || slot === 'evening_service' ? 'PM' : 'AM'
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number)
+  return Number.isInteger(hours) && Number.isInteger(minutes) ? hours * 60 + minutes : -1
+}
+
+function timeSlotCategory(slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): string {
+  if (LEGACY_PICKUP_TIME_SLOTS.has(slot)) return slot
+  if (!/^([01]\d|2[0-3]):(?:00|30)$/.test(slot)) return ''
+  const minute = timeToMinutes(slot)
+  const morningStart = timeToMinutes(config.serviceFeeHours.morningStart)
+  const morningEnd = timeToMinutes(config.serviceFeeHours.morningEnd)
+  const businessStart = timeToMinutes(config.businessHours.start)
+  const businessEnd = timeToMinutes(config.businessHours.end)
+  const eveningStart = timeToMinutes(config.serviceFeeHours.eveningStart)
+  const eveningEnd = timeToMinutes(config.serviceFeeHours.eveningEnd)
+  if (minute >= morningStart && minute < morningEnd) return 'morning_service'
+  if (minute >= businessStart && minute < businessEnd) return minute < 13 * 60 ? 'morning' : 'afternoon'
+  if (minute >= eveningStart && minute < eveningEnd) return 'evening_service'
+  return ''
+}
+
+function validPickupTimeSlot(slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
+  return Boolean(timeSlotCategory(slot, config))
+}
+
+function timeSlotPeriod(slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): 'AM' | 'PM' {
+  const category = timeSlotCategory(slot, config)
+  return category === 'afternoon' || category === 'evening_service' ? 'PM' : 'AM'
+}
+
+function serviceFeeTimeSlot(slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
+  const category = timeSlotCategory(slot, config)
+  return category === 'morning_service' || category === 'evening_service'
+}
+
+function timeSlotUnavailable(slots: string[] | undefined, slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
+  const category = timeSlotCategory(slot, config)
+  return Boolean(slots?.includes(slot) || (category && slots?.includes(category)))
 }
 
 function timeSlotPassed(date: string, slot: string, today: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
-  const toMinutes = (time: string) => { const [hours, minutes] = time.split(':').map(Number); return hours * 60 + minutes }
-  const endMinutes: Record<string, number> = { morning_service: toMinutes(config.serviceFeeHours.morningEnd), morning: 12 * 60, afternoon: toMinutes(config.businessHours.end), evening_service: toMinutes(config.serviceFeeHours.eveningEnd) }
-  return date === today && melbourneMinutesNow() >= (endMinutes[slot] || 0)
+  if (date !== today) return false
+  const category = timeSlotCategory(slot, config)
+  if (!category) return true
+  const legacyEndMinutes: Record<string, number> = {
+    morning_service: timeToMinutes(config.serviceFeeHours.morningEnd),
+    morning: 12 * 60,
+    afternoon: timeToMinutes(config.businessHours.end),
+    evening_service: timeToMinutes(config.serviceFeeHours.eveningEnd),
+  }
+  const deadline = LEGACY_PICKUP_TIME_SLOTS.has(slot) ? legacyEndMinutes[category] : timeToMinutes(slot)
+  return melbourneMinutesNow() >= deadline
 }
 
 function periodsOverlap(startDate: string, startPeriod: string, endDate: string, endPeriod: string, otherStartDate: string, otherStartPeriod: string, otherEndDate: string, otherEndPeriod: string): boolean {
@@ -492,17 +535,18 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const paymentProvider = requestedPaymentMethod === 'square' ? 'square' : paymentMethod === 'card' ? 'stripe' : 'internal'
   const refundMethod = 'original'
   const agreed = ['1', 'on', 'true', 'yes'].includes(String(body.agree || '').toLowerCase())
+  const config = await getRentalConfig(c.env)
   if (rawCouponCode && !couponCode) return json(c, 400, { ok: false, message: '优惠码格式无效。' })
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
   if (!firstName || !lastName || !contactPhone) return json(c, 400, { ok: false, message: '请填写名、姓和联系电话。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
-  if (deliveryMethod === 'Pickup' && (!PICKUP_TIME_SLOTS.has(pickupTimeSlot) || !PICKUP_TIME_SLOTS.has(returnTimeSlot))) {
+  if (deliveryMethod === 'Pickup' && (!validPickupTimeSlot(pickupTimeSlot, config) || !validPickupTimeSlot(returnTimeSlot, config))) {
     return json(c, 400, { ok: false, message: '请选择有效的取货和归还时间。' })
   }
   if (deliveryMethod === 'Pickup') {
     for (const term of Object.values(deviceTerms)) {
-      term.startPeriod = timeSlotPeriod(pickupTimeSlot)
-      term.endPeriod = timeSlotPeriod(returnTimeSlot)
+      term.startPeriod = timeSlotPeriod(pickupTimeSlot, config)
+      term.endPeriod = timeSlotPeriod(returnTimeSlot, config)
     }
   }
   let stripePaymentMethodId = ''
@@ -520,7 +564,6 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     }
   }
 
-  const config = await getRentalConfig(c.env)
   const settings = await paymentSettings(c)
   if (paymentProvider === 'square' && !settings.square) return json(c, 400, { ok: false, message: '礼品卡支付当前未启用。' })
   if (paymentMethod === 'balance' && !settings.balancePayment) return json(c, 400, { ok: false, message: '账户余额支付当前未启用。' })
@@ -578,10 +621,10 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     }
     if (deliveryMethod === 'Pickup' && (
       timeSlotPassed(term.startDate, pickupTimeSlot, today, config) || timeSlotPassed(term.endDate, returnTimeSlot, today, config)
-      || config.unavailableTimeSlots[term.startDate]?.includes(pickupTimeSlot)
-      || config.unavailableTimeSlots[term.endDate]?.includes(returnTimeSlot)
-      || deviceUnavailableSlots.has(`${term.startDate}:${pickupTimeSlot}`)
-      || deviceUnavailableSlots.has(`${term.endDate}:${returnTimeSlot}`)
+      || timeSlotUnavailable(config.unavailableTimeSlots[term.startDate], pickupTimeSlot, config)
+      || timeSlotUnavailable(config.unavailableTimeSlots[term.endDate], returnTimeSlot, config)
+      || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.startDate}:`)).map((value) => value.slice(term.startDate.length + 1)), pickupTimeSlot, config)
+      || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.endDate}:`)).map((value) => value.slice(term.endDate.length + 1)), returnTimeSlot, config)
     )) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选取货或归还时间不可用。` })
     for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day <= Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
       const date = new Date(day).toISOString().slice(0, 10)
@@ -621,7 +664,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
 
   const fees = devices.map((device) => calculateRentalFee(device, rentalPlans.get(String(device.id))!.period.days))
   const serviceFeeMultiplier = deliveryMethod === 'Pickup'
-    ? [pickupTimeSlot, returnTimeSlot].filter((slot) => SERVICE_FEE_TIME_SLOTS.has(slot)).length * config.serviceFeeRate
+    ? [pickupTimeSlot, returnTimeSlot].filter((slot) => serviceFeeTimeSlot(slot, config)).length * config.serviceFeeRate
     : 0
   const serviceFees = fees.map((fee) => Number((fee * serviceFeeMultiplier).toFixed(2)))
   const discounts = devices.map(() => 0)
