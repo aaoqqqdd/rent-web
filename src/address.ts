@@ -61,6 +61,22 @@ function fromProvider(properties: Record<string, unknown>, type: string, id: unk
   return { placeId, text: formattedAddress, street, suburb, state, postcode, formattedAddress }
 }
 
+function matchesAddressQuery(suggestion: AddressSuggestion, query: string): boolean {
+  const input = query.trim()
+  const houseNumber = input.match(/^(\d+[a-z]?)(?:\s|,|$)/i)?.[1]?.toLowerCase()
+  const suggestionNumber = normalizeAddressText(suggestion.street).split(' ')[0]
+  if (houseNumber && suggestionNumber !== houseNumber) return false
+
+  const postcode = input.match(/\b\d{4}\b/)?.[0]
+  if (postcode && suggestion.postcode !== postcode) return false
+
+  const suggestionText = normalizeAddressText(`${suggestion.street} ${suggestion.suburb} ${suggestion.state} ${suggestion.postcode}`)
+  const localityParts = input.split(',').slice(1)
+    .map(normalizeAddressText)
+    .filter((part) => part && !/^\d{4}$/.test(part) && !['australia', 'victoria', 'vic'].includes(part))
+  return localityParts.every((part) => suggestionText.includes(part))
+}
+
 export async function autocompleteMelbourneAddresses(query: string, deliveryAreas: string[] | Promise<string[]>): Promise<AddressSuggestion[]> {
   const input = query.trim().slice(0, 120)
   if (input.length < 3) return []
@@ -68,18 +84,18 @@ export async function autocompleteMelbourneAddresses(query: string, deliveryArea
   const deliveryAreasPromise = Promise.resolve(deliveryAreas)
   const providers: Array<(signal: AbortSignal) => Promise<AddressSuggestion[]>> = [
     async (signal) => {
-      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, limit: '4', lang: 'en', bbox: MELBOURNE_VIEWBOX })}`, { headers, signal })
+      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: input, limit: '4', lang: 'en', bbox: MELBOURNE_VIEWBOX })}`, { headers, signal })
       if (!response.ok) throw new Error(`Photon ${response.status}`)
       const data = await response.json() as { features?: Array<{ properties?: Record<string, unknown> }> }
       const areas = await deliveryAreasPromise
-      return (data.features || []).map((feature) => fromProvider(feature.properties || {}, 'photon', feature.properties?.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
+      return (data.features || []).map((feature) => fromProvider(feature.properties || {}, 'photon', feature.properties?.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).filter((item) => matchesAddressQuery(item, input)).slice(0, 6)
     },
     async (signal) => {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${input}, Melbourne, Victoria, Australia`, format: 'jsonv2', addressdetails: '1', limit: '4', countrycodes: 'au', viewbox: MELBOURNE_VIEWBOX, bounded: '1' })}`, { headers, signal })
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: input, format: 'jsonv2', addressdetails: '1', limit: '4', countrycodes: 'au', viewbox: MELBOURNE_VIEWBOX, bounded: '1' })}`, { headers, signal })
       if (!response.ok) throw new Error(`Nominatim ${response.status}`)
       const data = await response.json() as Array<{ address?: Record<string, unknown>; osm_type?: string; osm_id?: unknown; display_name?: string }>
       const areas = await deliveryAreasPromise
-      return data.map((item) => fromProvider({ ...(item.address || {}), display_name: item.display_name }, item.osm_type || 'osm', item.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).slice(0, 6)
+      return data.map((item) => fromProvider({ ...(item.address || {}), display_name: item.display_name }, item.osm_type || 'osm', item.osm_id, areas)).filter((item): item is AddressSuggestion => Boolean(item)).filter((item) => matchesAddressQuery(item, input)).slice(0, 6)
     },
   ]
   const controllers: AbortController[] = []
