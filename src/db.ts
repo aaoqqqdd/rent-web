@@ -563,6 +563,9 @@ export interface RentalConfig {
   bufferDays: number
   unavailableDates: string[]
   unavailableTimeSlots: Record<string, string[]>
+  serviceFeeHours: { morningStart: string; morningEnd: string; eveningStart: string; eveningEnd: string }
+  businessHours: { start: string; end: string }
+  serviceFeeRate: number
   pickupLocations: string[]
   deliveryAreas: string[]
   deliveryNote: string
@@ -575,6 +578,9 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     bufferDays: 0,
     unavailableDates: [],
     unavailableTimeSlots: {},
+    serviceFeeHours: { morningStart: '07:00', morningEnd: '08:00', eveningStart: '21:00', eveningEnd: '23:00' },
+    businessHours: { start: '09:00', end: '20:00' },
+    serviceFeeRate: 0.1,
     pickupLocations: [],
     deliveryAreas: ['墨尔本 CBD', 'Docklands', 'Southbank', 'South Yarra', 'Carlton', 'East Melbourne'],
     deliveryNote: '送货上门仅限墨尔本 CBD 及周边地区，填写完整地址后立即获取预估配送费，最终以确认订单为准。',
@@ -606,6 +612,21 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
               .map(([date, slots]) => [date, (slots as unknown[]).map((slot) => String(slot)).filter(Boolean)]),
           )
         }
+        const serviceFeeHours = parsed.serviceFeeHours && typeof parsed.serviceFeeHours === 'object' ? parsed.serviceFeeHours as Record<string, unknown> : {}
+        const businessHours = parsed.businessHours && typeof parsed.businessHours === 'object' ? parsed.businessHours as Record<string, unknown> : {}
+        const validTime = (value: unknown, fallback: string) => /^([01]\d|2[0-3]):(?:00|30)$/.test(String(value)) ? String(value) : fallback
+        cfg.serviceFeeHours = {
+          morningStart: validTime(serviceFeeHours.morningStart, cfg.serviceFeeHours.morningStart),
+          morningEnd: validTime(serviceFeeHours.morningEnd, cfg.serviceFeeHours.morningEnd),
+          eveningStart: validTime(serviceFeeHours.eveningStart, cfg.serviceFeeHours.eveningStart),
+          eveningEnd: validTime(serviceFeeHours.eveningEnd, cfg.serviceFeeHours.eveningEnd),
+        }
+        cfg.businessHours = {
+          start: validTime(businessHours.start, cfg.businessHours.start),
+          end: validTime(businessHours.end, cfg.businessHours.end),
+        }
+        const serviceFeeRate = Number(parsed.serviceFeeRate)
+        if (Number.isFinite(serviceFeeRate) && serviceFeeRate >= 0 && serviceFeeRate <= 1) cfg.serviceFeeRate = serviceFeeRate
       }
       if (row.key === 'companyDetails' && Array.isArray(parsed.pickupLocations)) {
         cfg.pickupLocations = [...new Set(

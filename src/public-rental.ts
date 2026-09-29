@@ -13,6 +13,8 @@ const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const COUPON_CODE_RE = /^[A-Z0-9_-]{1,40}$/
 const LONG_TERM_RENTAL_DAYS = 30
+const PICKUP_TIME_SLOTS = new Set(['morning_service', 'morning', 'afternoon', 'evening_service'])
+const SERVICE_FEE_TIME_SLOTS = new Set(['morning_service', 'evening_service'])
 
 interface RentalTerm {
   startDate: string
@@ -159,6 +161,16 @@ function melbourneMinutesNow(): number {
 
 function rentalPeriodPassed(date: string, period: 'AM' | 'PM', today: string): boolean {
   return date === today && melbourneMinutesNow() >= (period === 'AM' ? 12 * 60 : 23 * 60)
+}
+
+function timeSlotPeriod(slot: string): 'AM' | 'PM' {
+  return slot === 'afternoon' || slot === 'evening_service' ? 'PM' : 'AM'
+}
+
+function timeSlotPassed(date: string, slot: string, today: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
+  const toMinutes = (time: string) => { const [hours, minutes] = time.split(':').map(Number); return hours * 60 + minutes }
+  const endMinutes: Record<string, number> = { morning_service: toMinutes(config.serviceFeeHours.morningEnd), morning: 12 * 60, afternoon: toMinutes(config.businessHours.end), evening_service: toMinutes(config.serviceFeeHours.eveningEnd) }
+  return date === today && melbourneMinutesNow() >= (endMinutes[slot] || 0)
 }
 
 function periodsOverlap(startDate: string, startPeriod: string, endDate: string, endPeriod: string, otherStartDate: string, otherStartPeriod: string, otherEndDate: string, otherEndPeriod: string): boolean {
@@ -465,6 +477,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (deviceIds.length > MAX_CART_ITEMS) return json(c, 400, { ok: false, message: `单次最多提交 ${MAX_CART_ITEMS} 台设备。` })
   const deviceTerms = parseDeviceTerms(body, deviceIds)
   const deliveryMethod = body.deliveryMethod === 'Delivery' ? 'Delivery' : 'Pickup'
+  const pickupTimeSlot = String(body.pickupTimeSlot || '')
+  const returnTimeSlot = String(body.returnTimeSlot || '')
   const deliveryQuoteId = String(body.deliveryQuoteId || '').trim()
   const firstName = sanitizePlainText(body.firstName, 100)
   const lastName = sanitizePlainText(body.lastName, 100)
@@ -482,6 +496,15 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
   if (!firstName || !lastName || !contactPhone) return json(c, 400, { ok: false, message: '请填写名、姓和联系电话。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
+  if (deliveryMethod === 'Pickup' && (!PICKUP_TIME_SLOTS.has(pickupTimeSlot) || !PICKUP_TIME_SLOTS.has(returnTimeSlot))) {
+    return json(c, 400, { ok: false, message: '请选择有效的取货和归还时间。' })
+  }
+  if (deliveryMethod === 'Pickup') {
+    for (const term of Object.values(deviceTerms)) {
+      term.startPeriod = timeSlotPeriod(pickupTimeSlot)
+      term.endPeriod = timeSlotPeriod(returnTimeSlot)
+    }
+  }
   let stripePaymentMethodId = ''
   let stripeCardBrand = ''
   const setupIntentId = String(body.stripeSetupIntentId || '').trim()
@@ -553,6 +576,13 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       const group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service']
       return group.every((slot) => globalSlots.includes(slot) || deviceUnavailableSlots.has(`${date}:${slot}`))
     }
+    if (deliveryMethod === 'Pickup' && (
+      timeSlotPassed(term.startDate, pickupTimeSlot, today, config) || timeSlotPassed(term.endDate, returnTimeSlot, today, config)
+      || config.unavailableTimeSlots[term.startDate]?.includes(pickupTimeSlot)
+      || config.unavailableTimeSlots[term.endDate]?.includes(returnTimeSlot)
+      || deviceUnavailableSlots.has(`${term.startDate}:${pickupTimeSlot}`)
+      || deviceUnavailableSlots.has(`${term.endDate}:${returnTimeSlot}`)
+    )) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选取货或归还时间不可用。` })
     for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day <= Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
       const date = new Date(day).toISOString().slice(0, 10)
       for (const period of ['AM', 'PM'] as const) {
@@ -590,6 +620,10 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   }
 
   const fees = devices.map((device) => calculateRentalFee(device, rentalPlans.get(String(device.id))!.period.days))
+  const serviceFeeMultiplier = deliveryMethod === 'Pickup'
+    ? [pickupTimeSlot, returnTimeSlot].filter((slot) => SERVICE_FEE_TIME_SLOTS.has(slot)).length * config.serviceFeeRate
+    : 0
+  const serviceFees = fees.map((fee) => Number((fee * serviceFeeMultiplier).toFixed(2)))
   const discounts = devices.map(() => 0)
   let coupon: Record<string, unknown> | null = null
   if (couponCode) {
@@ -630,7 +664,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     if (eligibilityError) return json(c, 400, { ok: false, message: eligibilityError })
   }
   const accountEligible = String(user.account_type || 'formal') === 'formal' && String(user.role || 'CUSTOMER') === 'CUSTOMER'
-  const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], deliveryFee)
+  const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + serviceFees[index] + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], deliveryFee)
   if (paymentMethod === 'balance' && (!accountEligible || numberValue(user.balance) < totalBeforePayment)) return json(c, 400, { ok: false, message: '账户余额不足以支付这笔申请。' })
   let squareGiftCardId = ''
   if (paymentProvider === 'square') {
@@ -672,12 +706,13 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       const orderDeliveryFee = index === devices.length - 1
         ? Number((deliveryFee - sharedDeliveryFee * Math.max(0, devices.length - 1)).toFixed(2))
         : sharedDeliveryFee
-      const total = Number((fees[index] + deposit + orderDeliveryFee - discounts[index]).toFixed(2))
+      const serviceFee = serviceFees[index]
+      const total = Number((fees[index] + serviceFee + deposit + orderDeliveryFee - discounts[index]).toFixed(2))
       const note = `【官网申请 ${batch}】联系人：${contactName} / 电话：${contactPhone} / ${deliveryMethod === 'Delivery' ? '送货至' : '自取点'}：${location}${body.rentalNote ? `\n客户备注：${String(body.rentalNote).trim().slice(0, 350)}` : ''}`.slice(0, 500)
       await c.env.RENT.prepare(
-        `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupTimeSlot, returnTimeSlot, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, ?, ?, ?, ?, ?)`,
-      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, null, null, location, deliveryMethod, orderDeliveryFee, note, discounts[index] > 0 ? couponCode : null, discounts[index], new Date().toISOString()).run()
+        `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupTimeSlot, returnTimeSlot, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, serviceFee, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, orderDeliveryFee, note, discounts[index] > 0 ? couponCode : null, discounts[index], serviceFee, new Date().toISOString()).run()
       orderIds.push(orderId)
       // payment_provider 在共享主站中区分 Stripe 卡与礼品卡；旧数据库没有该列时，
       // 保留 card / balance 的历史兼容路径，但不能静默丢弃客户明确选择的 Square。
@@ -721,7 +756,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const totalRent = fees.reduce((sum, fee) => sum + fee, 0)
   const totalDeposit = devices.reduce((sum, device) => sum + numberValue(device.depositAmount, device.deposit_amount), 0)
   const totalDiscount = discounts.reduce((sum, discount) => sum + discount, 0)
-  await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${deliveryFee ? `，配送费 AUD$${deliveryFee.toFixed(2)}` : ''}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
+  const totalServiceFee = serviceFees.reduce((sum, fee) => sum + fee, 0)
+  await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${totalServiceFee ? `，时段服务费 AUD$${totalServiceFee.toFixed(2)}` : ''}${deliveryFee ? `，配送费 AUD$${deliveryFee.toFixed(2)}` : ''}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
   const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
   const paymentBreakdown = paymentProvider === 'stripe'
     ? firstOrder?.deposit_payment_mode === 'PREAUTH'

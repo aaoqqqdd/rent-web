@@ -222,7 +222,7 @@ app.get('/api/address/autocomplete', async (c) => {
   const cacheQuery = query.toLowerCase().replace(/\s+/g, ' ').slice(0, 120)
   const cacheUrl = new URL(c.req.url)
   cacheUrl.searchParams.set('q', cacheQuery)
-  cacheUrl.searchParams.set('__address_cache_v', '5')
+  cacheUrl.searchParams.set('__address_cache_v', '6')
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
   const cache = caches.default
   const cached = await cache.match(cacheKey)

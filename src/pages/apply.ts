@@ -284,6 +284,13 @@ export function renderApply(data: ApplyData): string {
   const deliveryNote = deliveryQuoteEnabled
     ? '送货上门仅限墨尔本 CBD 及周边地区，填写完整地址后立即获取预估配送费，最终以确认订单为准。'
     : config.deliveryNote
+  const pickupTimeSlots = [
+    ['morning_service', `${config.serviceFeeHours.morningStart.replace(/^0/, '')}–${config.serviceFeeHours.morningEnd.replace(/^0/, '')}（早间服务费 ${Number((config.serviceFeeRate * 100).toFixed(2))}%）`],
+    ['morning', `${config.businessHours.start.replace(/^0/, '')}–12:00`],
+    ['afternoon', `13:00–${config.businessHours.end.replace(/^0/, '')}`],
+    ['evening_service', `${config.serviceFeeHours.eveningStart.replace(/^0/, '')}–${config.serviceFeeHours.eveningEnd.replace(/^0/, '')}（晚间服务费 ${Number((config.serviceFeeRate * 100).toFixed(2))}%）`],
+  ] as const
+  const pickupTimeOptions = (selected = 'morning') => pickupTimeSlots.map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('')
 
   if (!rentable.length) {
     return /* html */ `
@@ -364,7 +371,13 @@ export function renderApply(data: ApplyData): string {
               <label for="deliveryMethod">取还方式</label>
               <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
             </div>
-            <div class="field" id="pickup-field"${hasPickupLocations ? '' : ' hidden'}><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
+            <div id="pickup-field"${hasPickupLocations ? '' : ' hidden'}>
+              <div class="field"><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
+              <div class="row2" id="pickup-time-fields">
+                <div class="field"><label for="pickupTimeSlot">取货时间</label><select id="pickupTimeSlot" name="pickupTimeSlot" required>${pickupTimeOptions()}</select></div>
+                <div class="field"><label for="returnTimeSlot">归还时间</label><select id="returnTimeSlot" name="returnTimeSlot" required>${pickupTimeOptions()}</select></div>
+              </div>
+            </div>
             <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
               <div class="field address-autocomplete">
                 <label for="delivery-address-search">搜索墨尔本地址</label>
@@ -526,6 +539,8 @@ export function renderApply(data: ApplyData): string {
   var deviceTermsInput = document.getElementById('deviceTerms');
   var method = document.getElementById('deliveryMethod');
   var pickupField = document.getElementById('pickup-field');
+  var pickupTimeSlot = document.getElementById('pickupTimeSlot');
+  var returnTimeSlot = document.getElementById('returnTimeSlot');
   var deliveryFields = document.getElementById('delivery-fields');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
@@ -700,12 +715,20 @@ export function renderApply(data: ApplyData): string {
     addressSuggestions.hidden = !items.length;
     addressSearch.setAttribute('aria-expanded', String(Boolean(items.length)));
   }
+  function addressLookupQuery() {
+    return [
+      addressSearch && addressSearch.value.trim(),
+      document.getElementById('deliverySuburb').value.trim(),
+      document.getElementById('deliveryPostcode').value.trim(),
+    ].filter(Boolean).join(', ');
+  }
   if (addressSearch && addressSuggestions) {
     addressSearch.addEventListener('input', function () {
       window.clearTimeout(addressTimer);
       if (addressRequest) addressRequest.abort();
       var query = addressSearch.value.trim();
-      var queryKey = query.toLowerCase().replace(/\s+/g, ' ');
+      var lookupQuery = addressLookupQuery();
+      var queryKey = lookupQuery.toLowerCase().replace(/\s+/g, ' ');
       var requestSequence = ++addressRequestSequence;
       if (query.length < 3) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入至少 3 个字符开始联想。'); return; }
       var cachedSuggestions = addressCache.get(queryKey);
@@ -717,7 +740,7 @@ export function renderApply(data: ApplyData): string {
       setAddressStatus('正在查找墨尔本地址…', 'loading');
       addressTimer = window.setTimeout(function () {
         addressRequest = new AbortController();
-        fetch('/api/address/autocomplete?q=' + encodeURIComponent(query), { headers: { Accept: 'application/json' }, signal: addressRequest.signal })
+        fetch('/api/address/autocomplete?q=' + encodeURIComponent(lookupQuery), { headers: { Accept: 'application/json' }, signal: addressRequest.signal })
           .then(readJsonResponse)
           .then(function (result) {
             if (requestSequence !== addressRequestSequence) return;
@@ -736,6 +759,11 @@ export function renderApply(data: ApplyData): string {
           })
           .finally(function () { if (requestSequence === addressRequestSequence) addressRequest = null; });
       }, 250);
+    });
+    ['deliverySuburb', 'deliveryPostcode'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', function () {
+        if (addressSearch.value.trim().length >= 3) addressSearch.dispatchEvent(new Event('input'));
+      });
     });
     addressSearch.addEventListener('keydown', function (event) {
       var options = addressSuggestions.querySelectorAll('button[role="option"]');
@@ -773,7 +801,9 @@ export function renderApply(data: ApplyData): string {
   }
   function termFor(id) {
     var value = cartTerms[id] || cartState.legacy || {}; var start = value.startDate || today; if (start < today) start = today;
-    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: value.startPeriod === 'PM' ? 'PM' : 'AM', endPeriod: value.endPeriod === 'PM' ? 'PM' : 'AM' };
+    var pickup = pickupTimeSlot && pickupTimeSlot.value;
+    var returned = returnTimeSlot && returnTimeSlot.value;
+    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: method.value === 'Pickup' && (pickup === 'afternoon' || pickup === 'evening_service') ? 'PM' : 'AM', endPeriod: method.value === 'Pickup' && (returned === 'afternoon' || returned === 'evening_service') ? 'PM' : 'AM' };
   }
   function termDays(term) {
     var half = Math.round((Date.parse(term.endDate + 'T00:00:00Z') - Date.parse(term.startDate + 'T00:00:00Z')) / 86400000) * 2 + (term.endPeriod === 'PM' ? 1 : 0) - (term.startPeriod === 'PM' ? 1 : 0);
@@ -814,6 +844,7 @@ export function renderApply(data: ApplyData): string {
     if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return uiCopy('请为每台设备填写有效租期。');
     if (term.startDate < today || termDays(term) < MIN_DAYS) return uiText('每台设备的租期不能少于 ' + MIN_DAYS + ' 天。', 'Each device must be rented for at least ' + MIN_DAYS + ' day(s).');
     if (termRangeUnavailable(id, term)) return uiCopy('该设备在所选租期或时段不可用。');
+    if (method.value === 'Pickup' && (slotUnavailable(id, term.startDate, pickupSlots.find(function (slot) { return slot.value === pickupTimeSlot.value; })) || slotUnavailable(id, term.endDate, pickupSlots.find(function (slot) { return slot.value === returnTimeSlot.value; })))) return uiCopy('该设备在所选取货或归还时间不可用。');
     return '';
   }
   function validateTerms() {
@@ -827,9 +858,10 @@ export function renderApply(data: ApplyData): string {
   }
   function calculateRentalPayable() {
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
+    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(function (slot) { return slot === 'morning_service' || slot === 'evening_service'; }).length * 100) / 100 : 0;
     var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentBase = Math.max(0, rentTotal + deliveryFee - appliedDiscount);
+    var paymentBase = Math.max(0, rentTotal + serviceFee + deliveryFee - appliedDiscount);
     var paymentFee = selectedPaymentMethod === 'card'
       ? Math.round(paymentBase * stripeFeeRate * 100) / 100
       : selectedPaymentMethod === 'square'
@@ -843,10 +875,11 @@ export function renderApply(data: ApplyData): string {
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
+    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(function (slot) { return slot === 'morning_service' || slot === 'evening_service'; }).length * 100) / 100 : 0;
     var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
-    var total = Math.max(0, rentTotal + depositTotal + deliveryFee - appliedDiscount);
+    var total = Math.max(0, rentTotal + serviceFee + depositTotal + deliveryFee - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentBase = Math.max(0, rentTotal + deliveryFee - appliedDiscount);
+    var paymentBase = Math.max(0, rentTotal + serviceFee + deliveryFee - appliedDiscount);
     var paymentFee = selectedPaymentMethod === 'card'
       ? Math.round(paymentBase * stripeFeeRate * 100) / 100
       : selectedPaymentMethod === 'square'
@@ -869,6 +902,7 @@ export function renderApply(data: ApplyData): string {
       return;
     }
     var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
+      + (serviceFee ? summaryRow(uiText('时段服务费', 'Time-slot service fee'), '$' + serviceFee.toFixed(2)) : '')
       + (method.value === 'Delivery' ? summaryRow(uiText('配送费', 'Delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : deliveryQuoteState === 'loading' ? uiText('报价中…', 'Getting quote…') : uiText('填写地址后报价', 'Enter address to quote')) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
       + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '')
@@ -1218,6 +1252,10 @@ export function renderApply(data: ApplyData): string {
     var pickupLocation = document.getElementById('pickupLocation');
     pickupLocation.disabled = delivery || ${hasPickupLocations ? 'false' : 'true'};
     pickupLocation.required = !delivery && ${hasPickupLocations ? 'true' : 'false'};
+    pickupTimeSlot.disabled = delivery;
+    pickupTimeSlot.required = !delivery;
+    returnTimeSlot.disabled = delivery;
+    returnTimeSlot.required = !delivery;
     ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) { document.getElementById(id).required = delivery; });
     if (!delivery) {
       deliveryQuoteRequestSequence += 1;
@@ -1229,8 +1267,9 @@ export function renderApply(data: ApplyData): string {
     }
     validateDeliveryAddress(false);
     if (delivery) requestDeliveryQuote(false);
-    refreshSummary();
+    renderCart();
   });
+  [pickupTimeSlot, returnTimeSlot].forEach(function (input) { input.addEventListener('change', function () { markCouponDirty(); renderCart(); }); });
   function quoteReadyDateTime() {
     if (!cartIds.length) return '';
     var term = termFor(cartIds[0]);
