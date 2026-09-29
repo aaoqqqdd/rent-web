@@ -284,13 +284,35 @@ export function renderApply(data: ApplyData): string {
   const deliveryNote = deliveryQuoteEnabled
     ? '送货上门仅限墨尔本 CBD 及周边地区，填写完整地址后立即获取预估配送费，最终以确认订单为准。'
     : config.deliveryNote
-  const pickupTimeSlots = [
-    ['morning_service', `${config.serviceFeeHours.morningStart.replace(/^0/, '')}–${config.serviceFeeHours.morningEnd.replace(/^0/, '')}（早间服务费 ${Number((config.serviceFeeRate * 100).toFixed(2))}%）`],
-    ['morning', `${config.businessHours.start.replace(/^0/, '')}–12:00`],
-    ['afternoon', `13:00–${config.businessHours.end.replace(/^0/, '')}`],
-    ['evening_service', `${config.serviceFeeHours.eveningStart.replace(/^0/, '')}–${config.serviceFeeHours.eveningEnd.replace(/^0/, '')}（晚间服务费 ${Number((config.serviceFeeRate * 100).toFixed(2))}%）`],
-  ] as const
-  const pickupTimeOptions = (selected = 'morning') => pickupTimeSlots.map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('')
+  const timeToMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number)
+    return hours * 60 + minutes
+  }
+  const halfHourSlots = (start: string, end: string) => {
+    const slots: string[] = []
+    for (let minute = timeToMinutes(start); minute < timeToMinutes(end); minute += 30) {
+      slots.push(`${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`)
+    }
+    return slots
+  }
+  const serviceFeePercent = Number((config.serviceFeeRate * 100).toFixed(2))
+  const pickupTimeGroups = [
+    { label: `早间服务费（${serviceFeePercent}%）`, slots: halfHourSlots(config.serviceFeeHours.morningStart, config.serviceFeeHours.morningEnd), serviceFee: true },
+    { label: '营业时段', slots: halfHourSlots(config.businessHours.start, config.businessHours.end), serviceFee: false },
+    { label: `晚间服务费（${serviceFeePercent}%）`, slots: halfHourSlots(config.serviceFeeHours.eveningStart, config.serviceFeeHours.eveningEnd), serviceFee: true },
+  ].filter((group) => group.slots.length)
+  const pickupTimeOptions = (selected = config.businessHours.start) => pickupTimeGroups.map((group) => `<optgroup label="${group.label}">${group.slots.map((time) => `<option value="${time}"${time === selected ? ' selected' : ''}>${time}${group.serviceFee ? `（服务费 ${serviceFeePercent}%）` : ''}</option>`).join('')}</optgroup>`).join('')
+  const pickupTimePicker = (id: 'pickupTimeSlot' | 'returnTimeSlot', label: string) => `
+    <div class="field time-picker-field">
+      <label id="${id}-label" for="${id}">${label}</label>
+      <select id="${id}" name="${id}" required class="time-picker-native" tabindex="-1" aria-hidden="true">${pickupTimeOptions()}</select>
+      <div class="time-picker" role="group" aria-labelledby="${id}-label" data-time-picker>
+        ${pickupTimeGroups.map((group) => `<section class="time-picker-group${group.serviceFee ? ' is-service-fee' : ''}">
+          <div class="time-picker-group-head"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3.5 2"></path></svg><span>${group.label}</span></div>
+          <div class="time-picker-slots">${group.slots.map((time) => `<button type="button" class="time-picker-slot" data-time="${time}" aria-pressed="${time === config.businessHours.start ? 'true' : 'false'}"><span>${time}</span></button>`).join('')}</div>
+        </section>`).join('')}
+      </div>
+    </div>`
 
   if (!rentable.length) {
     return /* html */ `
@@ -374,8 +396,8 @@ export function renderApply(data: ApplyData): string {
             <div id="pickup-field"${hasPickupLocations ? '' : ' hidden'}>
               <div class="field"><label for="pickupLocation">自取 / 归还地点</label>${pickupField}</div>
               <div class="row2" id="pickup-time-fields">
-                <div class="field"><label for="pickupTimeSlot">取货时间</label><select id="pickupTimeSlot" name="pickupTimeSlot" required>${pickupTimeOptions()}</select></div>
-                <div class="field"><label for="returnTimeSlot">归还时间</label><select id="returnTimeSlot" name="returnTimeSlot" required>${pickupTimeOptions()}</select></div>
+                ${pickupTimePicker('pickupTimeSlot', '取货时间')}
+                ${pickupTimePicker('returnTimeSlot', '归还时间')}
               </div>
             </div>
             <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
@@ -541,6 +563,20 @@ export function renderApply(data: ApplyData): string {
   var pickupField = document.getElementById('pickup-field');
   var pickupTimeSlot = document.getElementById('pickupTimeSlot');
   var returnTimeSlot = document.getElementById('returnTimeSlot');
+  document.querySelectorAll('[data-time-picker]').forEach(function (picker) {
+    var select = picker.parentElement.querySelector('select');
+    function sync() {
+      picker.querySelectorAll('[data-time]').forEach(function (button) {
+        var selected = button.dataset.time === select.value;
+        button.classList.toggle('is-selected', selected); button.setAttribute('aria-pressed', String(selected));
+      });
+    }
+    picker.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-time]'); if (!button) return;
+      select.value = button.dataset.time; select.dispatchEvent(new Event('change', { bubbles: true })); sync();
+    });
+    select.addEventListener('change', sync); sync();
+  });
   var deliveryFields = document.getElementById('delivery-fields');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
@@ -789,6 +825,7 @@ export function renderApply(data: ApplyData): string {
     document.addEventListener('click', function (event) { if (!event.target.closest('.address-autocomplete')) closeAddressSuggestions(); });
   }
   var today = todayStr();
+  var PICKUP_TIME_CONFIG = ${JSON.stringify({ serviceFeeHours: config.serviceFeeHours, businessHours: config.businessHours }).replace(/</g, '\\u003c')};
   var pickupSlots = [
     { value: 'morning_service', period: 'AM' },
     { value: 'morning', period: 'AM' },
@@ -799,19 +836,40 @@ export function renderApply(data: ApplyData): string {
     var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
     var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0); return (hour === 24 ? 0 : hour) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0);
   }
+  function timeToMinutes(time) {
+    var parts = String(time || '').split(':'); var hours = Number(parts[0]); var minutes = Number(parts[1]);
+    return Number.isInteger(hours) && Number.isInteger(minutes) ? hours * 60 + minutes : -1;
+  }
+  function slotCategory(value) {
+    if (['morning_service', 'morning', 'afternoon', 'evening_service'].indexOf(value) >= 0) return value;
+    var minute = timeToMinutes(value); var fees = PICKUP_TIME_CONFIG.serviceFeeHours; var business = PICKUP_TIME_CONFIG.businessHours;
+    if (minute >= timeToMinutes(fees.morningStart) && minute < timeToMinutes(fees.morningEnd)) return 'morning_service';
+    if (minute >= timeToMinutes(business.start) && minute < timeToMinutes(business.end)) return minute < 13 * 60 ? 'morning' : 'afternoon';
+    if (minute >= timeToMinutes(fees.eveningStart) && minute < timeToMinutes(fees.eveningEnd)) return 'evening_service';
+    return '';
+  }
+  function slotInfo(value) {
+    var category = slotCategory(value); if (!category) return null;
+    return { value: value, category: category, period: category === 'afternoon' || category === 'evening_service' ? 'PM' : 'AM' };
+  }
+  function serviceFeeSlot(value) {
+    var category = slotCategory(value); return category === 'morning_service' || category === 'evening_service';
+  }
   function termFor(id) {
     var value = cartTerms[id] || cartState.legacy || {}; var start = value.startDate || today; if (start < today) start = today;
     var pickup = pickupTimeSlot && pickupTimeSlot.value;
     var returned = returnTimeSlot && returnTimeSlot.value;
-    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: method.value === 'Pickup' && (pickup === 'afternoon' || pickup === 'evening_service') ? 'PM' : 'AM', endPeriod: method.value === 'Pickup' && (returned === 'afternoon' || returned === 'evening_service') ? 'PM' : 'AM' };
+    return { startDate: start, endDate: value.endDate || addDays(start, Math.max(1, MIN_DAYS)), startPeriod: method.value === 'Pickup' && slotInfo(pickup)?.period === 'PM' ? 'PM' : 'AM', endPeriod: method.value === 'Pickup' && slotInfo(returned)?.period === 'PM' ? 'PM' : 'AM' };
   }
   function termDays(term) {
     var half = Math.round((Date.parse(term.endDate + 'T00:00:00Z') - Date.parse(term.startDate + 'T00:00:00Z')) / 86400000) * 2 + (term.endPeriod === 'PM' ? 1 : 0) - (term.startPeriod === 'PM' ? 1 : 0);
     return half > 0 ? Math.ceil(half / 2) : 0;
   }
   function slotUnavailable(id, date, slot) {
+    var info = typeof slot === 'string' ? slotInfo(slot) : slot; if (!info) return true;
     var item = DEVICE_AVAILABILITY[id] || {};
-    return (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(slot.period) >= 0) || (UNAVAILABLE_TIME_SLOTS[date] || []).indexOf(slot.value) >= 0 || (item.unavailableTimeSlots && (item.unavailableTimeSlots[date] || []).indexOf(slot.value) >= 0);
+    var globalSlots = UNAVAILABLE_TIME_SLOTS[date] || []; var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
+    return (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0) || globalSlots.indexOf(info.value) >= 0 || globalSlots.indexOf(info.category) >= 0 || deviceSlots.indexOf(info.value) >= 0 || deviceSlots.indexOf(info.category) >= 0;
   }
   function periodUnavailable(id, date, period) {
     var item = DEVICE_AVAILABILITY[id] || {};
@@ -844,7 +902,7 @@ export function renderApply(data: ApplyData): string {
     if (!term.startDate || !term.endDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(term.endDate)) return uiCopy('请为每台设备填写有效租期。');
     if (term.startDate < today || termDays(term) < MIN_DAYS) return uiText('每台设备的租期不能少于 ' + MIN_DAYS + ' 天。', 'Each device must be rented for at least ' + MIN_DAYS + ' day(s).');
     if (termRangeUnavailable(id, term)) return uiCopy('该设备在所选租期或时段不可用。');
-    if (method.value === 'Pickup' && (slotUnavailable(id, term.startDate, pickupSlots.find(function (slot) { return slot.value === pickupTimeSlot.value; })) || slotUnavailable(id, term.endDate, pickupSlots.find(function (slot) { return slot.value === returnTimeSlot.value; })))) return uiCopy('该设备在所选取货或归还时间不可用。');
+    if (method.value === 'Pickup' && (slotUnavailable(id, term.startDate, pickupTimeSlot.value) || slotUnavailable(id, term.endDate, returnTimeSlot.value))) return uiCopy('该设备在所选取货或归还时间不可用。');
     return '';
   }
   function validateTerms() {
@@ -858,7 +916,7 @@ export function renderApply(data: ApplyData): string {
   }
   function calculateRentalPayable() {
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
-    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(function (slot) { return slot === 'morning_service' || slot === 'evening_service'; }).length * 100) / 100 : 0;
+    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(serviceFeeSlot).length * 100) / 100 : 0;
     var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var paymentBase = Math.max(0, rentTotal + serviceFee + deliveryFee - appliedDiscount);
@@ -875,7 +933,7 @@ export function renderApply(data: ApplyData): string {
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
-    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(function (slot) { return slot === 'morning_service' || slot === 'evening_service'; }).length * 100) / 100 : 0;
+    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(serviceFeeSlot).length * 100) / 100 : 0;
     var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
     var total = Math.max(0, rentTotal + serviceFee + depositTotal + deliveryFee - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';

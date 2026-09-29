@@ -222,6 +222,11 @@ p { margin: 0; }
 .field textarea { resize: vertical; min-height: 68px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .row3 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+.time-picker-native { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+.time-picker { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 13px; background: color-mix(in srgb, var(--muted) 72%, transparent); }
+.time-picker-group { min-width: 0; }.time-picker-group + .time-picker-group { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent); }
+.time-picker-group-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--muted-fg); font-size: 10px; font-weight: 700; letter-spacing: .04em; }.time-picker-group-head svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }.time-picker-group.is-service-fee .time-picker-group-head { color: var(--primary); }
+.time-picker-slots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }.time-picker-slot { min-height: 34px; padding: 0 3px; border: 1px solid transparent; border-radius: 999px; background: var(--card); color: var(--fg); font-family: var(--mono); font-size: 11px; font-weight: 600; line-height: 1; cursor: pointer; transition: transform .16s ease, border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease; }.time-picker-slot:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--primary) 52%, transparent); }.time-picker-slot.is-selected { border-color: var(--primary); background: var(--primary); color: #fff; box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 34%, transparent); }.time-picker-slot:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
 .form-summary {
   background: var(--muted); border: 1px solid var(--border); border-radius: 8px;
   padding: 14px 16px; font-size: 14px; margin-bottom: 18px;
@@ -323,6 +328,7 @@ p { margin: 0; }
 .auth-wrap { max-width: 440px; }
 @media (max-width: 620px) {
   .row2, .row3 { grid-template-columns: 1fr; }
+  .time-picker-slots { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 /* ---------- auth (注册 / 登录) ---------- */
