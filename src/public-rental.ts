@@ -587,7 +587,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     const suburb = String(body.deliverySuburb || '').trim().slice(0, 80)
     const state = String(body.deliveryState || '').trim().toUpperCase()
     const postcode = String(body.deliveryPostcode || '').trim()
-    if (!street || !suburb || !state || !postcode) return json(c, 400, { ok: false, message: '请填写完整有效的送货地址。' })
+    if (!street || !suburb || state !== 'VIC' || !/^\d{4}$/.test(postcode)) return json(c, 400, { ok: false, message: '请填写完整有效的澳洲维州送货地址。' })
     location = `${street}, ${suburb}${state ? ` ${state}` : ''}${postcode ? ` ${postcode}` : ''}`
   }
 

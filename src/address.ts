@@ -26,6 +26,11 @@ function stateCode(value: unknown): string {
   return STATE_NAMES[raw.toLowerCase()] || raw.toUpperCase()
 }
 
+function countryCode(value: unknown): string {
+  const raw = String(value || '').trim().toUpperCase()
+  return raw === 'AUSTRALIA' ? 'AU' : raw
+}
+
 function houseNumber(properties: Record<string, unknown>): string {
   const explicit = String(properties.housenumber || properties.house_number || '').trim()
   if (explicit) return explicit
@@ -42,28 +47,29 @@ function fromProvider(properties: Record<string, unknown>, type: string, id: unk
   const rawSuburb = String(properties.suburb || properties.locality || properties.neighbourhood || properties.district || properties.city || properties.town || '').trim()
   const city = String(properties.city || properties.town || properties.municipality || '').trim()
   const state = stateCode(properties.state)
+  const country = countryCode(properties.country_code || properties.countrycode || properties.countryCode)
   const postcode = String(properties.postcode || '').trim()
   const suburb = rawSuburb || city
   const formattedParts = [street, rawSuburb, city, state, postcode].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index)
   const formattedAddress = formattedParts.join(', ') || String(properties.display_name || '').trim()
-  if (!formattedAddress) return null
+  if (!formattedAddress || state !== 'VIC' || country !== 'AU') return null
   const placeId = `${type}_${id || formattedAddress}`.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 300)
   return { placeId, text: formattedAddress, street, suburb, state, postcode, formattedAddress }
 }
 
-export async function autocompleteAddresses(query: string): Promise<AddressSuggestion[]> {
+export async function autocompleteVictoriaAddresses(query: string): Promise<AddressSuggestion[]> {
   const input = query.trim().slice(0, 120)
   if (!input) return []
   const headers = { Accept: 'application/json', 'User-Agent': 'GeekSlope-Web/1.0 address search' }
   const providers: Array<(signal: AbortSignal) => Promise<AddressSuggestion[]>> = [
     async (signal) => {
-      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: input, lang: 'en' })}`, { headers, signal })
+      const response = await fetch(`https://photon.komoot.io/api/?${new URLSearchParams({ q: `${input}, Victoria, Australia`, lang: 'en' })}`, { headers, signal })
       if (!response.ok) throw new Error(`Photon ${response.status}`)
       const data = await response.json() as { features?: Array<{ properties?: Record<string, unknown> }> }
       return (data.features || []).map((feature) => fromProvider(feature.properties || {}, 'photon', feature.properties?.osm_id)).filter((item): item is AddressSuggestion => Boolean(item))
     },
     async (signal) => {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: input, format: 'jsonv2', addressdetails: '1' })}`, { headers, signal })
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${new URLSearchParams({ q: `${input}, Victoria`, format: 'jsonv2', addressdetails: '1', countrycodes: 'au' })}`, { headers, signal })
       if (!response.ok) throw new Error(`Nominatim ${response.status}`)
       const data = await response.json() as Array<{ address?: Record<string, unknown>; osm_type?: string; osm_id?: unknown; display_name?: string }>
       return data.map((item) => fromProvider({ ...(item.address || {}), display_name: item.display_name }, item.osm_type || 'osm', item.osm_id)).filter((item): item is AddressSuggestion => Boolean(item))

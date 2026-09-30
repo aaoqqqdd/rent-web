@@ -280,9 +280,6 @@ export function renderApply(data: ApplyData): string {
   const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardConfig, deliveryQuoteEnabled } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
-  const deliveryNote = deliveryQuoteEnabled
-    ? '填写完整地址后立即获取预估配送费，最终以确认订单为准。'
-    : '填写完整地址，配送范围和费用将在审核时确认。'
   const timeToMinutes = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number)
     return hours * 60 + minutes
@@ -397,7 +394,7 @@ export function renderApply(data: ApplyData): string {
           </div>
 
           <div class="form-card">
-            <div class="form-card-head"><span>02</span><div><h3>取还方式</h3><p>${deliveryQuoteEnabled ? '选择完整地址后立即获取预估运费' : '在线报价暂未启用，运费将在审核时确认'}</p></div></div>
+            <div class="form-card-head"><span>02</span><div><h3>取还方式</h3><p>${deliveryQuoteEnabled ? '填写完整地址后立即获取预估运费' : '在线报价暂未启用，运费将在审核时确认'}</p></div></div>
             <div class="field">
               <label for="deliveryMethod">取还方式</label>
               <select id="deliveryMethod" name="deliveryMethod"><option value="Pickup"${hasPickupLocations ? '' : ' disabled'}>到店自取${hasPickupLocations ? `（${config.pickupLocations.length} 个可选地点）` : '（暂未开放）'}</option><option value="Delivery"${hasPickupLocations ? '' : ' selected'}>送货上门</option></select>
@@ -411,20 +408,19 @@ export function renderApply(data: ApplyData): string {
             </div>
             <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
               <div class="field address-autocomplete">
-                <label for="delivery-address-search">搜索地址</label>
+                <label for="delivery-address-search">搜索澳洲维州地址</label>
                 <input id="delivery-address-search" type="search" autocomplete="off" role="combobox" aria-controls="address-suggestions" aria-expanded="false" placeholder="例如 123 Collins Street, Melbourne">
-                <div class="address-search-status" id="address-search-status" aria-live="polite">输入地址开始联想。</div>
+                <div class="address-search-status" id="address-search-status" aria-live="polite">输入至少 3 个字符开始联想。</div>
                 <div class="address-suggestions" id="address-suggestions" role="listbox" hidden></div>
                 <small class="address-attribution">地址数据 © OpenStreetMap contributors</small>
               </div>
               <div class="field"><label for="deliveryStreet">街道地址</label><input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1"></div>
               <div class="row3">
                 <div class="field"><label for="deliverySuburb">Suburb</label><input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra"></div>
-                <div class="field"><label for="deliveryState">州 / State</label><input id="deliveryState" name="deliveryState" value="VIC"></div>
+                <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
               </div>
-              <div class="field"><label for="deliveryPostcode">邮编 / Postcode</label><input id="deliveryPostcode" name="deliveryPostcode" placeholder="邮编"></div>
-              <p class="hint">${esc(deliveryNote)}</p>
-              ${deliveryQuoteEnabled ? '<input type="hidden" id="deliveryQuoteId" name="deliveryQuoteId"><p class="hint" id="delivery-quote-hint" aria-live="polite">选择完整地址后立即获取预估配送费。</p>' : '<p class="hint">在线报价暂未启用，运费将在审核时确认。</p>'}
+              <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
+              ${deliveryQuoteEnabled ? '<input type="hidden" id="deliveryQuoteId" name="deliveryQuoteId"><p class="hint" id="delivery-quote-hint" aria-live="polite"></p>' : '<p class="hint">在线报价暂未启用，运费将在审核时确认。</p>'}
             </div>
           </div>
 
@@ -717,6 +713,10 @@ export function renderApply(data: ApplyData): string {
     couponState = code ? 'unchecked' : 'empty';
     appliedDiscount = 0;
   }
+  function isVictoriaDeliveryAddress() {
+    if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
+    return /^\\d{4}$/.test(document.getElementById('deliveryPostcode').value.trim());
+  }
   function setAddressStatus(message, state) {
     if (addressStatus) { addressStatus.textContent = uiCopy(message); addressStatus.dataset.state = state || ''; }
   }
@@ -754,7 +754,7 @@ export function renderApply(data: ApplyData): string {
       var lookupQuery = query;
       var queryKey = query.toLowerCase().replace(/\s+/g, ' ');
       var requestSequence = ++addressRequestSequence;
-      if (!query.length) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入地址开始联想。'); return; }
+      if (query.length < 3) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入至少 3 个字符开始联想。'); return; }
       var cachedSuggestions = addressCache.get(queryKey);
       if (cachedSuggestions) {
         renderAddressSuggestions(cachedSuggestions);
@@ -953,7 +953,7 @@ export function renderApply(data: ApplyData): string {
     }
     var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
       + (serviceFee ? summaryRow(uiText('时段服务费', 'Time-slot service fee'), '$' + serviceFee.toFixed(2)) : '')
-      + (method.value === 'Delivery' ? summaryRow(uiText('配送费', 'Delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : deliveryQuoteState === 'loading' ? uiText('报价中…', 'Getting quote…') : uiText('填写地址后报价', 'Enter address to quote')) : '')
+      + (method.value === 'Delivery' ? summaryRow(uiText('来回配送费', 'Round-trip delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : deliveryQuoteState === 'loading' ? uiText('报价中…', 'Getting quote…') : uiText('填写地址后报价', 'Enter address to quote')) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
       + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '')
       + (selectedPaymentMethod === 'square' && squareGiftCardVerified ? summaryRow(uiText('礼品卡预计扣减', 'Estimated gift card deduction'), '-$' + giftCardDeduction.toFixed(2), 'summary-discount') : '')
@@ -1337,10 +1337,10 @@ export function renderApply(data: ApplyData): string {
     var state = document.getElementById('deliveryState').value.trim();
     var postcode = document.getElementById('deliveryPostcode').value.trim();
     var hint = document.getElementById('delivery-quote-hint');
-    if (!street || !suburb || !state || !postcode) {
+    if (!street || !suburb || !state || !/^\\d{4}$/.test(postcode) || !isVictoriaDeliveryAddress()) {
       deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteSpeed = 'Same day'; deliveryQuoteMessage = ''; deliveryQuoteState = 'idle';
       var staleInput = document.getElementById('deliveryQuoteId'); if (staleInput) staleInput.value = '';
-      if (hint) hint.textContent = uiCopy('选择完整地址后立即获取预估配送费。');
+      if (hint) hint.textContent = '';
       refreshSummary(); return;
     }
     deliveryQuoteState = 'loading'; deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteMessage = '';
@@ -1356,7 +1356,7 @@ export function renderApply(data: ApplyData): string {
       if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '配送报价失败，请稍后重试。'));
       deliveryQuoteId = String(result.json.quoteId || ''); deliveryQuoteAmount = Number(result.json.price || 0); deliveryQuoteSpeed = String(result.json.deliverySpeed || 'Same day'); deliveryQuoteMessage = ''; deliveryQuoteState = deliveryQuoteId && Number.isFinite(deliveryQuoteAmount) ? 'ready' : 'error';
       if (quoteInput) quoteInput.value = deliveryQuoteId;
-      if (hint) hint.textContent = deliveryQuoteState === 'ready' ? uiText('预计配送费：AUD$' + deliveryQuoteAmount.toFixed(2) + '（' + deliveryQuoteSpeed + '）。提交申请前请注意报价有效期。', 'Estimated delivery: AUD$' + deliveryQuoteAmount.toFixed(2) + ' (' + deliveryQuoteSpeed + '). The quote expires shortly.') : uiCopy('配送报价无效，请重试。');
+      if (hint) hint.textContent = deliveryQuoteState === 'ready' ? uiText('预计来回配送费：AUD$' + deliveryQuoteAmount.toFixed(2) + '（' + deliveryQuoteSpeed + '）。报价有效期有限。', 'Estimated round-trip delivery: AUD$' + deliveryQuoteAmount.toFixed(2) + ' (' + deliveryQuoteSpeed + '). The quote expires shortly.') : uiCopy('配送报价无效，请重试。');
       clearCheckoutError(); refreshSummary();
     }).catch(function (error) {
       if (error.name === 'AbortError' || requestSequence !== deliveryQuoteRequestSequence) return;
@@ -1372,10 +1372,10 @@ export function renderApply(data: ApplyData): string {
   function renderDeliveryQuoteHint() {
     var hint = document.getElementById('delivery-quote-hint');
     if (!hint) return;
-    if (deliveryQuoteState === 'ready') hint.textContent = uiText('预计配送费：AUD$' + deliveryQuoteAmount.toFixed(2) + '（' + deliveryQuoteSpeed + '）。提交申请前请注意报价有效期。', 'Estimated delivery: AUD$' + deliveryQuoteAmount.toFixed(2) + ' (' + deliveryQuoteSpeed + '). The quote expires shortly.');
+    if (deliveryQuoteState === 'ready') hint.textContent = uiText('预计来回配送费：AUD$' + deliveryQuoteAmount.toFixed(2) + '（' + deliveryQuoteSpeed + '）。报价有效期有限。', 'Estimated round-trip delivery: AUD$' + deliveryQuoteAmount.toFixed(2) + ' (' + deliveryQuoteSpeed + '). The quote expires shortly.');
     else if (deliveryQuoteState === 'loading') hint.textContent = uiCopy('正在获取配送报价…');
     else if (deliveryQuoteState === 'error') hint.textContent = uiCopy(deliveryQuoteMessage || '配送报价失败，请稍后重试。');
-    else if (method.value === 'Delivery') hint.textContent = uiCopy('选择完整地址后立即获取预估配送费。');
+    else if (method.value === 'Delivery') hint.textContent = '';
   }
   function scheduleDeliveryQuote(showError) {
     if (!DELIVERY_QUOTE_ENABLED || method.value !== 'Delivery') return;
@@ -1384,12 +1384,17 @@ export function renderApply(data: ApplyData): string {
   function validateDeliveryAddress(showError) {
     var suburb = document.getElementById('deliverySuburb');
     if (method.value !== 'Delivery') { suburb.setCustomValidity(''); return true; }
-    suburb.setCustomValidity('');
-    return true;
+    var state = document.getElementById('deliveryState').value.trim().toUpperCase();
+    var postcode = document.getElementById('deliveryPostcode').value.trim();
+    var message = state !== 'VIC' || !/^\\d{4}$/.test(postcode)
+      ? uiText('请输入澳洲维州地址和 4 位邮编。', 'Enter a Victorian, Australia address with a 4-digit postcode.') : '';
+    suburb.setCustomValidity(message);
+    if (message && showError) showFormError(message, suburb);
+    return !message;
   }
   function validateContactFields(showError) { return true; }
-  ['input', 'change'].forEach(function (eventName) {
-    ['deliveryStreet', 'deliverySuburb', 'deliveryPostcode'].forEach(function (id) {
+  ['input', 'change', 'blur'].forEach(function (eventName) {
+    ['deliveryStreet', 'deliverySuburb', 'deliveryState', 'deliveryPostcode'].forEach(function (id) {
       document.getElementById(id).addEventListener(eventName, function () { validateDeliveryAddress(true); scheduleDeliveryQuote(true); });
     });
   });

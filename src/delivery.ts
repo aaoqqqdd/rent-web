@@ -8,6 +8,7 @@ type DeliveryContext = Context<{ Bindings: Env }>
 const ZOOM2U_BASE_URL = 'https://api.zoom2u.com'
 const QUOTE_TTL_MS = 10 * 60 * 1000
 const MAX_PAYLOAD_LENGTH = 12_000
+const ROUND_TRIP_DELIVERY_MULTIPLIER = 2
 
 interface AddressInput {
   street: string
@@ -162,7 +163,7 @@ function jsonPayload(value: unknown): string {
 }
 
 function fullAddress(address: AddressInput): string {
-  return `${address.street}, ${address.suburb} ${address.state} ${address.postcode}`.trim()
+  return `${address.street}, ${address.suburb} ${address.state} ${address.postcode}, Australia`
 }
 
 function normalizeAddress(value: string): string {
@@ -328,8 +329,8 @@ export async function quoteDelivery(c: DeliveryContext, input: DeliveryQuoteRequ
     return { ok: false, message: quoteMessage(payload), code: 'provider_error' }
   }
   const option = pickQuoteOption(payload, configuredSpeed(config))
-  const price = Number(option?.price)
-  if (!option || !Number.isFinite(price) || price < 0) {
+  const oneWayPrice = Number(option?.price)
+  if (!option || !Number.isFinite(oneWayPrice) || oneWayPrice < 0) {
     console.error('Zoom2u quote response did not contain a price', jsonPayload(payload))
     return { ok: false, message: '配送商返回了无效报价，请联系客服确认。', code: 'invalid_provider_response' }
   }
@@ -345,7 +346,7 @@ export async function quoteDelivery(c: DeliveryContext, input: DeliveryQuoteRequ
        VALUES (?, 'zoom2u', ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       quoteId,
-      Number(price.toFixed(2)),
+      Number(oneWayPrice.toFixed(2)),
       address,
       Math.max(1, Math.min(10, Math.floor(input.deviceCount || 1))),
       clean(option.deliverySpeed, 32) || configuredSpeed(config),
@@ -361,7 +362,7 @@ export async function quoteDelivery(c: DeliveryContext, input: DeliveryQuoteRequ
   return {
     ok: true,
     quoteId,
-    price: Number(price.toFixed(2)),
+    price: Number((oneWayPrice * ROUND_TRIP_DELIVERY_MULTIPLIER).toFixed(2)),
     currency: 'AUD',
     deliverySpeed: clean(option.deliverySpeed, 32) || configuredSpeed(config),
     deliveredBy: clean(option.deliveredBy, 64) || null,
@@ -397,7 +398,7 @@ export async function validateDeliveryQuote(
       return { ok: false, message: '配送地址或设备数量发生变化，请重新获取报价。' }
     }
     if (!Number.isFinite(quote.price) || quote.price < 0) return { ok: false, message: '配送报价无效，请重新获取报价。' }
-    return { ok: true, price: Number(quote.price.toFixed(2)) }
+    return { ok: true, price: Number((quote.price * ROUND_TRIP_DELIVERY_MULTIPLIER).toFixed(2)) }
   } catch (error) {
     console.error('Delivery quote validation failed', error)
     return { ok: false, message: '配送报价暂时无法验证，请稍后重试。' }

@@ -29,7 +29,7 @@ import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcem
 import { renderGiftCards } from './pages/gift-cards'
 import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
 import { getPublicSquareGiftCardConfig, inspectSquareGiftCardNonce } from './squareGiftCard'
-import { autocompleteAddresses } from './address'
+import { autocompleteVictoriaAddresses } from './address'
 import { createDeliveryBooking, deliveryAdminTokenConfigured, deliveryQuotesEnabled, handleZoom2uWebhook, quoteDelivery, verifyDeliveryAdminToken } from './delivery'
 import { listOrdersForUser, lookupOrderByCredentials } from './orders'
 import {
@@ -229,8 +229,8 @@ app.get('/api/address/autocomplete', async (c) => {
   if (cached) return cached
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
   if (!(await enforceRateLimit(c.env, 'web-address-autocomplete', ip, 30, 60))) return c.json({ error: '地址查询过于频繁，请稍后再试。' }, 429)
-  const suggestions = await autocompleteAddresses(query)
-  const payload = JSON.stringify({ suggestions, message: suggestions.length ? undefined : '没有找到地址，请继续输入或手工填写。' })
+  const suggestions = await autocompleteVictoriaAddresses(query)
+  const payload = JSON.stringify({ suggestions, message: suggestions.length ? undefined : '没有找到澳洲维州地址，请继续输入或手工填写。' })
   const response = new Response(payload, {
     status: 200,
     headers: {
@@ -252,7 +252,7 @@ app.post('/api/delivery/quote', async (c) => {
   const suburb = String(body.deliverySuburb || '').trim().slice(0, 80)
   const state = String(body.deliveryState || '').trim().toUpperCase()
   const postcode = String(body.deliveryPostcode || '').trim()
-  if (!street || !suburb || !state || !postcode) return c.json({ ok: false, message: '请填写完整有效的送货地址。' }, 400)
+  if (!street || !suburb || state !== 'VIC' || !/^\d{4}$/.test(postcode)) return c.json({ ok: false, message: '请填写完整有效的澳洲维州送货地址。' }, 400)
   const deviceCount = Math.max(1, Math.min(10, Math.floor(Number(body.deviceCount) || 1)))
   const result = await quoteDelivery(c, {
     address: { street, suburb, state, postcode },
