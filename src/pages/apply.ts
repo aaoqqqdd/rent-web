@@ -280,10 +280,9 @@ export function renderApply(data: ApplyData): string {
   const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardConfig, deliveryQuoteEnabled } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
-  const deliveryAreas = config.deliveryAreas.join('、')
   const deliveryNote = deliveryQuoteEnabled
-    ? '送货上门仅限墨尔本 CBD 及周边地区，填写完整地址后立即获取预估配送费，最终以确认订单为准。'
-    : config.deliveryNote
+    ? '填写完整地址后立即获取预估配送费，最终以确认订单为准。'
+    : '填写完整地址，配送范围和费用将在审核时确认。'
   const timeToMinutes = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number)
     return hours * 60 + minutes
@@ -296,11 +295,21 @@ export function renderApply(data: ApplyData): string {
     return slots
   }
   const serviceFeePercent = Number((config.serviceFeeRate * 100).toFixed(2))
+  const businessStart = timeToMinutes(config.businessHours.start)
+  const businessEnd = timeToMinutes(config.businessHours.end)
   const pickupTimeGroups = [
-    { label: `早间服务费（${serviceFeePercent}%）`, slots: halfHourSlots(config.serviceFeeHours.morningStart, config.serviceFeeHours.morningEnd), serviceFee: true },
+    ...config.serviceFeeHours.map((range) => {
+      const beforeBusiness = timeToMinutes(range.end) <= businessStart
+      const afterBusiness = timeToMinutes(range.start) >= businessEnd
+      const label = beforeBusiness
+        ? '早间服务费'
+        : afterBusiness
+          ? '晚间服务费'
+          : '非营业服务费'
+      return { label: `${label}（${serviceFeePercent}%）`, slots: halfHourSlots(range.start, range.end), serviceFee: true }
+    }),
     { label: '营业时段', slots: halfHourSlots(config.businessHours.start, config.businessHours.end), serviceFee: false },
-    { label: `晚间服务费（${serviceFeePercent}%）`, slots: halfHourSlots(config.serviceFeeHours.eveningStart, config.serviceFeeHours.eveningEnd), serviceFee: true },
-  ].filter((group) => group.slots.length)
+  ].filter((group) => group.slots.length).sort((a, b) => timeToMinutes(a.slots[0]) - timeToMinutes(b.slots[0]))
   const pickupTimeOptions = (selected = config.businessHours.start) => pickupTimeGroups.map((group) => `<optgroup label="${group.label}">${group.slots.map((time) => `<option value="${time}"${time === selected ? ' selected' : ''}>${time}${group.serviceFee ? `（服务费 ${serviceFeePercent}%）` : ''}</option>`).join('')}</optgroup>`).join('')
   const pickupTimePicker = (id: 'pickupTimeSlot' | 'returnTimeSlot', label: string) => `
     <div class="field time-picker-field">
@@ -402,19 +411,19 @@ export function renderApply(data: ApplyData): string {
             </div>
             <div id="delivery-fields"${hasPickupLocations ? ' hidden' : ''}>
               <div class="field address-autocomplete">
-                <label for="delivery-address-search">搜索墨尔本地址</label>
+                <label for="delivery-address-search">搜索地址</label>
                 <input id="delivery-address-search" type="search" autocomplete="off" role="combobox" aria-controls="address-suggestions" aria-expanded="false" placeholder="例如 123 Collins Street, Melbourne">
-                <div class="address-search-status" id="address-search-status" aria-live="polite">输入至少 3 个字符开始联想。</div>
+                <div class="address-search-status" id="address-search-status" aria-live="polite">输入地址开始联想。</div>
                 <div class="address-suggestions" id="address-suggestions" role="listbox" hidden></div>
                 <small class="address-attribution">地址数据 © OpenStreetMap contributors</small>
               </div>
               <div class="field"><label for="deliveryStreet">街道地址</label><input id="deliveryStreet" name="deliveryStreet" autocomplete="address-line1"></div>
               <div class="row3">
                 <div class="field"><label for="deliverySuburb">Suburb</label><input id="deliverySuburb" name="deliverySuburb" placeholder="如 Docklands / South Yarra"></div>
-                <div class="field"><label for="deliveryState">州</label><input id="deliveryState" name="deliveryState" value="VIC" readonly></div>
+                <div class="field"><label for="deliveryState">州 / State</label><input id="deliveryState" name="deliveryState" value="VIC"></div>
               </div>
-              <div class="field"><label for="deliveryPostcode">邮编</label><input id="deliveryPostcode" name="deliveryPostcode" inputmode="numeric" pattern="\\d{4}" placeholder="4 位数字"></div>
-              <p class="hint">${esc(deliveryNote)}${deliveryAreas ? `<br>可配送区域：${esc(deliveryAreas)}` : ''}</p>
+              <div class="field"><label for="deliveryPostcode">邮编 / Postcode</label><input id="deliveryPostcode" name="deliveryPostcode" placeholder="邮编"></div>
+              <p class="hint">${esc(deliveryNote)}</p>
               ${deliveryQuoteEnabled ? '<input type="hidden" id="deliveryQuoteId" name="deliveryQuoteId"><p class="hint" id="delivery-quote-hint" aria-live="polite">选择完整地址后立即获取预估配送费。</p>' : '<p class="hint">在线报价暂未启用，运费将在审核时确认。</p>'}
             </div>
           </div>
@@ -521,10 +530,10 @@ export function renderApply(data: ApplyData): string {
   var MIN_DAYS = ${config.minimumRentalDays};
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
+  var UNAVAILABLE_PICKUP_HOURS = ${scriptJson(config.unavailablePickupHours)};
   var DEVICE_AVAILABILITY = {};
   var AVAILABILITY_READY = false;
   var AVAILABILITY_FAILED = false;
-  var DELIVERY_POSTCODES = ${scriptJson(config.deliveryPostcodes)};
   var COUPON_ENDPOINT = '/api/coupons/rental-cart-preview';
   var DELIVERY_QUOTE_ENDPOINT = '/api/delivery/quote';
   var DELIVERY_QUOTE_ENABLED = ${deliveryQuoteEnabled ? 'true' : 'false'};
@@ -669,11 +678,6 @@ export function renderApply(data: ApplyData): string {
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
   function formatDate(value) { return value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
-  function isMelbourneDeliveryAddress() {
-    if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
-    var postcode = document.getElementById('deliveryPostcode').value.trim();
-    return (DELIVERY_POSTCODES || []).indexOf(postcode) >= 0;
-  }
   function removeInlineError(target) {
     var host = target ? errorHost(target) : null;
     activeInlineErrors = activeInlineErrors.filter(function (item) {
@@ -735,36 +739,29 @@ export function renderApply(data: ApplyData): string {
       var button = document.createElement('button');
       button.type = 'button'; button.setAttribute('role', 'option'); button.setAttribute('aria-selected', 'false');
       button.dataset.address = JSON.stringify(item);
-      var marker = document.createElement('span'); marker.className = 'address-suggestion-marker'; marker.textContent = 'AU';
+      var marker = document.createElement('span'); marker.className = 'address-suggestion-marker'; marker.textContent = 'MAP';
       var label = document.createElement('span'); label.textContent = item.text;
       button.append(marker, label); addressSuggestions.appendChild(button);
     });
     addressSuggestions.hidden = !items.length;
     addressSearch.setAttribute('aria-expanded', String(Boolean(items.length)));
   }
-  function addressLookupQuery() {
-    return [
-      addressSearch && addressSearch.value.trim(),
-      document.getElementById('deliverySuburb').value.trim(),
-      document.getElementById('deliveryPostcode').value.trim(),
-    ].filter(Boolean).join(', ');
-  }
   if (addressSearch && addressSuggestions) {
     addressSearch.addEventListener('input', function () {
       window.clearTimeout(addressTimer);
       if (addressRequest) addressRequest.abort();
       var query = addressSearch.value.trim();
-      var lookupQuery = addressLookupQuery();
-      var queryKey = lookupQuery.toLowerCase().replace(/\s+/g, ' ');
+      var lookupQuery = query;
+      var queryKey = query.toLowerCase().replace(/\s+/g, ' ');
       var requestSequence = ++addressRequestSequence;
-      if (query.length < 3) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入至少 3 个字符开始联想。'); return; }
+      if (!query.length) { closeAddressSuggestions(); renderAddressSuggestions([]); setAddressStatus('输入地址开始联想。'); return; }
       var cachedSuggestions = addressCache.get(queryKey);
       if (cachedSuggestions) {
         renderAddressSuggestions(cachedSuggestions);
-        setAddressStatus(cachedSuggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', cachedSuggestions.length ? 'ready' : 'empty');
+        setAddressStatus(cachedSuggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的地址，请继续输入。', cachedSuggestions.length ? 'ready' : 'empty');
         return;
       }
-      setAddressStatus('正在查找墨尔本地址…', 'loading');
+      setAddressStatus('正在查找地址…', 'loading');
       addressTimer = window.setTimeout(function () {
         addressRequest = new AbortController();
         fetch('/api/address/autocomplete?q=' + encodeURIComponent(lookupQuery), { headers: { Accept: 'application/json' }, signal: addressRequest.signal })
@@ -775,7 +772,7 @@ export function renderApply(data: ApplyData): string {
             var suggestions = result.json.suggestions || [];
             addressCache.set(queryKey, suggestions);
             renderAddressSuggestions(suggestions);
-            setAddressStatus(suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的墨尔本地址，请继续输入。', suggestions.length ? 'ready' : 'empty');
+            setAddressStatus(suggestions.length ? '请选择地址以自动填写。' : '没有找到匹配的地址，请继续输入。', suggestions.length ? 'ready' : 'empty');
           })
           .catch(function (error) {
             if (error.name === 'AbortError' || requestSequence !== addressRequestSequence) return;
@@ -786,11 +783,6 @@ export function renderApply(data: ApplyData): string {
           })
           .finally(function () { if (requestSequence === addressRequestSequence) addressRequest = null; });
       }, 250);
-    });
-    ['deliverySuburb', 'deliveryPostcode'].forEach(function (id) {
-      document.getElementById(id).addEventListener('input', function () {
-        if (addressSearch.value.trim().length >= 3) addressSearch.dispatchEvent(new Event('input'));
-      });
     });
     addressSearch.addEventListener('keydown', function (event) {
       var options = addressSuggestions.querySelectorAll('button[role="option"]');
@@ -833,18 +825,25 @@ export function renderApply(data: ApplyData): string {
   }
   function slotCategory(value) {
     if (['morning_service', 'morning', 'afternoon', 'evening_service'].indexOf(value) >= 0) return value;
-    var minute = timeToMinutes(value); var fees = PICKUP_TIME_CONFIG.serviceFeeHours; var business = PICKUP_TIME_CONFIG.businessHours;
-    if (minute >= timeToMinutes(fees.morningStart) && minute < timeToMinutes(fees.morningEnd)) return 'morning_service';
+    var minute = timeToMinutes(value); var fees = PICKUP_TIME_CONFIG.serviceFeeHours || []; var business = PICKUP_TIME_CONFIG.businessHours;
+    for (var index = 0; index < fees.length; index += 1) {
+      var fee = fees[index];
+      if (minute >= timeToMinutes(fee.start) && minute < timeToMinutes(fee.end)) {
+        if (timeToMinutes(fee.end) <= timeToMinutes(business.start)) return 'morning_service';
+        if (timeToMinutes(fee.start) >= timeToMinutes(business.end)) return 'evening_service';
+        return 'service_fee';
+      }
+    }
     if (minute >= timeToMinutes(business.start) && minute < timeToMinutes(business.end)) return minute < 13 * 60 ? 'morning' : 'afternoon';
-    if (minute >= timeToMinutes(fees.eveningStart) && minute < timeToMinutes(fees.eveningEnd)) return 'evening_service';
     return '';
   }
   function slotInfo(value) {
     var category = slotCategory(value); if (!category) return null;
-    return { value: value, category: category, period: category === 'afternoon' || category === 'evening_service' ? 'PM' : 'AM' };
+    var minute = timeToMinutes(value); var business = PICKUP_TIME_CONFIG.businessHours;
+    return { value: value, category: category, period: category === 'afternoon' || category === 'evening_service' || (category === 'service_fee' && minute >= timeToMinutes(business.end)) ? 'PM' : 'AM' };
   }
   function serviceFeeSlot(value) {
-    var category = slotCategory(value); return category === 'morning_service' || category === 'evening_service';
+    var category = slotCategory(value); return category === 'morning_service' || category === 'evening_service' || category === 'service_fee';
   }
   function termFor(id) {
     var value = cartTerms[id] || cartState.legacy || {}; var start = value.startDate || today; if (start < today) start = today;
@@ -860,7 +859,9 @@ export function renderApply(data: ApplyData): string {
     var info = typeof slot === 'string' ? slotInfo(slot) : slot; if (!info) return true;
     var item = DEVICE_AVAILABILITY[id] || {};
     var globalSlots = UNAVAILABLE_TIME_SLOTS[date] || []; var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
-    return (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0) || globalSlots.indexOf(info.value) >= 0 || globalSlots.indexOf(info.category) >= 0 || deviceSlots.indexOf(info.value) >= 0 || deviceSlots.indexOf(info.category) >= 0;
+    var weekday = new Date(date + 'T00:00:00Z').getUTCDay();
+    var weeklyUnavailable = UNAVAILABLE_PICKUP_HOURS.some(function (range) { return Number(range.weekday) === weekday && timeToMinutes(info.value) >= timeToMinutes(range.start) && timeToMinutes(info.value) < timeToMinutes(range.end); });
+    return weeklyUnavailable || (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0) || globalSlots.indexOf(info.value) >= 0 || globalSlots.indexOf(info.category) >= 0 || deviceSlots.indexOf(info.value) >= 0 || deviceSlots.indexOf(info.category) >= 0;
   }
   function periodUnavailable(id, date, period) {
     var item = DEVICE_AVAILABILITY[id] || {};
@@ -1336,7 +1337,7 @@ export function renderApply(data: ApplyData): string {
     var state = document.getElementById('deliveryState').value.trim();
     var postcode = document.getElementById('deliveryPostcode').value.trim();
     var hint = document.getElementById('delivery-quote-hint');
-    if (!street || !suburb || !/^\\d{4}$/.test(postcode) || !isMelbourneDeliveryAddress()) {
+    if (!street || !suburb || !state || !postcode) {
       deliveryQuoteId = ''; deliveryQuoteAmount = 0; deliveryQuoteSpeed = 'Same day'; deliveryQuoteMessage = ''; deliveryQuoteState = 'idle';
       var staleInput = document.getElementById('deliveryQuoteId'); if (staleInput) staleInput.value = '';
       if (hint) hint.textContent = uiCopy('选择完整地址后立即获取预估配送费。');
@@ -1383,14 +1384,8 @@ export function renderApply(data: ApplyData): string {
   function validateDeliveryAddress(showError) {
     var suburb = document.getElementById('deliverySuburb');
     if (method.value !== 'Delivery') { suburb.setCustomValidity(''); return true; }
-    var street = document.getElementById('deliveryStreet').value.trim();
-    var suburbValue = suburb.value.trim();
-    var postcode = document.getElementById('deliveryPostcode').value.trim();
-    var message = street && suburbValue && postcode && !isMelbourneDeliveryAddress()
-      ? uiText('该邮编不在当前配送范围内，请选择到店自取。', 'This postcode is outside the current delivery area. Choose store pickup instead.') : '';
-    suburb.setCustomValidity(message);
-    if (message && showError) showFormError(message, suburb);
-    return !message;
+    suburb.setCustomValidity('');
+    return true;
   }
   function validateContactFields(showError) { return true; }
   ['input', 'change'].forEach(function (eventName) {

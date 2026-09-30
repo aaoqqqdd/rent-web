@@ -162,7 +162,7 @@ function jsonPayload(value: unknown): string {
 }
 
 function fullAddress(address: AddressInput): string {
-  return `${address.street}, ${address.suburb} ${address.state} ${address.postcode}, Australia`
+  return `${address.street}, ${address.suburb} ${address.state} ${address.postcode}`.trim()
 }
 
 function normalizeAddress(value: string): string {

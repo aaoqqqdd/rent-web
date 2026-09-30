@@ -563,12 +563,12 @@ export interface RentalConfig {
   bufferDays: number
   unavailableDates: string[]
   unavailableTimeSlots: Record<string, string[]>
-  serviceFeeHours: { morningStart: string; morningEnd: string; eveningStart: string; eveningEnd: string }
+  serviceFeeHours: Array<{ start: string; end: string }>
+  unavailablePickupHours: Array<{ weekday: number; start: string; end: string }>
   businessHours: { start: string; end: string }
   serviceFeeRate: number
   pickupLocations: string[]
   deliveryAreas: string[]
-  deliveryPostcodes: string[]
   deliveryNote: string
 }
 
@@ -579,12 +579,12 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     bufferDays: 0,
     unavailableDates: [],
     unavailableTimeSlots: {},
-    serviceFeeHours: { morningStart: '07:00', morningEnd: '08:00', eveningStart: '21:00', eveningEnd: '23:00' },
+    serviceFeeHours: [{ start: '07:00', end: '08:00' }, { start: '21:00', end: '23:00' }],
+    unavailablePickupHours: [],
     businessHours: { start: '09:00', end: '20:00' },
     serviceFeeRate: 0.1,
     pickupLocations: [],
     deliveryAreas: ['墨尔本 CBD', 'Docklands', 'Southbank', 'South Yarra', 'Carlton', 'East Melbourne', 'North Melbourne'],
-    deliveryPostcodes: ['3000', '3001', '3002', '3004', '3006', '3008', '3051', '3053', '3141'],
     deliveryNote: '送货上门仅限墨尔本 CBD 及周边地区，填写完整地址后立即获取预估配送费，最终以确认订单为准。',
   }
   try {
@@ -614,14 +614,42 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
               .map(([date, slots]) => [date, (slots as unknown[]).map((slot) => String(slot)).filter(Boolean)]),
           )
         }
-        const serviceFeeHours = parsed.serviceFeeHours && typeof parsed.serviceFeeHours === 'object' ? parsed.serviceFeeHours as Record<string, unknown> : {}
+        const serviceFeeHours = parsed.serviceFeeHours
         const businessHours = parsed.businessHours && typeof parsed.businessHours === 'object' ? parsed.businessHours as Record<string, unknown> : {}
         const validTime = (value: unknown, fallback: string) => /^([01]\d|2[0-3]):(?:00|30)$/.test(String(value)) ? String(value) : fallback
-        cfg.serviceFeeHours = {
-          morningStart: validTime(serviceFeeHours.morningStart, cfg.serviceFeeHours.morningStart),
-          morningEnd: validTime(serviceFeeHours.morningEnd, cfg.serviceFeeHours.morningEnd),
-          eveningStart: validTime(serviceFeeHours.eveningStart, cfg.serviceFeeHours.eveningStart),
-          eveningEnd: validTime(serviceFeeHours.eveningEnd, cfg.serviceFeeHours.eveningEnd),
+        const validRange = (value: unknown): value is { start: string; end: string } => {
+          if (!value || typeof value !== 'object') return false
+          const range = value as Record<string, unknown>
+          const start = validTime(range.start, '')
+          const end = validTime(range.end, '')
+          return Boolean(start && end && start < end)
+        }
+        if (Array.isArray(serviceFeeHours)) {
+          const ranges = serviceFeeHours.filter(validRange).map((range) => ({
+            start: validTime((range as { start: string }).start, ''),
+            end: validTime((range as { end: string }).end, ''),
+          }))
+          if (ranges.length) cfg.serviceFeeHours = ranges.slice(0, 12)
+        } else if (serviceFeeHours && typeof serviceFeeHours === 'object') {
+          const legacy = serviceFeeHours as Record<string, unknown>
+          const ranges = [
+            { start: validTime(legacy.morningStart, ''), end: validTime(legacy.morningEnd, '') },
+            { start: validTime(legacy.eveningStart, ''), end: validTime(legacy.eveningEnd, '') },
+          ].filter(validRange)
+          if (ranges.length) cfg.serviceFeeHours = ranges
+        }
+        if (Array.isArray(parsed.unavailablePickupHours)) {
+          cfg.unavailablePickupHours = parsed.unavailablePickupHours
+            .filter((range) => validRange(range) && Number.isInteger(Number((range as Record<string, unknown>).weekday)) && Number((range as Record<string, unknown>).weekday) >= 0 && Number((range as Record<string, unknown>).weekday) <= 6)
+            .map((range) => {
+              const value = range as Record<string, unknown>
+              return {
+                weekday: Number(value.weekday),
+                start: validTime(value.start, ''),
+                end: validTime(value.end, ''),
+              }
+            })
+            .slice(0, 24)
         }
         cfg.businessHours = {
           start: validTime(businessHours.start, cfg.businessHours.start),
@@ -638,11 +666,6 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
       if (row.key === 'companyDetails' && Array.isArray(parsed.deliveryAreas)) {
         cfg.deliveryAreas = [...new Set(
           parsed.deliveryAreas.map((value) => String(value).trim()).filter(Boolean),
-        )]
-      }
-      if (row.key === 'companyDetails' && Array.isArray(parsed.deliveryPostcodes)) {
-        cfg.deliveryPostcodes = [...new Set(
-          parsed.deliveryPostcodes.map((value) => String(value).trim()).filter((value) => /^\d{4}$/.test(value)),
         )]
       }
       if (row.key === 'companyDetails' && typeof parsed.deliveryNote === 'string' && parsed.deliveryNote.trim()) {

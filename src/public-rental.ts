@@ -1,7 +1,6 @@
 import type { Context } from 'hono'
 import { getRentalConfig } from './db'
 import { combinePersonName, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
-import { isMelbourneDeliveryPostcode } from './address'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
 import { markDeliveryQuoteUsed, validateDeliveryQuote } from './delivery'
@@ -9,7 +8,6 @@ import { markDeliveryQuoteUsed, validateDeliveryQuote } from './delivery'
 type RentalContext = Context<{ Bindings: Env }>
 
 const MAX_CART_ITEMS = 10
-const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const COUPON_CODE_RE = /^[A-Z0-9_-]{1,40}$/
 const LONG_TERM_RENTAL_DAYS = 30
@@ -173,15 +171,18 @@ function timeSlotCategory(slot: string, config: Awaited<ReturnType<typeof getRen
   if (LEGACY_PICKUP_TIME_SLOTS.has(slot)) return slot
   if (!/^([01]\d|2[0-3]):(?:00|30)$/.test(slot)) return ''
   const minute = timeToMinutes(slot)
-  const morningStart = timeToMinutes(config.serviceFeeHours.morningStart)
-  const morningEnd = timeToMinutes(config.serviceFeeHours.morningEnd)
   const businessStart = timeToMinutes(config.businessHours.start)
   const businessEnd = timeToMinutes(config.businessHours.end)
-  const eveningStart = timeToMinutes(config.serviceFeeHours.eveningStart)
-  const eveningEnd = timeToMinutes(config.serviceFeeHours.eveningEnd)
-  if (minute >= morningStart && minute < morningEnd) return 'morning_service'
+  for (const range of config.serviceFeeHours) {
+    const start = timeToMinutes(range.start)
+    const end = timeToMinutes(range.end)
+    if (minute >= start && minute < end) {
+      if (end <= businessStart) return 'morning_service'
+      if (start >= businessEnd) return 'evening_service'
+      return 'service_fee'
+    }
+  }
   if (minute >= businessStart && minute < businessEnd) return minute < 13 * 60 ? 'morning' : 'afternoon'
-  if (minute >= eveningStart && minute < eveningEnd) return 'evening_service'
   return ''
 }
 
@@ -191,17 +192,22 @@ function validPickupTimeSlot(slot: string, config: Awaited<ReturnType<typeof get
 
 function timeSlotPeriod(slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): 'AM' | 'PM' {
   const category = timeSlotCategory(slot, config)
-  return category === 'afternoon' || category === 'evening_service' ? 'PM' : 'AM'
+  return category === 'afternoon' || category === 'evening_service' || (category === 'service_fee' && timeToMinutes(slot) >= timeToMinutes(config.businessHours.end)) ? 'PM' : 'AM'
 }
 
 function serviceFeeTimeSlot(slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
   const category = timeSlotCategory(slot, config)
-  return category === 'morning_service' || category === 'evening_service'
+  return category === 'morning_service' || category === 'evening_service' || category === 'service_fee'
 }
 
-function timeSlotUnavailable(slots: string[] | undefined, slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
+function timeSlotUnavailable(slots: string[] | undefined, slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>, date?: string): boolean {
   const category = timeSlotCategory(slot, config)
-  return Boolean(slots?.includes(slot) || (category && slots?.includes(category)))
+  const weeklyUnavailable = date && config.unavailablePickupHours.some((range) => {
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay()
+    const minute = timeToMinutes(slot)
+    return range.weekday === weekday && minute >= timeToMinutes(range.start) && minute < timeToMinutes(range.end)
+  })
+  return Boolean(weeklyUnavailable || slots?.includes(slot) || (category && slots?.includes(category)))
 }
 
 function timeSlotPassed(date: string, slot: string, today: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
@@ -209,10 +215,10 @@ function timeSlotPassed(date: string, slot: string, today: string, config: Await
   const category = timeSlotCategory(slot, config)
   if (!category) return true
   const legacyEndMinutes: Record<string, number> = {
-    morning_service: timeToMinutes(config.serviceFeeHours.morningEnd),
+    morning_service: timeToMinutes(config.serviceFeeHours[0]?.end || '08:00'),
     morning: 12 * 60,
     afternoon: timeToMinutes(config.businessHours.end),
-    evening_service: timeToMinutes(config.serviceFeeHours.eveningEnd),
+    evening_service: timeToMinutes(config.serviceFeeHours[config.serviceFeeHours.length - 1]?.end || '23:00'),
   }
   const deadline = LEGACY_PICKUP_TIME_SLOTS.has(slot) ? legacyEndMinutes[category] : timeToMinutes(slot)
   return melbourneMinutesNow() >= deadline
@@ -581,9 +587,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     const suburb = String(body.deliverySuburb || '').trim().slice(0, 80)
     const state = String(body.deliveryState || '').trim().toUpperCase()
     const postcode = String(body.deliveryPostcode || '').trim()
-    if (!street || !suburb || !AU_STATES.has(state) || !/^\d{4}$/.test(postcode)) return json(c, 400, { ok: false, message: '请填写完整有效的澳洲送货地址。' })
-    if (!isMelbourneDeliveryPostcode(state, postcode, config.deliveryPostcodes)) return json(c, 400, { ok: false, message: '该邮编不在当前配送范围内，请选择到店自取。' })
-    location = `${street}, ${suburb} ${state} ${postcode}, Australia`
+    if (!street || !suburb || !state || !postcode) return json(c, 400, { ok: false, message: '请填写完整有效的送货地址。' })
+    location = `${street}, ${suburb}${state ? ` ${state}` : ''}${postcode ? ` ${postcode}` : ''}`
   }
 
   const devices: Record<string, unknown>[] = []
@@ -623,10 +628,10 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     }
     if (deliveryMethod === 'Pickup' && (
       timeSlotPassed(term.startDate, pickupTimeSlot, today, config) || timeSlotPassed(term.endDate, returnTimeSlot, today, config)
-      || timeSlotUnavailable(config.unavailableTimeSlots[term.startDate], pickupTimeSlot, config)
-      || timeSlotUnavailable(config.unavailableTimeSlots[term.endDate], returnTimeSlot, config)
-      || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.startDate}:`)).map((value) => value.slice(term.startDate.length + 1)), pickupTimeSlot, config)
-      || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.endDate}:`)).map((value) => value.slice(term.endDate.length + 1)), returnTimeSlot, config)
+      || timeSlotUnavailable(config.unavailableTimeSlots[term.startDate], pickupTimeSlot, config, term.startDate)
+      || timeSlotUnavailable(config.unavailableTimeSlots[term.endDate], returnTimeSlot, config, term.endDate)
+      || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.startDate}:`)).map((value) => value.slice(term.startDate.length + 1)), pickupTimeSlot, config, term.startDate)
+      || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.endDate}:`)).map((value) => value.slice(term.endDate.length + 1)), returnTimeSlot, config, term.endDate)
     )) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选取货或归还时间不可用。` })
     for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day <= Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
       const date = new Date(day).toISOString().slice(0, 10)
