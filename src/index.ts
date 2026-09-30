@@ -29,7 +29,7 @@ import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcem
 import { renderGiftCards } from './pages/gift-cards'
 import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
 import { getPublicSquareGiftCardConfig, inspectSquareGiftCardNonce } from './squareGiftCard'
-import { autocompleteMelbourneAddresses, isMelbourneAddress } from './address'
+import { autocompleteMelbourneAddresses, isMelbourneDeliveryPostcode } from './address'
 import { createDeliveryBooking, deliveryAdminTokenConfigured, deliveryQuotesEnabled, handleZoom2uWebhook, quoteDelivery, verifyDeliveryAdminToken } from './delivery'
 import { listOrdersForUser, lookupOrderByCredentials } from './orders'
 import {
@@ -222,15 +222,14 @@ app.get('/api/address/autocomplete', async (c) => {
   const cacheQuery = query.toLowerCase().replace(/\s+/g, ' ').slice(0, 120)
   const cacheUrl = new URL(c.req.url)
   cacheUrl.searchParams.set('q', cacheQuery)
-  cacheUrl.searchParams.set('__address_cache_v', '6')
+  cacheUrl.searchParams.set('__address_cache_v', '7')
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
   const cache = caches.default
   const cached = await cache.match(cacheKey)
   if (cached) return cached
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
   if (!(await enforceRateLimit(c.env, 'web-address-autocomplete', ip, 30, 60))) return c.json({ error: '地址查询过于频繁，请稍后再试。' }, 429)
-  const configPromise = getRentalConfig(c.env)
-  const suggestions = await autocompleteMelbourneAddresses(query, configPromise.then((config) => config.deliveryAreas))
+  const suggestions = await autocompleteMelbourneAddresses(query)
   const payload = JSON.stringify({ suggestions, message: suggestions.length ? undefined : '没有找到墨尔本地址，请继续输入或手工填写。' })
   const response = new Response(payload, {
     status: 200,
@@ -255,7 +254,7 @@ app.post('/api/delivery/quote', async (c) => {
   const postcode = String(body.deliveryPostcode || '').trim()
   const config = await getRentalConfig(c.env)
   if (!street || !suburb || state !== 'VIC' || !/^\d{4}$/.test(postcode)) return c.json({ ok: false, message: '请填写完整有效的墨尔本送货地址。' }, 400)
-  if (!isMelbourneAddress(suburb, state, `${street}, ${suburb} ${state} ${postcode}`, config.deliveryAreas)) return c.json({ ok: false, message: '该地址不在当前墨尔本配送范围内。' }, 400)
+  if (!isMelbourneDeliveryPostcode(state, postcode, config.deliveryPostcodes)) return c.json({ ok: false, message: '该邮编不在当前配送范围内。' }, 400)
   const deviceCount = Math.max(1, Math.min(10, Math.floor(Number(body.deviceCount) || 1)))
   const result = await quoteDelivery(c, {
     address: { street, suburb, state, postcode },

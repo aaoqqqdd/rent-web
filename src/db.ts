@@ -568,6 +568,7 @@ export interface RentalConfig {
   serviceFeeRate: number
   pickupLocations: string[]
   deliveryAreas: string[]
+  deliveryPostcodes: string[]
   deliveryNote: string
 }
 
@@ -582,7 +583,8 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     businessHours: { start: '09:00', end: '20:00' },
     serviceFeeRate: 0.1,
     pickupLocations: [],
-    deliveryAreas: ['墨尔本 CBD', 'Docklands', 'Southbank', 'South Yarra', 'Carlton', 'East Melbourne'],
+    deliveryAreas: ['墨尔本 CBD', 'Docklands', 'Southbank', 'South Yarra', 'Carlton', 'East Melbourne', 'North Melbourne'],
+    deliveryPostcodes: ['3000', '3001', '3002', '3004', '3006', '3008', '3051', '3053', '3141'],
     deliveryNote: '送货上门仅限墨尔本 CBD 及周边地区，填写完整地址后立即获取预估配送费，最终以确认订单为准。',
   }
   try {
@@ -636,6 +638,11 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
       if (row.key === 'companyDetails' && Array.isArray(parsed.deliveryAreas)) {
         cfg.deliveryAreas = [...new Set(
           parsed.deliveryAreas.map((value) => String(value).trim()).filter(Boolean),
+        )]
+      }
+      if (row.key === 'companyDetails' && Array.isArray(parsed.deliveryPostcodes)) {
+        cfg.deliveryPostcodes = [...new Set(
+          parsed.deliveryPostcodes.map((value) => String(value).trim()).filter((value) => /^\d{4}$/.test(value)),
         )]
       }
       if (row.key === 'companyDetails' && typeof parsed.deliveryNote === 'string' && parsed.deliveryNote.trim()) {

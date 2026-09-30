@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 import { getRentalConfig } from './db'
 import { combinePersonName, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
-import { isMelbourneAddress } from './address'
+import { isMelbourneDeliveryPostcode } from './address'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
 import { markDeliveryQuoteUsed, validateDeliveryQuote } from './delivery'
@@ -13,8 +13,9 @@ const AU_STATES = new Set(['VIC', 'NSW', 'QLD', 'SA', 'WA', 'TAS', 'NT', 'ACT'])
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const COUPON_CODE_RE = /^[A-Z0-9_-]{1,40}$/
 const LONG_TERM_RENTAL_DAYS = 30
-const PICKUP_TIME_SLOTS = new Set(['morning_service', 'morning', 'afternoon', 'evening_service'])
-const SERVICE_FEE_TIME_SLOTS = new Set(['morning_service', 'evening_service'])
+// The original named slots remain valid for existing bookings; new bookings can
+// use the configured half-hour slots as well.
+const LEGACY_PICKUP_TIME_SLOTS = new Set(['morning_service', 'morning', 'afternoon', 'evening_service'])
 
 interface RentalTerm {
   startDate: string
@@ -163,16 +164,6 @@ function rentalPeriodPassed(date: string, period: 'AM' | 'PM', today: string): b
   return date === today && melbourneMinutesNow() >= (period === 'AM' ? 12 * 60 : 23 * 60)
 }
 
-<<<<<<< HEAD
-function timeSlotPeriod(slot: string): 'AM' | 'PM' {
-  return slot === 'afternoon' || slot === 'evening_service' ? 'PM' : 'AM'
-}
-
-function timeSlotPassed(date: string, slot: string, today: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
-  const toMinutes = (time: string) => { const [hours, minutes] = time.split(':').map(Number); return hours * 60 + minutes }
-  const endMinutes: Record<string, number> = { morning_service: toMinutes(config.serviceFeeHours.morningEnd), morning: 12 * 60, afternoon: toMinutes(config.businessHours.end), evening_service: toMinutes(config.serviceFeeHours.eveningEnd) }
-  return date === today && melbourneMinutesNow() >= (endMinutes[slot] || 0)
-=======
 function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(':').map(Number)
   return Number.isInteger(hours) && Number.isInteger(minutes) ? hours * 60 + minutes : -1
@@ -225,7 +216,6 @@ function timeSlotPassed(date: string, slot: string, today: string, config: Await
   }
   const deadline = LEGACY_PICKUP_TIME_SLOTS.has(slot) ? legacyEndMinutes[category] : timeToMinutes(slot)
   return melbourneMinutesNow() >= deadline
->>>>>>> feat/pickup-time-slots-address-validation
 }
 
 function periodsOverlap(startDate: string, startPeriod: string, endDate: string, endPeriod: string, otherStartDate: string, otherStartPeriod: string, otherEndDate: string, otherEndPeriod: string): boolean {
@@ -552,22 +542,13 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   if (!EMAIL_RE.test(contactEmail)) return json(c, 400, { ok: false, message: '邮箱格式不正确。' })
   if (!firstName || !lastName || !contactPhone) return json(c, 400, { ok: false, message: '请填写名、姓和联系电话。' })
   if (!agreed) return json(c, 400, { ok: false, message: '请先阅读并同意服务条款与隐私政策。' })
-<<<<<<< HEAD
-  if (deliveryMethod === 'Pickup' && (!PICKUP_TIME_SLOTS.has(pickupTimeSlot) || !PICKUP_TIME_SLOTS.has(returnTimeSlot))) {
-=======
   if (deliveryMethod === 'Pickup' && (!validPickupTimeSlot(pickupTimeSlot, config) || !validPickupTimeSlot(returnTimeSlot, config))) {
->>>>>>> feat/pickup-time-slots-address-validation
     return json(c, 400, { ok: false, message: '请选择有效的取货和归还时间。' })
   }
   if (deliveryMethod === 'Pickup') {
     for (const term of Object.values(deviceTerms)) {
-<<<<<<< HEAD
-      term.startPeriod = timeSlotPeriod(pickupTimeSlot)
-      term.endPeriod = timeSlotPeriod(returnTimeSlot)
-=======
       term.startPeriod = timeSlotPeriod(pickupTimeSlot, config)
       term.endPeriod = timeSlotPeriod(returnTimeSlot, config)
->>>>>>> feat/pickup-time-slots-address-validation
     }
   }
   let stripePaymentMethodId = ''
@@ -601,7 +582,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     const state = String(body.deliveryState || '').trim().toUpperCase()
     const postcode = String(body.deliveryPostcode || '').trim()
     if (!street || !suburb || !AU_STATES.has(state) || !/^\d{4}$/.test(postcode)) return json(c, 400, { ok: false, message: '请填写完整有效的澳洲送货地址。' })
-    if (!isMelbourneAddress(suburb, state, `${street}, ${suburb} ${state} ${postcode}`, config.deliveryAreas)) return json(c, 400, { ok: false, message: '送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。' })
+    if (!isMelbourneDeliveryPostcode(state, postcode, config.deliveryPostcodes)) return json(c, 400, { ok: false, message: '该邮编不在当前配送范围内，请选择到店自取。' })
     location = `${street}, ${suburb} ${state} ${postcode}, Australia`
   }
 
@@ -642,17 +623,10 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     }
     if (deliveryMethod === 'Pickup' && (
       timeSlotPassed(term.startDate, pickupTimeSlot, today, config) || timeSlotPassed(term.endDate, returnTimeSlot, today, config)
-<<<<<<< HEAD
-      || config.unavailableTimeSlots[term.startDate]?.includes(pickupTimeSlot)
-      || config.unavailableTimeSlots[term.endDate]?.includes(returnTimeSlot)
-      || deviceUnavailableSlots.has(`${term.startDate}:${pickupTimeSlot}`)
-      || deviceUnavailableSlots.has(`${term.endDate}:${returnTimeSlot}`)
-=======
       || timeSlotUnavailable(config.unavailableTimeSlots[term.startDate], pickupTimeSlot, config)
       || timeSlotUnavailable(config.unavailableTimeSlots[term.endDate], returnTimeSlot, config)
       || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.startDate}:`)).map((value) => value.slice(term.startDate.length + 1)), pickupTimeSlot, config)
       || timeSlotUnavailable([...deviceUnavailableSlots].filter((value) => value.startsWith(`${term.endDate}:`)).map((value) => value.slice(term.endDate.length + 1)), returnTimeSlot, config)
->>>>>>> feat/pickup-time-slots-address-validation
     )) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选取货或归还时间不可用。` })
     for (let day = Date.parse(`${term.startDate}T00:00:00Z`); day <= Date.parse(`${term.endDate}T00:00:00Z`); day += 86400000) {
       const date = new Date(day).toISOString().slice(0, 10)
@@ -692,11 +666,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
 
   const fees = devices.map((device) => calculateRentalFee(device, rentalPlans.get(String(device.id))!.period.days))
   const serviceFeeMultiplier = deliveryMethod === 'Pickup'
-<<<<<<< HEAD
-    ? [pickupTimeSlot, returnTimeSlot].filter((slot) => SERVICE_FEE_TIME_SLOTS.has(slot)).length * config.serviceFeeRate
-=======
     ? [pickupTimeSlot, returnTimeSlot].filter((slot) => serviceFeeTimeSlot(slot, config)).length * config.serviceFeeRate
->>>>>>> feat/pickup-time-slots-address-validation
     : 0
   const serviceFees = fees.map((fee) => Number((fee * serviceFeeMultiplier).toFixed(2)))
   const discounts = devices.map(() => 0)

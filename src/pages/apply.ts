@@ -524,7 +524,7 @@ export function renderApply(data: ApplyData): string {
   var DEVICE_AVAILABILITY = {};
   var AVAILABILITY_READY = false;
   var AVAILABILITY_FAILED = false;
-  var DELIVERY_AREAS = ${scriptJson(config.deliveryAreas)};
+  var DELIVERY_POSTCODES = ${scriptJson(config.deliveryPostcodes)};
   var COUPON_ENDPOINT = '/api/coupons/rental-cart-preview';
   var DELIVERY_QUOTE_ENDPOINT = '/api/delivery/quote';
   var DELIVERY_QUOTE_ENABLED = ${deliveryQuoteEnabled ? 'true' : 'false'};
@@ -669,19 +669,10 @@ export function renderApply(data: ApplyData): string {
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
   function formatDate(value) { return value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.slice(8, 10) + '/' + value.slice(5, 7) + '/' + value.slice(0, 4) : ''; }
-  function normalizeAddress(value) {
-    return String(value || '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9\\s]/g, ' ').replace(/\\s+/g, ' ').trim();
-  }
   function isMelbourneDeliveryAddress() {
     if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
-    var text = normalizeAddress((addressSearch && addressSearch.value || '') + ' ' + document.getElementById('deliverySuburb').value);
     var postcode = document.getElementById('deliveryPostcode').value.trim();
-    var areas = ['docklands', 'southbank', 'south yarra', 'carlton', 'east melbourne'].concat(DELIVERY_AREAS || []);
-    return areas.map(normalizeAddress).filter(Boolean).some(function (area) {
-      return (area === 'cbd' || area === 'melbourne cbd')
-        ? text.indexOf('melbourne') >= 0 && /^(3000|3001|3004)$/.test(postcode)
-        : text.indexOf(area) >= 0;
-    });
+    return (DELIVERY_POSTCODES || []).indexOf(postcode) >= 0;
   }
   function removeInlineError(target) {
     var host = target ? errorHost(target) : null;
@@ -1396,7 +1387,7 @@ export function renderApply(data: ApplyData): string {
     var suburbValue = suburb.value.trim();
     var postcode = document.getElementById('deliveryPostcode').value.trim();
     var message = street && suburbValue && postcode && !isMelbourneDeliveryAddress()
-      ? uiText('送货地址仅限墨尔本及当前配置的服务区域，其他城市或郊区请选到店自取。', 'Delivery is limited to Melbourne and the configured service areas. Choose store pickup for other cities or suburbs.') : '';
+      ? uiText('该邮编不在当前配送范围内，请选择到店自取。', 'This postcode is outside the current delivery area. Choose store pickup instead.') : '';
     suburb.setCustomValidity(message);
     if (message && showError) showFormError(message, suburb);
     return !message;
