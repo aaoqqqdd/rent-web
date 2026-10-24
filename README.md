@@ -79,7 +79,7 @@ curl -X POST https://<官网域名>/api/delivery/bookings \
 - **邀请码（选填）**：按 `users.referral_code` 匹配，无效则拒绝注册；命中则写 `referrer_id`
   并镜像 `referral_codes` / `referrals` / `referral_audit_logs`（同 rent `lockReferralRelationship`
   核心）。奖励发放仍由 rent 在被推荐人首单时处理；相关表缺失时静默跳过。
-- **人机验证**：配置 `TURNSTILE_SITE_KEY`（vars）+ `TURNSTILE_SECRET_KEY`（secret）后
+- **人机验证**：优先使用 rent 后台 `/admin/api-settings` 保存的 Turnstile 配置（共享 D1 `systemSettings.turnstileConfig`，secret 加密存储）；也可用 `TURNSTILE_SITE_KEY`（vars）+ `TURNSTILE_SECRET_KEY`（secret）回退。配置后
   `/register` 会做 siteverify；未配置 secret 则放行（与 `/public/rental-request` 一致）。
 - **限流**：共用 rent 的 `security_rate_limits` 表，scope `web-register`，每 IP 每小时 5 次。
 - **登录**：rent 持有会话、跨站无法在本域写 cookie，登录面板按钮直接把用户带到
@@ -115,7 +115,7 @@ npx wrangler deploy --minify        # 部署 Worker: geekslope-web
 - `d1_databases[0].database_id` —— 与 rent 库一致（当前已填 `65a5ded3-…`）。账号不同就改成目标账号里 rent 库的 id。
 - `vars.APP_URL` —— **必须**改成 rent 主应用真实地址（如 `https://rent.geekslope.com.au`）。`/apply` 表单会 POST 到 `${APP_URL}/public/rental-request`。
 - `vars.MONTHLY_MULTIPLIER` —— 月租展示系数。
-- `vars.TURNSTILE_SITE_KEY` —— 与 rent 同一个 Turnstile 组件的站点公钥（留空则不显示人机验证）。
+- `vars.TURNSTILE_SITE_KEY` —— 仅作回退；正常情况下官网直接读 rent 后台配置的 Turnstile site key（留空且后台未配置则不显示人机验证）。
 - `vars.SQUARE_GIFT_CARD_URL` —— Square Dashboard 发布的 eGift Card order site（默认使用当前 GeekSlope 礼品卡页面）。该页面本身提供购买、查余额和 Reload card。
 - 可选：`wrangler secret put CONTACT_PHONE` / `CONTACT_EMAIL` 覆盖数据库里的联系方式。
 
@@ -123,7 +123,7 @@ npx wrangler deploy --minify        # 部署 Worker: geekslope-web
 
 - `PUBLIC_WEB_ORIGIN` = 本站部署 origin（如 `https://geekslope-web.pages.dev`）—— 用于放行本站的跨站下单请求（CORS + 来源校验）。
 - `PUBLIC_APP_URL`（可选）= rent 自身对外地址。
-- `TURNSTILE_SECRET_KEY`（已有）—— 未配置则公开下单接口跳过人机校验。
+- `TURNSTILE_SECRET_KEY`（已有）—— 仅作回退；正常情况读 rent 后台加密保存的 secret（两处都没有才跳过人机校验）。
 - 部署新增的 `src/actions/public/rentalRequest.ts` + `POST /public/rental-request` 路由后重新 `wrangler deploy`。
 
 绑定自定义域名：Cloudflare 控制台 Workers → geekslope-web → Settings → Domains & Routes。

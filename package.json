@@ -8,7 +8,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
     "typecheck": "tsc --noEmit",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "i18n:audit": "node scripts/i18n-audit.mjs"
   },
   "dependencies": {
     "hono": "^4.13.7",

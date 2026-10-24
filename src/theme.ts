@@ -85,6 +85,8 @@ p { margin: 0; }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0,230,255,.35), 0 12px 36px -12px rgba(0,230,255,.65); }
 .btn-ghost { background: transparent; color: var(--fg); border-color: var(--border); }
 .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+.btn-danger { background: #ff5c72; color: #fff; box-shadow: 0 10px 30px -14px rgba(255,92,114,.8); }
+.btn-danger:hover { transform: translateY(-1px); box-shadow: 0 14px 36px -14px rgba(255,92,114,.95); }
 .btn-lg { padding: 14px 26px; font-size: 15px; }
 .btn-sm { padding: 7px 14px; font-size: 13px; }
 .btn.is-added { background: rgba(0,230,255,.08); color: var(--primary); border-color: rgba(0,230,255,.36); box-shadow: none; }
@@ -316,14 +318,36 @@ p { margin: 0; }
 .coupon-row .btn { min-height: 43px; }
 .success-title { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .success-title svg { width: 24px; height: 24px; fill: none; stroke: var(--primary); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* 表单级提示：与 Toast / 弹窗共用一套语义色，错误贴在表单内，瞬时反馈走 Toast。 */
 .form-alert {
-  background: rgba(255,80,80,.08); border: 1px solid rgba(255,80,80,.35);
-  color: #ff9a9a; border-radius: 8px; padding: 12px 14px; font-size: 14px; margin-bottom: 16px;
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 16px; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid rgba(255,113,133,.34); background: rgba(255,113,133,.08);
+  color: #ffc4cd; font-size: 13.5px; line-height: 1.6;
+}
+.form-alert::before {
+  content: "!"; flex: none; display: grid; place-items: center;
+  width: 18px; height: 18px; margin-top: 1px; border-radius: 50%;
+  background: rgba(255,113,133,.18); color: #ff7185;
+  font: 700 11px/1 var(--mono);
 }
 .form-alert-ok {
-  background: rgba(0,199,159,.10); border-color: rgba(0,199,159,.40); color: #7ff0d4;
+  border-color: rgba(89,229,193,.32); background: rgba(89,229,193,.08); color: #b9f6e5;
 }
-.inline-form-error { margin: 8px 0 0; color: #ff7185; font-size: 12px; line-height: 1.6; }
+.form-alert-ok::before { content: "✓"; background: rgba(89,229,193,.16); color: var(--secondary); }
+.form-alert-warn {
+  border-color: rgba(245,185,85,.34); background: rgba(245,185,85,.08); color: #ffe0a8;
+}
+.form-alert-warn::before { content: "!"; background: rgba(245,185,85,.16); color: #f5b955; }
+.inline-form-error {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 8px 0 0; color: #ff7185; font-size: 12px; line-height: 1.6;
+}
+.inline-form-error::before {
+  content: "!"; flex: none; display: grid; place-items: center;
+  width: 14px; height: 14px; margin-top: 1px; border-radius: 50%;
+  background: rgba(255,113,133,.16); font: 700 9px/1 var(--mono);
+}
 .form-note { color: var(--muted-fg); font-size: 13px; margin-top: 14px; }
 .auth-wrap { max-width: 440px; }
 @media (max-width: 620px) {
@@ -1028,10 +1052,138 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .btn-primary:hover::after { transform: translateX(120%); transition: transform .6s ease; }
 }
 
+/* ---------- feedback layer: toast + confirm dialog ---------- */
+.gs-toast-region {
+  position: fixed; top: 90px; right: 24px; z-index: 1200;
+  display: grid; gap: 10px; width: min(400px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.gs-toast {
+  pointer-events: auto; position: relative;
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) 28px; gap: 12px; align-items: start;
+  padding: 14px; border: 1px solid var(--border-bright); border-radius: 12px;
+  background: rgba(17,20,29,.97); color: var(--fg);
+  box-shadow: 0 24px 60px -18px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.03);
+  backdrop-filter: blur(18px);
+  animation: gs-toast-in .28s cubic-bezier(.2,.8,.2,1) both;
+}
+.gs-toast::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px; border-radius: 2px; background: var(--primary); }
+.gs-toast-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: rgba(124,108,255,.13); color: #a99fff; }
+.gs-toast-icon svg { width: 19px; height: 19px; }
+.gs-toast-copy { min-width: 0; padding-top: 1px; }
+.gs-toast-copy strong { display: block; font-size: 13.5px; line-height: 1.4; letter-spacing: -.01em; }
+.gs-toast-copy p { margin: 2px 0 0; color: var(--muted-fg); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.gs-toast-copy strong + p { margin-top: 3px; }
+.gs-toast-close { display: grid; place-items: center; width: 28px; height: 28px; margin: -4px -4px 0 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted-fg); cursor: pointer; }
+.gs-toast-close:hover { background: rgba(255,255,255,.06); color: var(--fg); }
+.gs-toast-close svg { width: 15px; height: 15px; }
+.gs-toast-success::before { background: var(--secondary); }
+.gs-toast-success .gs-toast-icon { background: rgba(89,229,193,.12); color: var(--secondary); }
+.gs-toast-error::before { background: #ff7185; }
+.gs-toast-error .gs-toast-icon { background: rgba(255,113,133,.12); color: #ff7185; }
+.gs-toast-warning::before { background: #f5b955; }
+.gs-toast-warning .gs-toast-icon { background: rgba(245,185,85,.12); color: #f5b955; }
+.gs-toast.is-leaving { animation: gs-toast-out .2s ease forwards; }
+
+html.gs-dialog-open, html.gs-dialog-open body { overflow: hidden; }
+.gs-dialog {
+  width: min(460px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 32px);
+  margin: auto; padding: 0; border: 0; background: transparent; color: var(--fg); overflow: visible;
+}
+.gs-dialog::backdrop { background: rgba(4,5,10,.72); backdrop-filter: blur(6px); }
+.gs-dialog-card {
+  max-height: calc(100vh - 32px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 24px; border: 1px solid var(--border-bright); border-radius: 16px;
+  background: #11141d; box-shadow: 0 40px 100px -24px rgba(0,0,0,.9);
+  animation: gs-dialog-in .22s cubic-bezier(.2,.8,.2,1) both;
+}
+.gs-dialog-head { display: flex; align-items: flex-start; gap: 14px; }
+.gs-dialog-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(124,108,255,.13); color: #a99fff; }
+.gs-dialog-icon svg { width: 21px; height: 21px; }
+.gs-dialog[data-variant="danger"] .gs-dialog-icon { background: rgba(255,113,133,.13); color: #ff7185; }
+.gs-dialog[data-variant="warning"] .gs-dialog-icon { background: rgba(245,185,85,.13); color: #f5b955; }
+.gs-dialog-copy { min-width: 0; }
+.gs-dialog-copy h2 { font-size: 19px; line-height: 1.25; }
+.gs-dialog-copy p { margin-top: 7px; color: var(--muted-fg); font-size: 13.5px; line-height: 1.65; }
+.gs-dialog-details { display: grid; margin-top: 18px; padding: 2px 14px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.02); }
+.gs-dialog-detail { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; line-height: 1.5; }
+.gs-dialog-detail:last-child { border-bottom: 0; }
+.gs-dialog-detail span { flex: none; color: var(--muted-fg); }
+.gs-dialog-detail strong { font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.gs-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.gs-dialog-actions .btn { min-width: 100px; }
+
+@media (max-width: 620px) {
+  .gs-toast-region { top: 84px; left: 16px; right: 16px; width: auto; }
+  .gs-dialog { width: 100%; max-width: 100%; max-height: 88vh; margin: auto 0 0; }
+  .gs-dialog-card { max-height: 88vh; padding: 22px 18px calc(20px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; animation-name: gs-sheet-in; }
+  .gs-dialog-actions { flex-direction: column-reverse; gap: 8px; }
+  .gs-dialog-actions .btn { width: 100%; }
+}
+
+@keyframes gs-toast-in { from { opacity: 0; transform: translate3d(0,-8px,0) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes gs-toast-out { to { opacity: 0; transform: translate3d(0,-6px,0) scale(.985); } }
+@keyframes gs-dialog-in { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes gs-sheet-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- mobile ergonomics / a11y hardening ---------- */
+/* 锚点（#contact / #faq …）跳转时不要让 sticky header 盖住标题。 */
+html { scroll-padding-top: 88px; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* 键盘可见焦点：鼠标点击不出现描边，Tab 导航清晰可见。 */
+a:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible,
+input:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--secondary); outline-offset: 2px; border-radius: 4px;
+}
+/* Toast 贴在 sticky header + 通告条下方（--gs-overlay-top 由 layout.ts 实时计算）。 */
+.gs-toast-region { top: var(--gs-overlay-top, 90px); }
+/* 弹窗高度用动态视口单位，避免移动端浏览器工具栏收起时被裁切。 */
+.gs-dialog, .gs-dialog-card { max-height: calc(100dvh - 32px); }
+@supports not (height: 100dvh) {
+  .gs-dialog, .gs-dialog-card { max-height: calc(100vh - 32px); }
+}
+@media (max-width: 620px) {
+  /* iOS Safari：字号 < 16px 的输入控件在聚焦时会强制放大页面。 */
+  .field input, .field select, .field textarea,
+  .term-date-field input, .term-period-field select,
+  .catalog-tools input, .catalog-tools select, .tool-tail select,
+  .lookup-wrap input, .lookup-wrap select, .auth-panel input { font-size: 16px; }
+  /* 触控目标：图标按钮 / 语言切换 / 页脚链接至少 44px 高。 */
+  .menu-toggle { width: 44px; height: 44px; padding: 12px; }
+  .header-cart { min-width: 44px; min-height: 44px; justify-content: center; padding: 0 6px; }
+  .language-switcher button { min-width: 34px; min-height: 34px; padding: 8px 6px; font-size: 11px; }
+  .nav-logout { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; }
+  .nav-account { gap: 8px; }
+  .nav.is-open { max-height: calc(100dvh - 96px); overflow-y: auto; overscroll-behavior: contain; }
+  .nav.is-open a { min-height: 44px; display: flex; align-items: center; }
+  .time-picker-slot { min-height: 40px; }
+  .cart-remove { min-height: 44px; }
+  .foot-col a, .foot-col span { display: flex; align-items: center; min-height: 44px; margin-bottom: 0; }
+  .foot-bottom a { display: inline-flex; align-items: center; min-height: 40px; margin: 0 16px 0 0; }
+  .site-announcement-inner { min-height: 52px; }
+  .gs-dialog-actions .btn { min-height: 46px; }
+  /* 设备库筛选栏：输入框 28px、筛选按钮 37px 在手机上都偏小。 */
+  .catalog-tools input, .catalog-tools select, .tool-tail select { min-height: 42px; }
+  .filter-chip { min-height: 40px; padding: 8px 12px; }
+}
+/* 触屏设备（含 iPad）同样避免聚焦输入框时页面被放大。 */
+@media (hover: none) and (pointer: coarse) {
+  .catalog-tools input, .catalog-tools select, .tool-tail select,
+  .field input, .field select, .field textarea,
+  .term-date-field input, .term-period-field select { font-size: 16px; }
+}
+/* iPhone 刘海 / 底部 Home 条安全区。 */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .site-footer .wrap { padding-bottom: calc(30px + env(safe-area-inset-bottom)); }
+  .gs-dialog-card { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+  .gs-toast-region { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+}
+/* 长英文 / 长地址不撑破卡片。 */
+.legal-document__content, .card, .lookup-data-list, .order-record-section, .gs-dialog-copy, .address-suggestion { overflow-wrap: anywhere; }
 `
 
 // 内容指纹：STYLES 一变就变。页面用 /styles.css?v=${STYLE_VERSION} 引样式，

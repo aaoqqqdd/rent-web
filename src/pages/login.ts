@@ -45,7 +45,7 @@ export function renderLogin(data: LoginData): string {
     <!-- ============ 注册 ============ -->
     <div class="auth-panel${tab === 'register' ? '' : ' is-hidden'}" data-panel="register">
       <form id="register-form" class="form-card" novalidate>
-        <div class="form-alert" id="reg-error" hidden></div>
+        <div class="form-alert" id="reg-error" role="alert" aria-live="polite" hidden></div>
 
         <div class="field">
           <label for="reg-name">姓名</label>
@@ -102,9 +102,9 @@ export function renderLogin(data: LoginData): string {
 
     <!-- ============ 登录 ============ -->
     <div class="auth-panel${tab === 'login' ? '' : ' is-hidden'}" data-panel="login">
-      ${notice ? `<div class="form-alert form-alert-ok">${esc(notice)}</div>` : ''}
+      ${notice ? `<div data-gs-notice data-type="${notice.includes('过期') ? 'warning' : 'info'}" data-message="${esc(notice)}" hidden></div>` : ''}
       <form method="post" action="/login" class="form-card">
-        ${error ? `<div class="form-alert">${esc(error)}</div>` : ''}
+        ${error ? `<div class="form-alert" role="alert">${esc(error)}</div>` : ''}
         <div class="field">
           <label for="account">邮箱或手机号</label>
           <input id="account" name="account" autocomplete="username" required maxlength="254" value="${esc(account ?? '')}">
@@ -189,9 +189,11 @@ export function renderLogin(data: LoginData): string {
       .then(function (res) {
         if (res.j && res.j.ok) {
           form.hidden = true;
-          doneMsg.textContent = window.GeekSlopeI18n ? window.GeekSlopeI18n.t(res.j.message || '账号已创建，请前往登录。') : (res.j.message || '账号已创建，请前往登录。');
+          var successMessage = window.GeekSlopeI18n ? window.GeekSlopeI18n.t(res.j.message || '账号已创建，请前往登录。') : (res.j.message || '账号已创建，请前往登录。');
+          doneMsg.textContent = successMessage;
           doneBox.hidden = false;
           doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (window.GeekSlopeUI) window.GeekSlopeUI.toast(successMessage, { type: 'success' });
           return;
         }
         submitBtn.disabled = false;

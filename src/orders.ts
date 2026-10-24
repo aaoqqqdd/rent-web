@@ -307,7 +307,7 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
   })
 }
 
-const ORDER_SELECT = `SELECT o.*, u.email AS email, u.account_type AS account_type,
+const ORDER_SELECT = `SELECT o.*, u.email AS email, u.account_type AS account_type, u.password_hash AS user_password_hash,
   d.name AS device_name, d.model AS device_model, d.serialNumber AS serial_number,
   d.cpu AS device_cpu, d.ram AS device_ram, d.storage AS device_storage,
   d.gpu AS device_gpu, d.os AS device_os
@@ -333,12 +333,16 @@ export async function lookupOrderByCredentials(env: Env, orderNo: string, email:
   if (!row) return null
 
   let temporaryPassword: string | undefined
-  if ((value(row, 'account_type', 'accountType') || 'formal') === 'guest') {
+  const isGuest = (value(row, 'account_type', 'accountType') || 'formal') === 'guest'
+  const hasPassword = Boolean(String(value(row, 'user_password_hash', 'userPasswordHash') || '').trim())
+  // 只在「临时账户第一次领取」时生成密码。每次都重置会让用户上一次拿到的密码失效
+  // （既打断正常登录，也让任何人凭订单号+邮箱反复接管临时账户）。
+  if (isGuest && !hasPassword) {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
     const bytes = new Uint8Array(10)
     crypto.getRandomValues(bytes)
     temporaryPassword = `Gs${Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('')}!`
-    await env.RENT.prepare("UPDATE users SET password_hash = ?, password_salt = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND account_type = 'guest'")
+    await env.RENT.prepare("UPDATE users SET password_hash = ?, password_salt = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND account_type = 'guest' AND (password_hash IS NULL OR password_hash = '')")
       .bind(await hashPassword(temporaryPassword), value(row, 'userId', 'user_id'))
       .run()
   }

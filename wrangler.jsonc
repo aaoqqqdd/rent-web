@@ -30,8 +30,9 @@
 		"APP_URL": "https://rent.ydnw6zt6vj.workers.dev",
 		// 月租展示价 = 日租 × 该系数（取整）。仅用于官网展示，真实计费仍在 rent 内完成。
 		"MONTHLY_MULTIPLIER": "20",
-		// Cloudflare Turnstile 站点公钥（与 rent 主应用同一个 Turnstile 组件）。
-		// 留空则「立即租赁」表单不显示人机验证；rent 侧未配置 TURNSTILE_SECRET_KEY 时也会放行。
+		// Cloudflare Turnstile 站点公钥。官网优先读取共享 D1 的
+		// systemSettings.turnstileConfig（rent 后台 /admin/api-settings 配置），
+		// 这里的变量仅作回退；两处都为空时不显示人机验证、服务端校验放行。
 		"TURNSTILE_SITE_KEY": "",
 		// Square Dashboard 中发布的 eGift Card order site；官网入口会复用该页面的购买、查余额和 Reload card 功能。
 		"SQUARE_GIFT_CARD_URL": "https://app.squareup.com/gift/MLP6ZYA585ZQT/order",
@@ -41,8 +42,9 @@
 	//   CONTACT_PHONE / CONTACT_EMAIL —— 覆盖 systemSettings.companyDetails 里的联系方式
 	//   SETTINGS_ENCRYPTION_KEY —— 读取共享 D1 中加密的 Stripe 配置（与 rent 使用同一个 secret）
 	//   STRIPE_PUBLISHABLE_KEY / STRIPE_SECRET_KEY —— 也可直接配置 Stripe（secret 请使用 wrangler secret）
-	//   TURNSTILE_SECRET_KEY（secret）—— /register 注册接口的服务端人机校验密钥。
-	//     未配置则跳过校验（与 rent 公开接口一致）。与 TURNSTILE_SITE_KEY 配套。
+	//   TURNSTILE_SECRET_KEY（secret）—— 人机校验密钥的回退值。正常情况不需要配置：
+	//     官网会读取 rent 后台保存并加密的 systemSettings.turnstileConfig（同一个
+	//     SETTINGS_ENCRYPTION_KEY 解密）。两处都没有 secret 时才跳过校验。
 	//   ZOOM2U_API_TOKEN（secret）—— Zoom2u API Bearer token；配置后 /checkout 会实时获取配送报价。
 	//   ZOOM2U_WEBHOOK_SECRET（secret）—— Zoom2u 后台登记 Webhook 时使用的 Authorization 值。
 	//   DELIVERY_ADMIN_TOKEN（secret）—— 创建真实配送订单的内部管理接口令牌。

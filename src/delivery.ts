@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 import { getSiteContact } from './db'
 import type { Env } from './index'
 import { deliveryStatusInfo } from './deliveryStatus'
+import { decryptSetting, readJsonSetting } from './settings'
 
 type DeliveryContext = Context<{ Bindings: Env }>
 
@@ -80,44 +81,19 @@ interface DeliveryRuntimeConfig {
 
 type StoredDeliveryConfig = Partial<Record<keyof DeliveryRuntimeConfig, string>>
 
-const encode = (bytes: Uint8Array) => { let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary) }
-const decode = (value: string) => new Uint8Array(Array.from(atob(value), char => char.charCodeAt(0)))
-
-async function deliveryEncryptionKey(env: Env): Promise<CryptoKey> {
-  const master = clean(env.SETTINGS_ENCRYPTION_KEY, 500)
-  if (!master) throw new Error('SETTINGS_ENCRYPTION_KEY is not configured')
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(master))
-  return crypto.subtle.importKey('raw', digest, 'AES-GCM', false, ['decrypt'])
-}
-
-async function decryptStoredDeliveryValue(env: Env, value: string | undefined): Promise<string> {
-  if (!value) return ''
-  try {
-    const [iv, ciphertext] = value.split('.')
-    if (!iv || !ciphertext) return ''
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: decode(iv) }, await deliveryEncryptionKey(env), decode(ciphertext))
-    return new TextDecoder().decode(plain)
-  } catch {
-    return ''
-  }
-}
-
-async function readStoredDeliveryConfig(env: Env): Promise<StoredDeliveryConfig> {
-  try {
-    const row = await env.RENT.prepare("SELECT value FROM systemSettings WHERE key = 'deliveryConfig'").first() as Record<string, unknown> | null
-    return row?.value ? JSON.parse(String(row.value)) as StoredDeliveryConfig : {}
-  } catch {
-    return {}
-  }
+async function readStoredDeliveryConfig(c: DeliveryContext): Promise<StoredDeliveryConfig> {
+  const stored = await readJsonSetting(c, 'deliveryConfig')
+  return (stored as StoredDeliveryConfig | null) ?? {}
 }
 
 async function getDeliveryRuntimeConfig(c: DeliveryContext): Promise<DeliveryRuntimeConfig> {
-  const stored = await readStoredDeliveryConfig(c.env)
+  const stored = await readStoredDeliveryConfig(c)
+  // secret 解密统一走 src/settings.ts（与 Turnstile 等配置同一套 AES-GCM 约定）。
   const [apiToken, customerApiKey, webhookSecret, adminToken] = await Promise.all([
-    decryptStoredDeliveryValue(c.env, stored.apiToken),
-    decryptStoredDeliveryValue(c.env, stored.customerApiKey),
-    decryptStoredDeliveryValue(c.env, stored.webhookSecret),
-    decryptStoredDeliveryValue(c.env, stored.adminToken),
+    decryptSetting(c, stored.apiToken),
+    decryptSetting(c, stored.customerApiKey),
+    decryptSetting(c, stored.webhookSecret),
+    decryptSetting(c, stored.adminToken),
   ])
   return {
     apiToken: apiToken || clean(c.env.ZOOM2U_API_TOKEN, 500),

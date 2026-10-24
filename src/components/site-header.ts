@@ -12,8 +12,8 @@ export interface HeaderOptions {
 export function renderSiteHeader(options: HeaderOptions, contact: SiteContact): string {
     const active = (path: string): string => options.path === path || options.path.startsWith(`${path}/`) ? ' aria-current="page"' : ''
     const accountAction = options.user
-        ? /* html */ `<span class="nav-account"><a class="btn btn-primary header-account" href="/sso/start">进入用户中心</a><a class="nav-logout" href="/logout">退出</a></span>`
-        : /* html */ `<a class="btn btn-primary header-account" href="https://rent.ydnw6zt6vj.workers.dev/admin/settings">登录 / 注册</a>`
+        ? /* html */ `<span class="nav-account"><a class="btn btn-primary header-account" href="/sso/start">进入用户中心</a><a class="nav-logout" href="/logout" data-confirm-logout>退出</a></span>`
+        : /* html */ `<a class="btn btn-primary header-account" href="/login">登录 / 注册</a>`
     return /* html */ `
 <a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
 <header class="site-header">
@@ -38,7 +38,7 @@ export function renderSiteHeader(options: HeaderOptions, contact: SiteContact): 
         <span data-i18n="cart">购物车</span><b class="cart-count" data-cart-count hidden>0</b>
       </a>
       ${accountAction}
-      <div class="language-switcher" role="group" aria-label="Language" data-i18n-attr="aria-label:language"><button type="button" data-language="zh">中</button><button type="button" data-language="en">EN</button></div>
+      <div class="language-switcher" role="group" aria-label="Language" data-i18n-attr="aria-label:language" data-no-translate><button type="button" data-language="zh">中</button><button type="button" data-language="en">EN</button></div>
     </div>
   </div>
 </header>`

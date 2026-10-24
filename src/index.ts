@@ -42,10 +42,10 @@ import {
   issueHandoffToken,
   sessionCookie,
   verifyCredentials,
-  verifyTurnstile,
   type SessionUser,
   registerCustomer,
 } from './auth'
+import { getTurnstileSiteKey, verifyTurnstile } from './turnstile'
 
 export interface Env {
   RENT: D1Database
@@ -57,8 +57,8 @@ export interface Env {
   SETTINGS_ENCRYPTION_KEY?: string
   STRIPE_PUBLISHABLE_KEY?: string
   STRIPE_SECRET_KEY?: string
-  // Turnstile 服务端密钥（`wrangler secret put TURNSTILE_SECRET_KEY`）。
-  // 未配置时 /register 跳过人机校验（与 rent 公开接口行为一致）。
+  // Turnstile 服务端密钥。优先从共享 D1 `systemSettings.turnstileConfig`
+  // （rent 后台 /admin/api-settings 配置）读取；这里的变量仅作为回退。
   TURNSTILE_SECRET_KEY?: string
   SQUARE_GIFT_CARD_URL?: string
   // Zoom2u：API token 和 webhook secret 请使用 wrangler secret put。
@@ -94,16 +94,50 @@ app.use('*', async (c, next) => {
   await next()
 })
 
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  // Tawk.to 客服组件（layout.ts 注入）在修复「缓存页丢安全头」之后才会真正受 CSP 约束，
+  // 因此这里显式放行它的脚本 / 内嵌框 / WebSocket，避免聊天窗口静默失效。
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://tally.so https://web.squarecdn.com https://sandbox.web.squarecdn.com https://embed.tawk.to",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to",
+  "font-src 'self' https://fonts.gstatic.com https://*.tawk.to",
+  "img-src 'self' data: https:",
+  "connect-src 'self' https://challenges.cloudflare.com https://api.stripe.com https://photon.komoot.io https://nominatim.openstreetmap.org https://connect.squareup.com https://connect.squareupsandbox.com https://tally.so https://*.tawk.to wss://*.tawk.to",
+  "frame-src https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://climate.stripe.com https://tally.so https://tawk.to https://*.tawk.to",
+  "form-action 'self' https://app.squareup.com",
+].join('; ')
+
+/** 每个响应都必须带的安全响应头（HTML / JSON / 静态资源 / 404 都一样）。 */
+function securityHeaders(protocol: string): Array<[string, string]> {
+  const headers: Array<[string, string]> = [
+    ['content-security-policy', CONTENT_SECURITY_POLICY],
+    ['x-content-type-options', 'nosniff'],
+    ['x-frame-options', 'DENY'],
+    ['referrer-policy', 'strict-origin-when-cross-origin'],
+    ['permissions-policy', 'camera=(), microphone=(), geolocation=()'],
+    ['cross-origin-opener-policy', 'same-origin'],
+    ['cross-origin-resource-policy', 'same-origin'],
+    ['x-permitted-cross-domain-policies', 'none'],
+  ]
+  if (protocol === 'https:') headers.push(['strict-transport-security', 'max-age=31536000; includeSubDomains'])
+  return headers
+}
+
+function applySecurityHeaders(headers: Headers, protocol: string): void {
+  try {
+    for (const [name, value] of securityHeaders(protocol)) headers.set(name, value)
+  } catch {
+    /* 某些 Response 的 headers 是不可变的（例如直接透传的 fetch 响应），忽略即可 */
+  }
+}
+
 app.use('*', async (c, next) => {
-  c.header('X-Content-Type-Options', 'nosniff')
-  c.header('X-Frame-Options', 'DENY')
-  c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
-  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  c.header('Cross-Origin-Opener-Policy', 'same-origin')
-  c.header('Cross-Origin-Resource-Policy', 'same-origin')
-  c.header('X-Permitted-Cross-Domain-Policies', 'none')
-  if (new URL(c.req.url).protocol === 'https:') c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-  c.header('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://tally.so https://web.squarecdn.com https://sandbox.web.squarecdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://challenges.cloudflare.com https://api.stripe.com https://photon.komoot.io https://nominatim.openstreetmap.org https://connect.squareup.com https://connect.squareupsandbox.com https://tally.so; frame-src https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://climate.stripe.com https://tally.so; form-action 'self' https://app.squareup.com")
+  const protocol = new URL(c.req.url).protocol
+  // 先写一份到 Hono 的 prepared headers：中间件里提前返回的 413/403 也能带上安全头。
+  for (const [name, value] of securityHeaders(protocol)) c.header(name, value)
 
   const contentLength = Number(c.req.header('Content-Length') || 0)
   if (Number.isFinite(contentLength) && contentLength > 128 * 1024) return c.text('Request body too large', 413)
@@ -113,6 +147,17 @@ app.use('*', async (c, next) => {
     if ((origin && origin !== requestOrigin) || c.req.header('Sec-Fetch-Site') === 'cross-site') return c.text('Invalid request origin', 403)
   }
   await next()
+  // 关键：cachedHtml() 等处理器直接 `return new Response(...)`，会绕过 c.render/c.newResponse，
+  // Hono 的 prepared headers 不会合并进去 —— 实测所有走边缘缓存的页面因此丢掉了 CSP、
+  // X-Frame-Options、nosniff、HSTS 等全部安全头。链结束后统一补写到最终响应上。
+  applySecurityHeaders(c.res.headers, protocol)
+})
+
+app.onError((error, c) => {
+  console.error('web unhandled error:', error instanceof Error ? error.message : String(error))
+  const res = c.text('Internal Server Error', 500)
+  applySecurityHeaders(res.headers, new URL(c.req.url).protocol)
+  return res
 })
 
 function appUrl(env: Env): string {
@@ -161,6 +206,7 @@ async function cachedHtml(
     if (hit) {
       const headers = new Headers(hit.headers)
       headers.set('cache-control', 'no-cache, must-revalidate')
+      headers.set('vary', 'Cookie')
       return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers })
     }
   }
@@ -173,6 +219,8 @@ async function cachedHtml(
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': authed ? 'private, no-store' : 'no-cache, must-revalidate',
+      // 登录态页面按 Cookie 区分，禁止共享缓存 / 中间代理把一个人的顶栏发给另一个人。
+      vary: 'Cookie',
     },
   })
   if (!authed && status === 200) {
@@ -226,7 +274,11 @@ app.get('/api/address/autocomplete', async (c) => {
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
   const cache = caches.default
   const cached = await cache.match(cacheKey)
-  if (cached) return cached
+  if (cached) {
+    // Cache API 返回的 Response headers 是只读的，直接返回会让全局中间件补安全头时抛错
+    // （被 applySecurityHeaders 静默吞掉）。复制一份可变 headers 再返回。
+    return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers: new Headers(cached.headers) })
+  }
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
   if (!(await enforceRateLimit(c.env, 'web-address-autocomplete', ip, 30, 60))) return c.json({ error: '地址查询过于频繁，请稍后再试。' }, 429)
   const suggestions = await autocompleteVictoriaAddresses(query)
@@ -297,19 +349,43 @@ app.on(['GET', 'POST'], '/api/coupons/rental-cart-preview', async (c) => {
   const rawTerms = body?.terms ?? c.req.query('terms')
   if (rawTerms && typeof rawTerms === 'object') terms = rawTerms
   else { try { terms = JSON.parse(String(rawTerms || 'null')) } catch { terms = undefined } }
-  const result = await previewRentalCoupon(c, [...new Set(deviceIds)], Number(body?.days ?? c.req.query('days') ?? 0), String(body?.code ?? c.req.query('code') ?? ''), terms, String(body?.email ?? ''))
-  return c.json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' })
-})
-
-app.post('/api/rental-setup-intent', async (c) => {
   try {
-    return c.json(await createRentalSetupIntent(c))
+    const result = await previewRentalCoupon(c, [...new Set(deviceIds)], Number(body?.days ?? c.req.query('days') ?? 0), String(body?.code ?? c.req.query('code') ?? ''), terms, String(body?.email ?? ''))
+    return c.json(result, result.ok ? 200 : 400, { 'Cache-Control': 'no-store' })
   } catch (error) {
-    return c.json({ ok: false, message: error instanceof Error ? error.message : '信用卡验证暂不可用，请稍后重试。' }, 400)
+    // 共享 D1 缺少 coupons / marketing 表时不要抛 500，统一按「暂时不可用」处理。
+    console.error('web coupon preview failed:', error instanceof Error ? error.message : String(error))
+    return c.json({ ok: false, message: '优惠码校验暂时不可用，请稍后重试。' }, 503, { 'Cache-Control': 'no-store' })
   }
 })
 
-app.get('/api/account-balance', async (c) => c.json(await lookupAccountBalance(c, String(c.req.query('email') || '')), 200, { 'Cache-Control': 'no-store' }))
+app.post('/api/rental-setup-intent', async (c) => {
+  // 每次调用都会在 Stripe 创建一个 SetupIntent；不限制会被脚本刷成付费 API 滥用。
+  const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'web-rental-setup-intent', ip, 12, 600))) {
+    return c.json({ ok: false, message: '请求过于频繁，请稍后再试。' }, 429, { 'Cache-Control': 'no-store' })
+  }
+  try {
+    return c.json(await createRentalSetupIntent(c))
+  } catch (error) {
+    // 上游 Stripe 的错误文本会暴露配置状态，只记日志、对外给通用提示。
+    console.error('web setup-intent failed:', error instanceof Error ? error.message : String(error))
+    return c.json({ ok: false, message: '信用卡验证暂不可用，请稍后重试。' }, 400)
+  }
+})
+
+// 账户余额查询：必须携带官网登录态，且只返回「本次会话用户自己」的余额。
+// 这里曾按 ?email= 任意查询，等于把「某邮箱是否为正式客户 + 余额」暴露给任何访客
+// （账户枚举 / 财务信息泄露）。结账页对未登录访客不再显示余额支付选项。
+app.get('/api/account-balance', async (c) => {
+  const user = await currentUser(c)
+  const requestedEmail = String(c.req.query('email') || '').trim().toLowerCase()
+  if (!user) return c.json({ ok: true, available: false, accountEligible: false, balance: 0, requiresLogin: true }, 200, { 'Cache-Control': 'no-store' })
+  if (requestedEmail && requestedEmail !== user.email.toLowerCase()) {
+    return c.json({ ok: true, available: false, accountEligible: false, balance: 0 }, 200, { 'Cache-Control': 'no-store' })
+  }
+  return c.json(await lookupAccountBalance(c, user.email), 200, { 'Cache-Control': 'no-store' })
+})
 
 app.post('/api/square-gift-card-preview', async (c) => {
   const body = await parseRequestBody(c)
@@ -320,7 +396,9 @@ app.post('/api/square-gift-card-preview', async (c) => {
     const preview = await inspectSquareGiftCardNonce(c, String(body.nonce || ''))
     return c.json({ ok: true, ...preview }, 200, { 'Cache-Control': 'no-store' })
   } catch (error) {
-    return c.json({ ok: false, message: error instanceof Error ? error.message : '礼品卡验证失败，请检查卡号后重试。' }, 400)
+    // Square 上游错误可能带配置信息（例如「管理员尚未完整配置 Square」），不直接回显。
+    console.error('web square gift card preview failed:', error instanceof Error ? error.message : String(error))
+    return c.json({ ok: false, message: '礼品卡验证失败，请检查卡号后重试。' }, 400)
   }
 })
 
@@ -597,7 +675,7 @@ app.get('/checkout', (c) =>
       selectedId: c.req.query('device') || '',
       config,
       appUrl: appUrl(c.env),
-      turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
+      turnstileSiteKey: await getTurnstileSiteKey(c),
       squareGiftCardConfig,
       deliveryQuoteEnabled: await deliveryQuotesEnabled(c),
     })
@@ -625,16 +703,18 @@ async function renderLoginPage(
   opts: { error?: string; notice?: string; account?: string; status?: number; tab?: 'register' | 'login' },
 ): Promise<Response> {
   const contact = await getSiteContact(c.env)
-  const tab = opts.tab ?? (c.req.query('tab') === 'login' ? 'login' : 'register')
+  const noticeKey = c.req.query('notice') || ''
+  const notice = opts.notice ?? (Object.prototype.hasOwnProperty.call(LOGIN_NOTICES, noticeKey) ? LOGIN_NOTICES[noticeKey] : undefined)
+  const tab = opts.tab ?? (notice || c.req.query('tab') === 'login' ? 'login' : 'register')
   const html = renderPage({
     title: `注册 / 登录 — ${contact.name}`,
     description: `注册 ${contact.name} 账号，或用已有邮箱和密码登录，管理你的租赁订单、付款与合同签署。`,
     body: renderLogin({
       appUrl: appUrl(c.env),
-      turnstileSiteKey: c.env.TURNSTILE_SITE_KEY || '',
+      turnstileSiteKey: await getTurnstileSiteKey(c),
       tab,
       error: opts.error,
-      notice: opts.notice,
+      notice,
       account: opts.account,
     }),
     contact,
@@ -707,7 +787,7 @@ app.post('/register', async (c) => {
     c.req.header('X-Forwarded-For')?.split(',')[0] ||
     'unknown'
   ).trim()
-  const result = await registerCustomer(c.env, body, ip)
+  const result = await registerCustomer(c, body, ip)
   const status = result.ok ? 200 : result.code === 'error' ? 500 : result.code === 'rate_limited' ? 429 : 400
   return c.json(result, status)
 })
@@ -777,7 +857,7 @@ app.get('/order-lookup', (c) =>
   cachedHtml(c, HTML_TTL, async (user) => {
     const contact = await getSiteContact(c.env)
     const orders = user ? await listOrdersForUser(c.env, user.id, appUrl(c.env)) : []
-    return renderPage({ title: `订单查询 — ${contact.name}`, description: '查看电脑租赁订单当前状态、合同、密码和取还详情。', body: renderOrderLookup(appUrl(c.env), orders, c.env.TURNSTILE_SITE_KEY || ''), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow', user })
+    return renderPage({ title: `订单查询 — ${contact.name}`, description: '查看电脑租赁订单当前状态、合同、密码和取还详情。', body: renderOrderLookup(appUrl(c.env), orders, await getTurnstileSiteKey(c)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow', user })
   }),
 )
 
@@ -791,7 +871,7 @@ app.post('/api/order-lookup', async (c) => {
   const orderNo = String(body.orderNo || '').trim()
   const email = String(body.email || '').trim()
   if (!orderNo || !email) return c.json({ ok: false, message: '请输入订单编号和申请邮箱。' }, 400)
-  if (!(await verifyTurnstile(c.env, String(body.turnstileToken || body['cf-turnstile-response'] || ''), ip))) return c.json({ ok: false, message: '人机验证未通过，请重试。' }, 400)
+  if (!(await verifyTurnstile(c, String(body.turnstileToken || body['cf-turnstile-response'] || ''), ip))) return c.json({ ok: false, message: '人机验证未通过，请重试。' }, 400)
   try {
     const result = await lookupOrderByCredentials(c.env, orderNo, email, appUrl(c.env))
     if (!result) return c.json({ ok: false, message: '没有找到匹配的订单，请检查订单编号和邮箱。' }, 404)
@@ -840,6 +920,9 @@ app.get('/sso/start', async (c) => {
 })
 
 const doLogout = async (c: Context<{ Bindings: Env }>) => {
+  // 登出会撤销该用户在两站的所有会话。跨站顶层跳转（链接/图片）也会带上 Cookie，
+  // 因此拒绝 Sec-Fetch-Site: cross-site，避免第三方页面把访客强制登出。
+  if (c.req.header('Sec-Fetch-Site') === 'cross-site') return c.redirect('/', 303)
   await destroySession(c) // 撤销该用户所有会话：官网 + rent 一起登出
   const res = c.redirect('/login?notice=logged-out')
   res.headers.set('Set-Cookie', clearedSessionCookie())

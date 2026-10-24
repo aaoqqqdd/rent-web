@@ -61,6 +61,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var availabilityReady = false;
   var availabilityFailed = false;
   var availabilityKey = '';
+  function isEnglishLanguage() { return Boolean(window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en'); }
+  function cartText(chinese, english) { return isEnglishLanguage() ? english : chinese; }
   function today() {
     var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
     var values = {}; parts.forEach(function (part) { if (part.type !== 'literal') values[part.type] = part.value; });
@@ -157,61 +159,6 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     try { if (window.GeekSlopeCart) window.GeekSlopeCart.write(ids); } catch (_) {}
   }
   function write(ids, terms) { persist(ids, terms); render(); }
-  function legacySharedRender() {
-    var state = read();
-    if (!state.ids) state = { ids: [], term: null };
-    var ids = state.ids;
-    if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) {
-      ids.push(selectedId);
-      write(ids, state.term);
-    }
-    empty.hidden = ids.length > 0;
-    content.hidden = ids.length === 0;
-    if (ids.length) {
-      loadAvailability(ids);
-      var term = state.term || { startDate: today(), endDate: addDays(today(), minimumDays), startPeriod: 'AM', endPeriod: 'AM' };
-      var savedStart = term.startDate;
-      var savedEnd = term.endDate;
-      startInput.min = today();
-      if (!term.startDate || term.startDate < startInput.min) term.startDate = startInput.min;
-      if (availabilityReady) term.startDate = nextAvailableDate(term.startDate);
-      startInput.value = term.startDate;
-      endInput.min = addDays(startInput.value, Math.max(1, minimumDays));
-      if (availabilityReady) endInput.min = nextAvailableDate(endInput.min);
-      endInput.value = term.endDate && term.endDate >= endInput.min ? term.endDate : endInput.min;
-      if (availabilityReady && deviceDateUnavailable(endInput.value)) endInput.value = nextAvailableDate(endInput.value);
-      startInput.disabled = !availabilityReady; endInput.disabled = !availabilityReady;
-      if (availabilityReady && (startInput.value !== savedStart || endInput.value !== savedEnd)) {
-        write(ids, { startDate: startInput.value, endDate: endInput.value, startPeriod: 'AM', endPeriod: 'AM' });
-        return;
-      }
-    }
-    clearChildren(items);
-    var deposit = 0;
-    var rentalDays = ids.length && startInput.value && endInput.value ? Math.max(0, Math.ceil((new Date(endInput.value + 'T00:00:00Z') - new Date(startInput.value + 'T00:00:00Z')) / 86400000)) : 0;
-    ids.forEach(function (id) {
-      var product = map.get(id); deposit += Number(product.deposit || 0);
-      var row = document.createElement('article'); row.className = 'cart-page-item';
-      var detail = document.createElement('div');
-      var category = document.createElement('span'); category.textContent = product.categoryLabel;
-      var name = document.createElement('h3'); name.textContent = product.name;
-      var model = document.createElement('p'); model.textContent = product.model || '配置详情见设备页';
-      detail.append(category, name, model);
-      var price = document.createElement('div'); price.className = 'cart-page-price';
-      var priceValue = document.createElement('div');
-      var rawDaily = Number(product.day || 0);
-      var daily = document.createElement('strong');
-      daily.textContent = rawDaily > 0 ? '$' + rawDaily.toFixed(2) : '询价';
-      var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit);
-      priceValue.appendChild(daily);
-      var depositText = document.createElement('span'); depositText.textContent = '押金 $' + product.deposit;
-      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除';
-      price.append(priceValue, depositText, remove); row.append(detail, price);
-      items.appendChild(row);
-    });
-    var rent = ids.reduce(function (sum, id) { return sum + rentalFee(map.get(id), rentalDays); }, 0);
-    total.textContent = ids.length ? ids.length + ' 台设备 · ' + rentalDays + ' 天 · 租金 $' + rent.toFixed(2) + ' · 押金 $' + deposit.toFixed(2) : '';
-  }
   function rentalFee(product, days) {
     var monthlyDays = Math.floor(days / 30) * 30;
     var weeklyDays = Math.floor((days - monthlyDays) / 7) * 7;
@@ -227,10 +174,10 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function renderPicker(picker, id, role, term, month) {
     var year = month.getFullYear(); var monthIndex = month.getMonth(); clearChildren(picker);
-    var head = document.createElement('div'); head.className = 'date-picker-head'; var title = document.createElement('strong'); title.textContent = year + '年' + (monthIndex + 1) + '月';
+    var head = document.createElement('div'); head.className = 'date-picker-head'; var title = document.createElement('strong'); title.textContent = isEnglishLanguage() ? new Intl.DateTimeFormat('en-AU', { month: 'long', year: 'numeric' }).format(month) : year + '年' + (monthIndex + 1) + '月';
     var previous = document.createElement('button'); previous.type = 'button'; previous.className = 'date-picker-nav'; previous.textContent = '‹'; var next = document.createElement('button'); next.type = 'button'; next.className = 'date-picker-nav'; next.textContent = '›';
     previous.addEventListener('click', function () { renderPicker(picker, id, role, term, new Date(year, monthIndex - 1, 1)); }); next.addEventListener('click', function () { renderPicker(picker, id, role, term, new Date(year, monthIndex + 1, 1)); }); head.append(previous, title, next); picker.appendChild(head);
-    var week = document.createElement('div'); week.className = 'date-picker-week'; ['一', '二', '三', '四', '五', '六', '日'].forEach(function (label) { var cell = document.createElement('span'); cell.textContent = label; week.appendChild(cell); }); picker.appendChild(week);
+    var week = document.createElement('div'); week.className = 'date-picker-week'; (isEnglishLanguage() ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['一', '二', '三', '四', '五', '六', '日']).forEach(function (label) { var cell = document.createElement('span'); cell.textContent = label; week.appendChild(cell); }); picker.appendChild(week);
     var grid = document.createElement('div'); grid.className = 'date-picker-grid'; var first = new Date(year, monthIndex, 1); var offset = (first.getDay() + 6) % 7;
     for (var index = 0; index < 42; index += 1) {
       var date = new Date(year, monthIndex, index - offset + 1); var iso = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); var button = document.createElement('button'); button.type = 'button'; button.textContent = String(date.getDate()); button.dataset.date = iso;
@@ -240,21 +187,21 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     picker.appendChild(grid);
   }
   function dateField(id, role, term) {
-    var field = document.createElement('div'); field.className = 'term-date-field'; var label = document.createElement('label'); label.textContent = role === 'start' ? '取货日期' : '归还日期';
-    var control = document.createElement('div'); control.className = 'term-date-control'; var input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric'; input.autocomplete = 'off'; input.maxLength = 10; input.placeholder = 'dd/mm/yyyy'; input.value = formatDate(term[role === 'start' ? 'startDate' : 'endDate']); var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'date-picker-toggle'; toggle.setAttribute('aria-label', role === 'start' ? '打开取货日期日历' : '打开归还日期日历'); toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>'; var picker = document.createElement('div'); picker.className = 'date-picker'; picker.hidden = true;
+    var field = document.createElement('div'); field.className = 'term-date-field'; var label = document.createElement('label'); label.textContent = role === 'start' ? cartText('取货日期', 'Pickup date') : cartText('归还日期', 'Return date');
+    var control = document.createElement('div'); control.className = 'term-date-control'; var input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric'; input.autocomplete = 'off'; input.maxLength = 10; input.placeholder = 'dd/mm/yyyy'; input.value = formatDate(term[role === 'start' ? 'startDate' : 'endDate']); var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'date-picker-toggle'; toggle.setAttribute('aria-label', role === 'start' ? cartText('打开取货日期日历', 'Open pickup date calendar') : cartText('打开归还日期日历', 'Open return date calendar')); toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>'; var picker = document.createElement('div'); picker.className = 'date-picker'; picker.hidden = true;
     var open = function () { picker.hidden = false; toggle.setAttribute('aria-expanded', 'true'); var value = parseDate(input.value) || term[role === 'start' ? 'startDate' : 'endDate'] || today(); var date = new Date(value + 'T00:00:00'); renderPicker(picker, id, role, term, new Date(date.getFullYear(), date.getMonth(), 1)); };
     var close = function () { picker.hidden = true; toggle.setAttribute('aria-expanded', 'false'); };
     toggle.setAttribute('aria-expanded', 'false'); toggle.addEventListener('click', function () { if (picker.hidden) open(); else close(); });
     input.addEventListener('focus', open); input.addEventListener('click', open); input.addEventListener('input', function () { input.value = maskDate(input.value); input.setCustomValidity(''); });
-    input.addEventListener('blur', function () { window.setTimeout(function () { if (!control.contains(document.activeElement)) close(); }, 100); var value = parseDate(input.value); if (!value) { input.setCustomValidity('请输入有效日期（格式：dd/mm/yyyy）。'); return; } var state = read(); var next = state.terms[id] || term; next[role === 'start' ? 'startDate' : 'endDate'] = value; state.terms[id] = next; persist(state.ids, state.terms); render(); });
+    input.addEventListener('blur', function () { window.setTimeout(function () { if (!control.contains(document.activeElement)) close(); }, 100); var value = parseDate(input.value); if (!value) { input.setCustomValidity(cartText('请输入有效日期（格式：dd/mm/yyyy）。', 'Enter a valid date (format: dd/mm/yyyy).')); return; } var state = read(); var next = state.terms[id] || term; next[role === 'start' ? 'startDate' : 'endDate'] = value; state.terms[id] = next; persist(state.ids, state.terms); render(); });
     control.append(input, toggle, picker); field.append(label, control); return field;
   }
   function termError(id, term) {
-    if (!map.get(id)?.available) return '当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。'; if (!parseDate(term.startDate) || !parseDate(term.endDate)) return '请输入有效日期（格式：dd/mm/yyyy）。'; if (term.startDate < today()) return '取货日期不能早于今天。'; if (termDays(term) < minimumDays) return '租期不能少于 ' + minimumDays + ' 天。'; if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return '该设备在所选租期或时段不可用，请选择其他日期。'; return '';
+    if (!map.get(id)?.available) return cartText('当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。', 'This device can only be reserved or enquired about; remove it and contact us instead.'); if (!parseDate(term.startDate) || !parseDate(term.endDate)) return cartText('请输入有效日期（格式：dd/mm/yyyy）。', 'Enter a valid date (format: dd/mm/yyyy).'); if (term.startDate < today()) return cartText('取货日期不能早于今天。', 'The pickup date cannot be earlier than today.'); if (termDays(term) < minimumDays) return cartText('租期不能少于 ' + minimumDays + ' 天。', 'The rental term must be at least ' + minimumDays + ' day(s).'); if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return cartText('该设备在所选租期或时段不可用，请选择其他日期。', 'This device is unavailable for the selected term or time slot. Choose different dates.'); return '';
   }
   function termEditor(id, term) {
-    var wrap = document.createElement('div'); wrap.className = 'device-term-editor'; var head = document.createElement('div'); head.className = 'device-term-editor-head'; var title = document.createElement('strong'); title.textContent = '本设备租期'; head.appendChild(title); wrap.appendChild(head);
-    var fields = document.createElement('div'); fields.className = 'term-date-grid'; fields.append(dateField(id, 'start', term), dateField(id, 'end', term)); var status = document.createElement('p'); status.className = 'term-status'; var error = availabilityReady && !availabilityFailed ? termError(id, term) : ''; status.textContent = availabilityFailed ? '设备档期检查失败，请刷新后重试。' : (availabilityReady ? (error || '该设备档期可用。') : '正在检查该设备档期…'); if (error || availabilityFailed) status.dataset.state = 'error'; wrap.append(fields, status); return wrap;
+    var wrap = document.createElement('div'); wrap.className = 'device-term-editor'; var head = document.createElement('div'); head.className = 'device-term-editor-head'; var title = document.createElement('strong'); title.textContent = isEnglishLanguage() ? 'Rental term for this device' : '本设备租期'; head.appendChild(title); wrap.appendChild(head);
+    var fields = document.createElement('div'); fields.className = 'term-date-grid'; fields.append(dateField(id, 'start', term), dateField(id, 'end', term)); var status = document.createElement('p'); status.className = 'term-status'; var error = availabilityReady && !availabilityFailed ? termError(id, term) : ''; status.textContent = availabilityFailed ? cartText('设备档期检查失败，请刷新后重试。', 'Availability check failed. Refresh and try again.') : (availabilityReady ? (error || cartText('该设备档期可用。', 'This device is available for the selected term.')) : cartText('正在检查该设备档期…', 'Checking this device availability…')); if (error || availabilityFailed) status.dataset.state = 'error'; wrap.append(fields, status); return wrap;
   }
   function setEmptyState(isEmpty) {
     empty.hidden = !isEmpty;
@@ -265,11 +212,12 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) { ids.push(selectedId); state.terms[selectedId] = normalizeTerm(selectedId, null); persist(ids, state.terms); }
     setEmptyState(ids.length === 0);
     if (!ids.length) { clearChildren(items); total.textContent = ''; return; } loadAvailability(ids); clearChildren(items); var deposit = 0; var rent = 0; var valid = true;
-    ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; deposit += Number(product.deposit || 0); rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || '配置详情见设备页'; detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); var dailyRate = Number(product.day || 0); daily.textContent = dailyRate > 0 ? '$' + dailyRate.toFixed(2) : '询价'; if (dailyRate > 0) { var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); } var depositText = document.createElement('span'); depositText.textContent = Number(product.deposit || 0) > 0 ? '押金 $' + Number(product.deposit || 0).toFixed(2) : '押金待确认'; var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = '移除'; price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
-    total.textContent = ids.length + ' 台设备｜租金 $' + rent.toFixed(2) + '｜押金 $' + deposit.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (valid ? '' : '｜请先修正不可用租期');
+    ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; deposit += Number(product.deposit || 0); rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || cartText('配置详情见设备页', 'See the device page for specifications'); detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); var dailyRate = Number(product.day || 0); daily.textContent = dailyRate > 0 ? '$' + dailyRate.toFixed(2) : cartText('询价', 'Enquire'); if (dailyRate > 0) { var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); } var depositText = document.createElement('span'); depositText.textContent = Number(product.deposit || 0) > 0 ? cartText('押金 $' + Number(product.deposit || 0).toFixed(2), 'Deposit $' + Number(product.deposit || 0).toFixed(2)) : cartText('押金待确认', 'Deposit to be confirmed'); var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = cartText('移除', 'Remove'); price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
+    total.textContent = ids.length + cartText(' 台设备｜租金 $', ' device(s) | Rental $') + rent.toFixed(2) + cartText('｜押金 $', ' | Deposit $') + deposit.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (valid ? '' : cartText('｜请先修正不可用租期', ' | Please correct an unavailable rental term'));
     var checkout = content.querySelector('a[href="/checkout"], a[data-checkout-link]');
     if (checkout) { checkout.dataset.checkoutLink = 'true'; checkout.href = valid ? '/checkout' : '#cart-page-items'; checkout.setAttribute('aria-disabled', String(!valid)); checkout.classList.toggle('is-disabled', !valid); }
   }
+  window.addEventListener('geekslope:language-change', render);
   items.addEventListener('click', function (event) { var remove = event.target.closest('[data-cart-remove]'); if (!remove) return; selectedId = ''; var state = read(); delete state.terms[remove.dataset.cartRemove]; write(state.ids.filter(function (id) { return id !== remove.dataset.cartRemove; }), state.terms); });
   render();
 })();
@@ -370,7 +318,7 @@ export function renderApply(data: ApplyData): string {
     </div>
 
     <form id="apply-form" hidden>
-      <div class="form-alert" id="form-error" hidden></div>
+      <div class="form-alert" id="form-error" role="alert" aria-live="polite" hidden></div>
 
       <input type="hidden" id="deviceTerms" name="deviceTerms" required>
 
@@ -595,6 +543,7 @@ export function renderApply(data: ApplyData): string {
   var deliveryQuoteRequestSequence = 0;
   var couponState = 'empty';
   var checkoutBlocked = false;
+  var checkoutConfirming = false;
   var stripe = null;
   var stripeElements = null;
   var setupIntent = null;
@@ -648,6 +597,10 @@ export function renderApply(data: ApplyData): string {
   }
   function uiCopy(value) {
     return window.GeekSlopeI18n ? window.GeekSlopeI18n.t(value) : value;
+  }
+  function notify(message, type, title) {
+    if (!window.GeekSlopeUI) return;
+    window.GeekSlopeUI.toast(message, { type: type || 'info', title: title });
   }
 
   function splitContactName(value) {
@@ -983,7 +936,7 @@ export function renderApply(data: ApplyData): string {
       var name = document.createElement('strong'); name.textContent = product.name;
       var meta = document.createElement('span');
       var rawDaily = Number(product.day || 0);
-      var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + ' · ' + rentalDays + uiText(' 天 · ', ' day(s) · ');
+      var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + uiText(' · ' + rentalDays + ' 天 · ', ' · ' + rentalDays + ' day(s) · ');
       meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : uiText('询价', 'Enquire')) + uiText('/天', '/day') + uiText(' · 押金 $', ' · Deposit $') + product.deposit;
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = uiText('移除', 'Remove');
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
@@ -1414,6 +1367,7 @@ export function renderApply(data: ApplyData): string {
         couponState = 'valid';
         clearCheckoutError();
         refreshSummary();
+        notify(hint.textContent || uiText('优惠码已应用。', 'Promo code applied.'), 'success', uiText('优惠码已应用', 'Promo code applied'));
       })
       .catch(function (error) { couponState = 'invalid'; appliedDiscount = 0; hint.textContent = ''; showFormError(error.message || uiCopy('优惠码校验失败，请稍后重试。'), hint); });
   });
@@ -1508,15 +1462,44 @@ export function renderApply(data: ApplyData): string {
     }
     var payload = {};
     new FormData(form).forEach(function (value, key) { payload[key] = value; });
-    if (saveContactInfo.checked) {
-      try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ firstName: payload.firstName || '', lastName: payload.lastName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
-    }
     payload.deviceIds = cartIds.slice(); payload.deviceId = cartIds[0];
     payload.deviceTerms = deviceTermsInput.value;
     if (method.value === 'Delivery' && DELIVERY_QUOTE_ENABLED) payload.deliveryQuoteId = deliveryQuoteId;
     if (selectedPaymentMethod === 'square') payload.squareGiftCardNonce = squareGiftCardNonce;
     var turnstileInput = form.querySelector('[name="cf-turnstile-response"]');
     if (turnstileInput) payload['cf-turnstile-response'] = turnstileInput.value;
+    if (checkoutConfirming) return;
+    checkoutConfirming = true;
+    if (window.GeekSlopeUI && window.GeekSlopeUI.confirm) {
+      var depositTotal = cartIds.reduce(function (total, id) { return total + Number(productMap.get(id).deposit || 0); }, 0);
+      var firstTerm = termFor(cartIds[0]);
+      var deviceNames = cartIds.map(function (id) { return productMap.get(id).name; }).join(uiText('、', ', '));
+      var confirmed = true;
+      try {
+        confirmed = await window.GeekSlopeUI.confirm({
+          title: { zh: '确认提交租赁申请？', en: 'Submit your rental application?' },
+          message: { zh: '提交后将验证并预授权押金，租金不会立即扣款。请确认设备、租期与费用无误。', en: 'Your deposit will be verified and pre-authorised after submission; rent is not charged immediately. Check the devices, rental term and costs before continuing.' },
+          details: [
+            { label: { zh: '设备', en: 'Devices' }, value: cartIds.length + uiText(' 台 · ', ' device(s) · ') + deviceNames },
+            { label: { zh: '租期', en: 'Rental term' }, value: formatDate(firstTerm.startDate) + ' – ' + formatDate(firstTerm.endDate) + (cartIds.length > 1 ? uiText('（每台设备可能不同）', ' (dates may differ per device)') : '') },
+            { label: { zh: '取还方式', en: 'Handover' }, value: method.value === 'Delivery' ? uiText('送货上门', 'Delivery') : uiText('到店自取', 'Store pickup') },
+            { label: { zh: '租金及手续费', en: 'Rent and fees' }, value: 'AUD $' + calculateRentalPayable().toFixed(2) },
+            { label: { zh: '押金（预授权）', en: 'Deposit (pre-authorised)' }, value: 'AUD $' + depositTotal.toFixed(2) }
+          ],
+          confirmText: { zh: '确认提交', en: 'Submit application' },
+          cancelText: { zh: '返回检查', en: 'Go back and check' },
+          variant: 'warning'
+        });
+      } finally {
+        checkoutConfirming = false;
+      }
+      if (!confirmed) return;
+    } else {
+      checkoutConfirming = false;
+    }
+    if (saveContactInfo.checked) {
+      try { localStorage.setItem('geekslope-contact-v1', JSON.stringify({ firstName: payload.firstName || '', lastName: payload.lastName || '', phone: payload.contactPhone || '', email: payload.contactEmail || '' })); } catch (_) {}
+    }
     submitBtn.disabled = true; submitBtn.textContent = uiText('提交中…', 'Submitting…');
     fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(readJsonResponse)
@@ -1526,12 +1509,15 @@ export function renderApply(data: ApplyData): string {
           if (result.json.orderNo) { document.getElementById('done-order-no').textContent = result.json.orderNo; document.getElementById('done-password').textContent = uiCopy(result.json.temporaryPassword || '已有账号，请使用原密码'); credentialBox.hidden = false; }
           doneBox.hidden = false;
           if (!reduceMotion) doneBox.classList.add('is-in');
-          doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+          doneBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          notify(uiCopy(result.json.message || '申请已提交，我们确认后会联系你。'), 'success', uiText('申请已提交', 'Application submitted'));
+          return;
         }
         throw new Error(uiCopy((result.json && result.json.message) || '提交失败，请稍后重试。'));
       })
       .catch(function (error) {
-        showFormError(error.message || uiCopy('提交失败，请稍后重试。'), submitBtn); submitBtn.disabled = false; submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application');
+        notify(error.message || uiCopy('提交失败，请稍后重试。'), 'error', uiText('提交失败', 'Submission failed'));
+        submitBtn.disabled = false; submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application');
       });
   });
 })();

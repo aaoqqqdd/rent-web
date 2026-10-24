@@ -7,6 +7,7 @@ import type { SessionUser } from './auth'
 import { esc } from './escape'
 import { renderSiteHeader } from './components/site-header'
 import { renderSiteFooter } from './components/site-footer'
+import { renderFeedbackUi, FEEDBACK_SCRIPT } from './components/feedback'
 import { FAVICON_SVG } from './components/brand'
 
 export { FAVICON_SVG }
@@ -59,6 +60,27 @@ export function renderPage(opts: PageOptions): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+(() => {
+  // Resolve the presentation language before CSS/paint so html[lang] and
+  // html[data-lang] are already correct on the first frame. Auto-detection is
+  // deliberately NOT written back to localStorage; only an explicit toggle
+  // persists a choice (see setLanguage(..., persist)).
+  var language = 'zh';
+  try {
+    var stored = localStorage.getItem('geekslope-language');
+    if (stored === 'en' || stored === 'zh') {
+      language = stored;
+    } else {
+      var languages = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''];
+      language = /^en(?:-|$)/i.test(String(languages[0] || '')) ? 'en' : 'zh';
+    }
+  } catch (_) {}
+  var root = document.documentElement;
+  root.setAttribute('data-lang', language);
+  root.lang = language === 'en' ? 'en-AU' : 'zh-CN';
+})();
+</script>
 <title>${esc(opts.title)}</title>
 <meta name="description" content="${esc(opts.description)}">
 <meta name="robots" content="${esc(opts.robots || 'index, follow, max-image-preview:large')}">
@@ -93,72 +115,108 @@ ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, op
 <main id="main-content">
 ${opts.body}
 </main>
+${renderFeedbackUi()}
 ${renderSiteFooter(opts.contact)}
 <script>
 (() => {
   var englishCopy = ${englishCopy};
   var englishPatterns = ${englishPatterns}.map(function (entry) { return [new RegExp(entry[0]), entry[1]]; });
-  var englishPhraseEntries = Object.keys(englishCopy)
-    .filter(function (source) { return source.length >= 2 && /\\p{Script=Han}/u.test(source); })
-    .sort(function (a, b) { return b.length - a.length; });
-  var originalText = new WeakMap();
-  var originalAttributes = new WeakMap();
+  var textState = new WeakMap();
+  var attrState = new WeakMap();
   var i18nTextNodes = new WeakMap();
   var originalTitle = document.title;
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
   var activeAnnouncementNotice = null;
-  function cleanChinesePunctuation(value) { return String(value || '').replace(/。/g, ''); }
-  function formatSentenceBreaks(value, node) {
-    var text = String(value || '');
-    if (/[；;]/.test(text) && node && node.parentElement) node.parentElement.classList.add('has-sentence-break');
-    return text.replace(/[；;]/g, '\\n');
+  var SKIP_SELECTOR = 'script,style,[data-no-translate],[data-i18n],[data-i18n-attr]';
+  var TRANSLATED_ATTRIBUTES = ['placeholder', 'aria-label', 'title', 'alt', 'value', 'aria-valuetext', 'aria-roledescription', 'label'];
+  // NOTE: this whole block lives inside a TS template literal; every regex
+  // backslash and escape (\\n, \\s, \\p{Script=Han}, \\/) must be doubled in the
+  // source or it is eaten before it reaches the browser.
+  function hasHan(value) { return /\\p{Script=Han}/u.test(String(value || '')); }
+  // 正则模式里捕获组可能来自数据库（例如配送区域列表），只做安全的少量地名 / 标点归一化，
+  // 不做通用短语替换，避免出现 “Delivery 时段 / Services 费” 这种中英混杂。
+  function normalizePatternResult(value) {
+    return String(value || '')
+      .replaceAll('墨尔本 CBD 及周边地区', 'Melbourne CBD and nearby areas')
+      .replaceAll('墨尔本 CBD', 'Melbourne CBD')
+      .replaceAll('墨尔本', 'Melbourne')
+      .replaceAll('、', ', ');
   }
   function englishFor(value) {
     var lookup = String(value || '').replace(/\\s+/g, ' ').trim();
-    var translated = englishCopy[lookup] || '';
-    for (var i = 0; !translated && i < englishPatterns.length; i += 1) {
-      if (englishPatterns[i][0].test(lookup)) translated = lookup.replace(englishPatterns[i][0], englishPatterns[i][1]);
+    if (!lookup) return null;
+    var translated = englishCopy[lookup];
+    if (translated == null) {
+      for (var i = 0; i < englishPatterns.length; i += 1) {
+        if (englishPatterns[i][0].test(lookup)) { translated = normalizePatternResult(lookup.replace(englishPatterns[i][0], englishPatterns[i][1])); break; }
+      }
     }
-    if (!translated) {
-      var partial = lookup;
-      englishPhraseEntries.forEach(function (source) {
-        if (partial.indexOf(source) >= 0) partial = partial.replaceAll(source, englishCopy[source]);
-      });
-      if (partial !== lookup) translated = partial;
-    }
-    if (!translated) return value;
-    // A pattern's captured group (eg. a policy name inside a dynamic notice) is
-    // copied into the replacement as-is; translate any Chinese it still carries.
-    translated = translated.replace(/\\p{Script=Han}+/gu, function (segment) { return englishCopy[segment] || segment; });
-    return translated
-      .replaceAll('、', ', ')
-      .replaceAll('墨尔本 CBD 及周边地区', 'Melbourne CBD and nearby areas')
-      .replaceAll('墨尔本 CBD', 'Melbourne CBD')
-      .replaceAll('墨尔本', 'Melbourne');
+    if (translated == null) return null;
+    return translated;
+  }
+  function t(value) {
+    if (currentLanguage !== 'en') return value;
+    var translated = englishFor(value);
+    return translated == null ? value : translated;
+  }
+  function currentCopy(zh, en) { return currentLanguage === 'en' ? en : zh; }
+  function cleanEnglishPunctuation(value) { return String(value || '').replace(/。/g, ''); }
+  function sentenceBreak(value, node) {
+    var text = String(value || '');
+    if (text.indexOf('；') < 0) return text;
+    if (node && node.parentElement) node.parentElement.classList.add('has-sentence-break');
+    return text.replace(/；/g, '\\n');
+  }
+  function clearSentenceBreaks() {
+    document.querySelectorAll('.has-sentence-break').forEach(function (element) { element.classList.remove('has-sentence-break'); });
   }
   function translateTextNode(node) {
-    if (!node || !node.parentElement || node.parentElement.closest('script,style,[data-no-translate]')) return;
+    if (!node || !node.parentElement || node.parentElement.closest(SKIP_SELECTOR)) return;
     var current = node.nodeValue || '';
-    if (/\\p{Script=Han}/u.test(current) && !originalText.has(node)) originalText.set(node, current);
-    var source = originalText.get(node) || current;
+    var state = textState.get(node);
+    if (!state || state.lastWritten !== current) {
+      state = { source: current, lastWritten: current };
+      textState.set(node, state);
+    }
+    var source = state.source;
     var trimmed = source.trim();
     if (!trimmed) return;
-    var translated = currentLanguage === 'en' ? englishFor(trimmed) : trimmed;
-    var next = source.slice(0, source.indexOf(trimmed)) + translated + source.slice(source.indexOf(trimmed) + trimmed.length);
-    next = formatSentenceBreaks(cleanChinesePunctuation(next), node);
+    var start = source.indexOf(trimmed);
+    var next;
+    if (currentLanguage === 'en') {
+      var english = englishFor(trimmed);
+      if (english == null) {
+        next = source;
+      } else {
+        next = source.slice(0, start) + sentenceBreak(cleanEnglishPunctuation(english), node) + source.slice(start + trimmed.length);
+      }
+    } else {
+      next = source;
+    }
     if (node.nodeValue !== next) node.nodeValue = next;
+    state.lastWritten = next;
   }
   function translateElement(element) {
-    if (!element || element.closest('script,style,[data-no-translate]')) return;
-    var saved = originalAttributes.get(element) || {};
-    ['placeholder', 'aria-label', 'title'].forEach(function (attribute) {
+    if (!element || element.closest(SKIP_SELECTOR)) return;
+    var states = attrState.get(element);
+    if (!states) { states = {}; attrState.set(element, states); }
+    TRANSLATED_ATTRIBUTES.forEach(function (attribute) {
       var current = element.getAttribute(attribute);
-      if (current && /\\p{Script=Han}/u.test(current)) saved[attribute] = current;
-      var source = saved[attribute];
-      if (source) element.setAttribute(attribute, cleanChinesePunctuation(currentLanguage === 'en' ? englishFor(source) : source));
+      if (current == null) return;
+      var state = states[attribute];
+      if (!state || state.lastWritten !== current) {
+        state = { source: current, lastWritten: current };
+        states[attribute] = state;
+      }
+      if (currentLanguage !== 'en' && state.source === current) return;
+      if (!hasHan(state.source)) return;
+      var translated = currentLanguage === 'en' ? englishFor(state.source) : state.source;
+      if (translated == null) return;
+      var next = currentLanguage === 'en' ? cleanEnglishPunctuation(translated) : translated;
+      if (element.getAttribute(attribute) !== next) element.setAttribute(attribute, next);
+      state.lastWritten = next;
     });
-    originalAttributes.set(element, saved);
   }
   function translateTree(root) {
     if (root.nodeType === Node.TEXT_NODE) { translateTextNode(root); return; }
@@ -215,14 +273,12 @@ ${renderSiteFooter(opts.contact)}
     });
   }
   function setI18nText(element, value) {
-    // Keep inline icons, counters and arrows intact when a translated element
-    // contains child elements (for example, the gift-card CTA arrow).
     var saved = i18nTextNodes.get(element);
     if (!saved || !element.contains(saved.node)) {
-      var textNode = Array.prototype.slice.call(element.childNodes).find(function (node) { return node.nodeType === Node.TEXT_NODE && /\S/.test(node.nodeValue || ''); });
+      var textNode = Array.prototype.slice.call(element.childNodes).find(function (node) { return node.nodeType === Node.TEXT_NODE && /\\S/.test(node.nodeValue || ''); });
       if (!textNode) { element.textContent = value; return; }
       var source = textNode.nodeValue || '';
-      saved = { node: textNode, prefix: (source.match(/^\s*/) || [''])[0], suffix: (source.match(/\s*$/) || [''])[0] };
+      saved = { node: textNode, prefix: (source.match(/^\\s*/) || [''])[0], suffix: (source.match(/\\s*$/) || [''])[0] };
       i18nTextNodes.set(element, saved);
     }
     saved.node.nodeValue = saved.prefix + value + saved.suffix;
@@ -240,17 +296,55 @@ ${renderSiteFooter(opts.contact)}
     title.textContent = isCoupon
       ? (english ? '🎉 New offer live! Enter promo code ' : '🎉 新优惠上线！使用优惠码 ') + notice.couponCode + (benefit ? ' ' + benefit : '')
       : english && notice.titleEn ? notice.titleEn
-      : (!notice.isAdminAnnouncement && english ? englishFor(notice.title || '最新通告') : (notice.title || '最新通告'));
+      : (!notice.isAdminAnnouncement && english ? (englishFor(notice.title || '最新通告') || 'Latest update') : (notice.title || '最新通告'));
     link.href = isCoupon
       ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
       : '/announcements/' + encodeURIComponent(notice.id);
-    if (action) action.firstChild.textContent = (isCoupon ? (english ? 'Browse devices ' : '去挑选设备 ') : (english ? 'View details ' : '查看详情 '));
+    if (action) action.firstChild.textContent = currentCopy(isCoupon ? '去挑选设备 ' : '查看详情 ', isCoupon ? 'Browse devices ' : 'View details ');
     announcement.hidden = false;
   }
-  function setLanguage(language) {
+  function updateMeta(english) {
+    var title = english ? (englishFor(originalTitle) || originalTitle) : originalTitle;
+    var description = english ? (englishFor(originalDescription) || originalDescription) : originalDescription;
+    document.title = title;
+    document.querySelector('meta[name="description"]')?.setAttribute('content', description);
+    document.querySelector('meta[property="og:title"]')?.setAttribute('content', title);
+    document.querySelector('meta[property="og:description"]')?.setAttribute('content', description);
+    document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', title);
+    document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', description);
+    document.querySelector('meta[property="og:locale"]')?.setAttribute('content', english ? 'en_AU' : 'zh_CN');
+  }
+  function renderMenuToggle() {
+    var toggle = document.querySelector('.menu-toggle');
+    if (!toggle) return;
+    var open = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-label', currentCopy(open ? '关闭菜单' : '打开菜单', open ? 'Close menu' : 'Open menu'));
+  }
+  function renderCart(ids) {
+    document.querySelectorAll('[data-cart-count]').forEach(function (badge) {
+      badge.textContent = String(ids.length);
+      badge.hidden = ids.length === 0;
+    });
+    var cartLink = document.querySelector('.header-cart');
+    if (cartLink) {
+      cartLink.setAttribute('aria-label', ids.length === 1
+        ? currentCopy('购物车，1 件设备', 'Cart, 1 device')
+        : currentCopy('购物车，' + ids.length + ' 件设备', 'Cart, ' + ids.length + ' devices'));
+    }
+    document.querySelectorAll('[data-cart-add]').forEach(function (button) {
+      var added = ids.indexOf(button.getAttribute('data-device-id') || '') >= 0;
+      button.classList.toggle('is-added', added);
+      button.textContent = currentCopy(added ? '已加入购物车' : '加入购物车', added ? 'Added to cart' : 'Add to cart');
+      button.setAttribute('aria-pressed', String(added));
+    });
+  }
+  function setLanguage(language, persist) {
     var english = language === 'en';
     currentLanguage = english ? 'en' : 'zh';
-    document.documentElement.lang = english ? 'en-AU' : 'zh-CN';
+    var root = document.documentElement;
+    root.lang = english ? 'en-AU' : 'zh-CN';
+    root.setAttribute('data-lang', currentLanguage);
+    clearSentenceBreaks();
     document.querySelectorAll('[data-i18n]').forEach(function (node) {
       var key = node.getAttribute('data-i18n'); var value = translations[key];
       if (value) setI18nText(node, value[english ? 1 : 0]);
@@ -264,91 +358,34 @@ ${renderSiteFooter(opts.contact)}
     renderCouponCallouts();
     renderCouponMessages();
     renderNoticeTexts();
-    document.title = english ? englishFor(originalTitle) : originalTitle;
-    var descriptionMeta = document.querySelector('meta[name="description"]');
-    if (descriptionMeta) descriptionMeta.setAttribute('content', english ? englishFor(originalDescription) : originalDescription);
-    var openGraphLocale = document.querySelector('meta[property="og:locale"]');
-    if (openGraphLocale) openGraphLocale.setAttribute('content', english ? 'en_AU' : 'zh_CN');
-    try { localStorage.setItem('geekslope-language', english ? 'en' : 'zh'); } catch (_) {}
+    renderMenuToggle();
+    renderCart(readCart());
+    updateMeta(english);
+    if (persist) { try { localStorage.setItem('geekslope-language', english ? 'en' : 'zh'); } catch (_) {} }
     window.dispatchEvent(new CustomEvent('geekslope:language-change', { detail: { language: currentLanguage } }));
   }
-  var savedLanguage = '';
-  try {
-    var storedLanguage = localStorage.getItem('geekslope-language');
-    if (storedLanguage === 'en' || storedLanguage === 'zh') savedLanguage = storedLanguage;
-  } catch (_) {}
-  if (!savedLanguage) {
-    var browserLanguages = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''];
-    savedLanguage = browserLanguages.some(function (language) { return /^en(?:-|$)/i.test(String(language)); }) ? 'en' : 'zh';
-  }
-  document.querySelectorAll('[data-language]').forEach(function (button) { button.addEventListener('click', function () { setLanguage(button.getAttribute('data-language') || 'zh'); }); });
-  setLanguage(savedLanguage);
-  new MutationObserver(function (mutations) {
-    mutations.forEach(function (mutation) {
-      if (mutation.type === 'characterData') translateTextNode(mutation.target);
-      mutation.addedNodes.forEach(translateTree);
-    });
-  }).observe(document.body, { childList: true, characterData: true, subtree: true });
-  window.GeekSlopeI18n = { language: function () { return currentLanguage; }, t: function (value) { return currentLanguage === 'en' ? englishFor(value) : value; }, apply: translateTree };
-  var toggle = document.querySelector('.menu-toggle');
-  var nav = document.getElementById('site-nav');
-  if (toggle && nav) {
-    toggle.addEventListener('click', function () {
-      var open = toggle.getAttribute('aria-expanded') === 'true';
-      toggle.setAttribute('aria-expanded', String(!open));
-      toggle.setAttribute('aria-label', window.GeekSlopeI18n.t(open ? '打开菜单' : '关闭菜单'));
-      nav.classList.toggle('is-open', !open);
-    });
-    nav.addEventListener('click', function (event) {
-      if (event.target.closest('a')) {
-        toggle.setAttribute('aria-expanded', 'false');
-        nav.classList.remove('is-open');
-      }
-    });
-  }
-
-  // 顶栏滚动收缩：纯 DOM 状态切换，不依赖任何库，随时可用。
-  var siteHeader = document.querySelector('.site-header');
-  var onScroll = function () { if (siteHeader) siteHeader.classList.toggle('is-scrolled', window.scrollY > 18); };
-  onScroll();
-  window.addEventListener('scroll', onScroll, { passive: true });
-
-  var announcement = document.querySelector('[data-site-announcement]');
-  if (announcement) {
-    fetch('/api/public-notices?limit=1', { headers: { accept: 'application/json' } })
-      .then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (data) {
-        var notice = data && data.notices && data.notices[0];
-        if (!notice) return;
-        activeAnnouncementNotice = notice;
-        renderAnnouncementNotice(notice);
-      })
-      .catch(function () {});
-  }
-
-  // 动效自托管（原来挂在 gsap CDN 上：一旦那个脚本加载失败——网络、广告拦截、
-  // 校园/公司网络限制——全站动效会无声地整体消失。改成原生 CSS 动画 +
-  // IntersectionObserver，零外部依赖，永远不会因为第三方资源加载失败而丢失）。
-  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduceMotion) {
-    var revealItems = document.querySelectorAll('.feature, .card:not(.cart-checkout-item), .scenario, .step, .info-card, .service-standard-grid article, .faq-list details, .contact-option');
-    if (revealItems.length) {
-      revealItems.forEach(function (item) { item.classList.add('reveal'); });
-      if ('IntersectionObserver' in window) {
-        var observer = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) {
-            if (!entry.isIntersecting) return;
-            observer.unobserve(entry.target);
-            entry.target.classList.add('is-in');
-          });
-        }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
-        revealItems.forEach(function (item) { observer.observe(item); });
+  var initialLanguage = 'zh';
+  var dataLanguage = document.documentElement.getAttribute('data-lang');
+  if (dataLanguage === 'en' || dataLanguage === 'zh') {
+    initialLanguage = dataLanguage;
+  } else {
+    try {
+      var storedLanguage = localStorage.getItem('geekslope-language');
+      if (storedLanguage === 'en' || storedLanguage === 'zh') {
+        initialLanguage = storedLanguage;
       } else {
-        revealItems.forEach(function (item) { item.classList.add('is-in'); });
+        var browserLanguages = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''];
+        initialLanguage = /^en(?:-|$)/i.test(String(browserLanguages[0] || '')) ? 'en' : 'zh';
       }
-    }
+    } catch (_) {}
   }
-
+  function ensureLanguageButtons() {
+    document.querySelectorAll('[data-language]').forEach(function (button) {
+      if (button.dataset.languageBound === 'true') return;
+      button.dataset.languageBound = 'true';
+      button.addEventListener('click', function () { setLanguage(button.getAttribute('data-language') || 'zh', true); });
+    });
+  }
   var CART_KEY = 'geekslope-cart-v1';
   function cleanIds(ids) {
     var clean = ids.filter(function (id, index) { return typeof id === 'string' && id && ids.indexOf(id) === index; }).slice(0, 10);
@@ -372,20 +409,6 @@ ${renderSiteFooter(opts.contact)}
     window.dispatchEvent(new CustomEvent('geekslope:cart-change', { detail: { ids: clean, term: state.term, terms: state.terms } }));
     return clean;
   }
-  function renderCart(ids) {
-    document.querySelectorAll('[data-cart-count]').forEach(function (badge) {
-      badge.textContent = String(ids.length);
-      badge.hidden = ids.length === 0;
-    });
-    var cartLink = document.querySelector('.header-cart');
-    if (cartLink) cartLink.setAttribute('aria-label', window.GeekSlopeI18n.t('购物车，' + ids.length + ' 件设备'));
-    document.querySelectorAll('[data-cart-add]').forEach(function (button) {
-      var added = ids.indexOf(button.getAttribute('data-device-id') || '') >= 0;
-      button.classList.toggle('is-added', added);
-      button.textContent = window.GeekSlopeI18n.t(added ? '已加入购物车' : '加入购物车');
-      button.setAttribute('aria-pressed', String(added));
-    });
-  }
   function addToCart(id, term) {
     var state = readCartState();
     var ids = state.ids;
@@ -397,6 +420,103 @@ ${renderSiteFooter(opts.contact)}
   function removeFromCart(id) { return writeCart(readCart().filter(function (item) { return item !== id; })); }
   function setCartTerm(term) { return writeCart(readCart(), term); }
   window.GeekSlopeCart = { read: readCart, readState: readCartState, write: writeCart, add: addToCart, remove: removeFromCart, setTerm: setCartTerm, clear: function () { return writeCart([]); } };
+
+  window.GeekSlopeI18n = { language: function () { return currentLanguage; }, t: t, apply: translateTree, englishFor: englishFor };
+  new MutationObserver(function (mutations) {
+    mutations.forEach(function (mutation) {
+      if (mutation.type === 'characterData') translateTextNode(mutation.target);
+      else if (mutation.type === 'attributes') translateElement(mutation.target);
+      else mutation.addedNodes.forEach(translateTree);
+    });
+  }).observe(document.body, { childList: true, characterData: true, attributes: true, attributeFilter: TRANSLATED_ATTRIBUTES, subtree: true });
+  ensureLanguageButtons();
+  // The initial pass must not persist auto-detected language; only explicit
+  // switcher clicks do (persist=true).
+  setLanguage(initialLanguage, false);
+
+  var toggle = document.querySelector('.menu-toggle');
+  var nav = document.getElementById('site-nav');
+  var siteHeader = document.querySelector('.site-header');
+  var announcement = document.querySelector('[data-site-announcement]');
+  function closeMenu(restoreFocus) {
+    if (!toggle || !nav) return;
+    if (toggle.getAttribute('aria-expanded') !== 'true') return;
+    toggle.setAttribute('aria-expanded', 'false');
+    renderMenuToggle();
+    nav.classList.remove('is-open');
+    if (restoreFocus) toggle.focus();
+  }
+  function openMenu() {
+    if (!toggle || !nav) return;
+    toggle.setAttribute('aria-expanded', 'true');
+    renderMenuToggle();
+    nav.classList.add('is-open');
+    var firstLink = nav.querySelector('a');
+    if (firstLink) firstLink.focus();
+  }
+  if (toggle && nav) {
+    toggle.addEventListener('click', function () {
+      if (toggle.getAttribute('aria-expanded') === 'true') closeMenu(false); else openMenu();
+    });
+    nav.addEventListener('click', function (event) { if (event.target.closest('a')) closeMenu(false); });
+    // 点击菜单外 / 按 Esc / 视口变宽时收起菜单（移动端常见预期，也避免焦点留在隐藏元素里）。
+    document.addEventListener('click', function (event) {
+      if (!nav.classList.contains('is-open')) return;
+      if (nav.contains(event.target) || toggle.contains(event.target)) return;
+      closeMenu(false);
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && nav.classList.contains('is-open')) { event.preventDefault(); closeMenu(true); }
+    });
+    if (window.matchMedia) {
+      var wideViewport = window.matchMedia('(min-width: 1181px)');
+      var onViewportChange = function (event) { if (event.matches) closeMenu(false); };
+      if (wideViewport.addEventListener) wideViewport.addEventListener('change', onViewportChange);
+      else if (wideViewport.addListener) wideViewport.addListener(onViewportChange);
+    }
+  }
+  // Toast 区域要贴在「sticky header + 通告条」正下方，否则手机上会盖住通告。
+  function syncOverlayOffset() {
+    var offset = (siteHeader ? siteHeader.offsetHeight : 0) + (announcement && !announcement.hidden ? announcement.offsetHeight : 0) + 14;
+    document.documentElement.style.setProperty('--gs-overlay-top', offset + 'px');
+  }
+  syncOverlayOffset();
+  window.addEventListener('resize', syncOverlayOffset, { passive: true });
+  window.addEventListener('geekslope:language-change', syncOverlayOffset);
+  var onScroll = function () { if (siteHeader) siteHeader.classList.toggle('is-scrolled', window.scrollY > 18); };
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+  if (announcement) {
+    fetch('/api/public-notices?limit=1', { headers: { accept: 'application/json' } })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (data) {
+        var notice = data && data.notices && data.notices[0];
+        if (!notice) return;
+        activeAnnouncementNotice = notice;
+        renderAnnouncementNotice(notice);
+        syncOverlayOffset();
+      })
+      .catch(function () {});
+  }
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) {
+    var revealItems = document.querySelectorAll('.feature, .card:not(.cart-checkout-item), .scenario, .step, .info-card, .service-standard-grid article, .faq-list details, .contact-option');
+    if (revealItems.length) {
+      revealItems.forEach(function (item) { item.classList.add('reveal'); });
+      if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            observer.unobserve(entry.target);
+            entry.target.classList.add('is-in');
+          });
+        }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+        revealItems.forEach(function (item) { observer.observe(item); });
+      } else {
+        revealItems.forEach(function (item) { item.classList.add('is-in'); });
+      }
+    }
+  }
   document.addEventListener('click', function (event) {
     var button = event.target.closest('[data-cart-add]');
     if (!button) return;
@@ -412,19 +532,30 @@ ${renderSiteFooter(opts.contact)}
     }
   });
   renderCart(readCart());
-  // .cart-checkout-item 的入场动画（含 nth-child 错落延迟）直接写在 CSS 里，
-  // 每次 renderCart() 重建行列表都会自动重放，无需额外触发。
 })();
 </script>
+${FEEDBACK_SCRIPT}
 <script>
 var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
 (function () {
-  var s1 = document.createElement('script'), s0 = document.getElementsByTagName('script')[0];
-  s1.async = true;
-  s1.src = 'https://embed.tawk.to/6aa7f5bf739506344185fac9/1k2g1fsvm';
-  s1.charset = 'UTF-8';
-  s1.setAttribute('crossorigin', '*');
-  s0.parentNode.insertBefore(s1, s0);
+  // Lazy-load live chat after the page is interactive so it never competes
+  // with first paint (CSP allowlists the Tawk hosts; no crossorigin attr).
+  var loaded = false;
+  function loadTawk() {
+    if (loaded) return;
+    loaded = true;
+    var script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://embed.tawk.to/6aa7f5bf739506344185fac9/1k2g1fsvm';
+    script.charset = 'UTF-8';
+    document.head.appendChild(script);
+  }
+  function schedule() {
+    if ('requestIdleCallback' in window) window.requestIdleCallback(loadTawk, { timeout: 3000 });
+    else window.setTimeout(loadTawk, 600);
+  }
+  if (document.readyState === 'complete') schedule();
+  else window.addEventListener('load', schedule, { once: true });
 })();
 </script>
 </body>

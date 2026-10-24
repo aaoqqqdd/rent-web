@@ -1,8 +1,9 @@
 import type { Context } from 'hono'
 import { getRentalConfig } from './db'
-import { combinePersonName, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
+import { combinePersonName, currentUser, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
+import { verifyTurnstile } from './turnstile'
 import { markDeliveryQuoteUsed, validateDeliveryQuote } from './delivery'
 
 type RentalContext = Context<{ Bindings: Env }>
@@ -325,21 +326,6 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
   ])
 }
 
-async function verifyTurnstile(c: RentalContext, token: string): Promise<boolean> {
-  const secret = String(c.env.TURNSTILE_SECRET_KEY || '')
-  if (!secret) return true
-  if (!token) return false
-  try {
-    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret, response: token, remoteip: c.req.header('CF-Connecting-IP') }),
-    })
-    return Boolean((await response.json() as { success?: boolean }).success)
-  } catch {
-    return false
-  }
-}
-
 function base64ToBytes(value: string): Uint8Array {
   return new Uint8Array(Array.from(atob(value), (character) => character.charCodeAt(0)))
 }
@@ -521,7 +507,7 @@ export async function previewRentalCoupon(c: RentalContext, deviceIds: string[],
 export async function handleRentalRequest(c: RentalContext, body: Record<string, unknown>): Promise<Response> {
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
   if (!(await enforceRateLimit(c.env, 'web-rental-request', ip, 10, 600))) return json(c, 429, { ok: false, message: '提交请求过于频繁，请稍后重试。' })
-  if (!(await verifyTurnstile(c, String(body['cf-turnstile-response'] || '')))) return json(c, 400, { ok: false, message: '人机验证失败，请重试。' })
+  if (!(await verifyTurnstile(c, String(body['cf-turnstile-response'] || ''), ip))) return json(c, 400, { ok: false, message: '人机验证失败，请重试。' })
 
   const deviceIds = parseDeviceIds(body)
   if (!deviceIds.length) return json(c, 400, { ok: false, message: '购物车中没有可提交的设备。' })
@@ -698,14 +684,19 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     if (String(user.role || 'CUSTOMER') !== 'CUSTOMER' || String(user.status || 'active') !== 'active' || String(user.account_type || 'formal') !== 'formal') return json(c, 403, { ok: false, message: '该账号当前无法下单，请联系客服。' })
   } else {
     temporaryPassword = generateTemporaryPassword()
-    const result = await registerCustomer(c.env, { name: contactName, firstName, lastName, email: contactEmail, phone: contactPhone, password: temporaryPassword, passwordConfirm: temporaryPassword, agree: '1', turnstileToken: body['cf-turnstile-response'] }, ip)
+    const result = await registerCustomer(c, { name: contactName, firstName, lastName, email: contactEmail, phone: contactPhone, password: temporaryPassword, passwordConfirm: temporaryPassword, agree: '1', turnstileToken: body['cf-turnstile-response'] }, ip, { turnstileVerified: true })
     if (!result.ok) return json(c, result.code === 'rate_limited' ? 429 : 400, { ok: false, message: result.message })
     user = await c.env.RENT.prepare('SELECT * FROM users WHERE lower(email) = lower(?) LIMIT 1').bind(contactEmail).first<Record<string, unknown>>()
     accountCreated = true
   }
   if (!user?.id) return json(c, 500, { ok: false, message: '账号创建失败，请稍后重试。' })
+  // 本次请求是否操作「自己的」账号：新注册账号当然算；已有账号必须带官网登录态。
+  // 之前仅凭邮箱就能命中已有账号并改写姓名 / 用余额付款 / 绑定礼品卡，等于让任何人
+  // 以他人身份改资料、下单、消耗余额（account takeover 的写入侧）。
+  const sessionUser = await currentUser(c)
+  const ownsAccount = Boolean(sessionUser && sessionUser.id === String(user.id))
   const personNameColumns = await ensurePersonNameColumns(c.env)
-  if (personNameColumns.firstName && personNameColumns.lastName) {
+  if ((accountCreated || ownsAccount) && personNameColumns.firstName && personNameColumns.lastName) {
     await c.env.RENT.prepare('UPDATE users SET first_name = ?, last_name = ?, name = ? WHERE id = ?')
       .bind(firstName, lastName, contactName, user.id).run()
   }
@@ -715,9 +706,12 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   }
   const accountEligible = String(user.account_type || 'formal') === 'formal' && String(user.role || 'CUSTOMER') === 'CUSTOMER'
   const totalBeforePayment = fees.reduce((sum, fee, index) => sum + fee + serviceFees[index] + numberValue(devices[index].depositAmount, devices[index].deposit_amount) - discounts[index], deliveryFee)
-  if (paymentMethod === 'balance' && (!accountEligible || numberValue(user.balance) < totalBeforePayment)) return json(c, 400, { ok: false, message: '账户余额不足以支付这笔申请。' })
+  if (paymentMethod === 'balance' && (!ownsAccount || !accountEligible || numberValue(user.balance) < totalBeforePayment)) {
+    return json(c, 400, { ok: false, message: !ownsAccount ? '请先登录账号后再使用余额支付。' : '账户余额不足以支付这笔申请。' })
+  }
   let squareGiftCardId = ''
   if (paymentProvider === 'square') {
+    if (!ownsAccount) return json(c, 401, { ok: false, message: '请先登录账号后再使用礼品卡支付。' })
     const squareGiftCardNonce = String(body.squareGiftCardNonce || '').trim()
     if (!squareGiftCardNonce) return json(c, 400, { ok: false, message: '请填写礼品卡并完成安全验证。' })
     try {
@@ -821,10 +815,47 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: rentalPlans.get(deviceIds[0])?.period.days || 0, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
 }
 
+// 请求体硬上限：中间件的 Content-Length 检查挡不住 `Transfer-Encoding: chunked`
+// （攻击者可以不带长度头无限发送）。这里按流式字节预算读取，超过即中止。
+const MAX_REQUEST_BODY_BYTES = 128 * 1024
+
+async function readRequestBodyText(c: RentalContext): Promise<string | null> {
+  const body = c.req.raw.body
+  if (!body) return ''
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      size += value.byteLength
+      if (size > MAX_REQUEST_BODY_BYTES) {
+        await reader.cancel().catch(() => {})
+        return null
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock?.()
+  }
+  const merged = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(merged)
+}
+
 export async function parseRequestBody(c: RentalContext): Promise<Record<string, unknown> | null> {
   try {
-    const contentType = c.req.header('content-type') || ''
-    return contentType.includes('application/json') ? await c.req.json() as Record<string, unknown> : Object.fromEntries(Object.entries(await c.req.parseBody()).map(([key, value]) => [key, String(value)]))
+    const contentType = (c.req.header('content-type') || '').toLowerCase()
+    const text = await readRequestBodyText(c)
+    if (text === null) return null
+    if (contentType.includes('application/json')) return JSON.parse(text) as Record<string, unknown>
+    return Object.fromEntries(new URLSearchParams(text))
   } catch {
     return null
   }

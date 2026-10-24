@@ -6,6 +6,7 @@
 
 import type { Context } from 'hono'
 import type { Env } from './index'
+import { verifyTurnstile } from './turnstile'
 
 const PBKDF2_ITERATIONS = 100000
 
@@ -99,23 +100,6 @@ async function underRateLimit(env: Env, clientKey: string, limit: number, window
     return Number(row?.request_count ?? 0) <= limit
   } catch {
     return true // 限流表不可用时不拦截注册
-  }
-}
-
-export async function verifyTurnstile(env: Env, token: string, ip: string): Promise<boolean> {
-  const secret = env.TURNSTILE_SECRET_KEY || ''
-  if (!secret) return true // 未配置 secret 时放行（与 rent 公开接口一致）
-  if (!token) return false
-  try {
-    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret, response: token, remoteip: ip }),
-    })
-    const data = (await res.json()) as { success?: boolean }
-    return Boolean(data.success)
-  } catch {
-    return false
   }
 }
 
@@ -228,7 +212,13 @@ export function ensurePersonNameColumns(env: Env): Promise<PersonNameColumns> {
  * status='active', balance=0, commission_balance=0, created_at, updated_at) +
  * 协议确认列（尽力而为）。users_old 镜像由 D1 触发器自动完成。
  */
-export async function registerCustomer(env: Env, input: RegisterInput, ip: string): Promise<RegisterResult> {
+export async function registerCustomer(
+  c: Context<{ Bindings: Env }>,
+  input: RegisterInput,
+  ip: string,
+  options: { turnstileVerified?: boolean } = {},
+): Promise<RegisterResult> {
+  const env = c.env
   const firstName = sanitizePlainText(input.firstName, 100)
   const lastName = sanitizePlainText(input.lastName, 100)
   const name = sanitizePlainText(input.name, 100) || combinePersonName(firstName, lastName)
@@ -253,7 +243,7 @@ export async function registerCustomer(env: Env, input: RegisterInput, ip: strin
     return { ok: false, code: 'invalid', message: '请先阅读并同意服务条款与隐私政策。' }
   }
 
-  if (!(await verifyTurnstile(env, String(input.turnstileToken ?? ''), ip))) {
+  if (!options.turnstileVerified && !(await verifyTurnstile(c, String(input.turnstileToken ?? ''), ip))) {
     return { ok: false, code: 'turnstile', message: '人机验证未通过，请重试。' }
   }
 
@@ -539,6 +529,8 @@ export async function issueHandoffToken(env: Env, userId: string): Promise<strin
   await ensureSchema(env)
   const token = randomToken()
   const expiresAt = new Date(Date.now() + HANDOFF_TTL_SECONDS * 1000).toISOString()
+  // 顺手清掉过期的握手 token，避免表随时间无限增长。
+  await env.RENT.prepare('DELETE FROM sso_handoff_tokens WHERE expires_at < CURRENT_TIMESTAMP').run().catch(() => {})
   await env.RENT.prepare('INSERT INTO sso_handoff_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
     .bind(await sha256Hex(token), userId, expiresAt)
     .run()

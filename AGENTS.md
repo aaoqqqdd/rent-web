@@ -88,6 +88,16 @@ src/pages/legal.ts    法律 / 合规文档页外壳（正文实时读 D1，见 
 - `GET /logout`：撤销该用户在 `auth_sessions` 的**全部**行（官网 + rent 一起掉线）+ 清 cookie。
 - 携带 `session` cookie 的请求绕过边缘缓存（否则会缓存带登录态的顶栏导致串号）。
 
+## 反馈层（Toast / 确认弹窗）
+
+- 全站统一实现在 `src/components/feedback.ts`，由 `layout.ts` 注入每个页面；页面脚本调用
+  `window.GeekSlopeUI.toast(message, { type, title })` 与
+  `window.GeekSlopeUI.confirm({ title, message, details, confirmText, cancelText, variant })`。
+- 表单校验错误留在字段 / 表单内（`.form-alert`、`.inline-form-error`）；异步结果用 Toast；
+  **退出登录、提交租赁申请**等高风险动作必须先走确认弹窗。业务代码不要直接用
+  `alert()` / `confirm()`（`<dialog>` 不可用的旧浏览器由反馈层内部兜底）。
+- 模态中的动态内容用 `textContent` 注入；新文案优先传 `uiText(zh, en)` / `t()`，不要拼 HTML。
+
 ## 约定与注意事项
 
 - **rent 侧的改动**：① 新增 `src/actions/public/rentalRequest.ts` 与 `POST /public/rental-request` 路由、
@@ -101,3 +111,55 @@ src/pages/legal.ts    法律 / 合规文档页外壳（正文实时读 D1，见 
 - 所有用户可见的动态字符串都要经 `esc()`（`src/layout.ts`）。
 - 边缘缓存 60s：产品价格改动后最多 1 分钟生效。
 - 改完跑 `npm run typecheck`。
+
+## 安全基线（改路由 / 中间件前先读）
+
+- 所有安全响应头（CSP / X-Frame-Options / nosniff / Referrer-Policy / Permissions-Policy /
+  COOP / CORP / HSTS）由 `src/index.ts` 的全局中间件统一写入，并在 `await next()` **之后再写一遍**
+  到 `c.res.headers`。原因：`cachedHtml()` 等处理器直接 `return new Response(...)`，Hono 的
+  `c.header()` 不会合并进这类响应；只写一次会导致所有营销页丢 CSP（已验证回归）。
+- 从 `caches.default` 取出的响应 headers 是**只读**的，必须先
+  `new Response(cached.body, { headers: new Headers(cached.headers) })` 再返回，否则补安全头会抛错。
+- `/api/account-balance` 只返回**当前 session 用户自己**的余额；未登录返回
+  `requiresLogin: true` 且不含任何账户信息。不要按 `?email=` 放行。
+- 结账 `/api/rental-request`：已有账号必须带 session 才能改资料 / 用余额 / 绑礼品卡
+  （`ownsAccount`）；未登录只允许用新邮箱创建账号并按卡支付。
+- 请求体上限 128 KB：`Content-Length` 检查 + `parseRequestBody()` 的流式字节预算
+  （防 `Transfer-Encoding: chunked` 绕过）。新增 JSON 接口请复用 `parseRequestBody()`。
+- 上游（Stripe / Square）错误只写日志，不把 `error.message` 回显给访客。
+- 限流统一走 `enforceRateLimit()`（D1 `security_rate_limits`）。新增会调外部付费 API 的接口
+  必须限流（示例：`/api/rental-setup-intent`）。
+- **Turnstile 配置读共享 D1**：`src/turnstile.ts` 优先读取 rent 后台
+  `/admin/api-settings` 写入的 `systemSettings.turnstileConfig`（site key 明文、
+  secret 用 `SETTINGS_ENCRYPTION_KEY` 加密），失败才回退 `TURNSTILE_SITE_KEY` /
+  `TURNSTILE_SECRET_KEY`。解密/读表统一走 `src/settings.ts`（与 delivery 配置同一套约定），
+  读取失败一律软失败。后台配置存在但解不开时打日志并按「未配置」处理（不渲染 widget、不假装有校验）。
+- 第三方脚本：Tawk.to 客服组件在 CSP 里显式放行（`embed.tawk.to`、`*.tawk.to`、`wss://*.tawk.to`），
+  并在 `load` 后用 `requestIdleCallback` 懒加载。新增第三方域名必须同步更新 CSP。
+
+## 多语言（zh/en）与移动端约定
+
+- 渲染架构：**服务端只输出中文 HTML**，`<head>` 里的内联脚本按
+  `localStorage.geekslope-language` → `navigator.languages[0]` 提前设置 `html[lang]` / `html[data-lang]`；
+  `layout.ts` 末尾的翻译引擎按 `ENGLISH_COPY` 精确匹配 → `ENGLISH_PATTERNS` 正则替换翻译文本。
+- **不再有「短语局部替换」兜底**：未命中的字符串保持中文（而不是拼出 `Delivery 时段` 这类中英混杂）。
+  新增用户可见文案必须同时给英文：优先加到 `src/i18n.ts` 的 `ENGLISH_COPY`；动态拼接的句子加
+  `ENGLISH_PATTERNS`（模式里的捕获组会经过 `normalizePatternResult()` 处理地名/顿号）。
+- `src/layout.ts` 的内联脚本在 TS 模板字符串里：**所有反斜杠必须写两次**（`/\\p{Script=Han}/u`、
+  `'\\n'`、`/\\s+/`）。写错会产出的页面脚本 SyntaxError，导致菜单/语言切换/购物车全部失效。
+  改完用 `node -e` 对渲染后的 `<script>` 做 `new Function()` 语法检查，或跑下面的验证脚本。
+- 中文标点只在 EN 模式清理（`。` 去掉、`；` 转行）；zh 模式必须与 SSR 完全一致。
+- 语言切换时 `geekslope:language-change` 事件会重渲染列表/购物车/反馈层；新增动态组件请监听它。
+- 自动识别的语言**不写入** localStorage，只有用户点「中 / EN」才持久化。
+- 移动端：输入控件字号 ≥16px（防 iOS 聚焦缩放）、图标/语言切换/页脚链接 ≥44px 命中区、
+  `.gs-toast-region` 用 `--gs-overlay-top` 贴在「header + 通告条」下方、锚点用
+  `scroll-padding-top: 88px` 避免被 sticky header 遮挡。
+
+## 验证脚本
+
+| 命令 | 用途 |
+| --- | --- |
+| `node scripts/i18n-audit.mjs` | 静态扫描所有 SSR / 运行时中文字符串，检查英文覆盖率（应为 0 findings） |
+| `node scripts/verify-site.mjs --lang en` | 无头 Chrome 渲染 12 个页面 × 3 视口，检查 EN 模式残留中文 / 横向溢出 / 输入字号 |
+| `node scripts/verify-i18n-switch.mjs` | 语言切换（含 Toast / 弹窗 / 持久化）、移动菜单、动态文本回归 |
+| `node scripts/verify-responsive.mjs` | 390 / 844×390 / 1024 / 1440 视口的溢出、Toast/弹窗几何、结账控件尺寸 |

@@ -6,3 +6,6 @@ node_modules/
 worker-configuration.d.ts
 
 .claude/
+
+# verification artefacts (screenshots/report.json), scripts live in scripts/
+.audit/
