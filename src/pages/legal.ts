@@ -17,7 +17,20 @@ function renderVariables(data: LegalPageData): Record<string, unknown> {
   const { companyDetails, bankDetails, metadata } = data.document
   const version = metadata.version || '1.0'
   const lastUpdatedDate = metadata.lastUpdatedDate || '—'
+  const versionVariables: Record<string, string> = {}
+  const metadataKeys: Record<string, string> = {
+    user_agreement: 'user', user_terms: 'user', service_terms: 'service',
+    privacy_policy: 'privacy', software_terms: 'software', refund_policy: 'copyright',
+    cookie_policy: 'cookie', complaints_policy: 'complaints', acceptable_use_policy: 'aup',
+    consumer_rights: 'consumer', rental_agreement: 'rental', contract: 'contract',
+  }
+  for (const [prefix, key] of Object.entries(metadataKeys)) {
+    const documentMetadata = data.document.legalMetadata?.[key]
+    versionVariables[`${prefix}_version`] = documentMetadata?.version || '1.0'
+    versionVariables[`${prefix}_last_updated_date`] = documentMetadata?.lastUpdatedDate || '—'
+  }
   return {
+    ...versionVariables,
     company_name: companyDetails.name || data.contact.name,
     company_abn: companyDetails.abn || '',
     company_address: companyDetails.address || data.contact.address,
@@ -77,11 +90,13 @@ function sanitizeDocument(html: string): string {
 }
 
 function fillTemplate(raw: string, data: LegalPageData): string {
-  let content = raw
+  // 编辑器可能把 $ / { / } / _ 保存为 HTML 实体。先解析 HTML 恢复占位符；
+  // 最终输出仍再次清洗，校验替换后的链接和图片地址。
+  let content = sanitizeDocument(raw)
   for (const [key, value] of Object.entries(renderVariables(data))) {
     // 同时兼容编辑器中把下划线写成 `\_` 的 Markdown 转义形式。
     const placeholderKey = key.replace(/_/g, '\\\\?_')
-    content = content.replace(new RegExp(`\\$\\{${placeholderKey}\\}|\\{${placeholderKey}\\}`, 'g'), esc(value))
+    content = content.replace(new RegExp(`\\$\\{${placeholderKey}\\}|\\{${placeholderKey}\\}`, 'g'), () => esc(value))
   }
   if (data.rentalTemplate) {
     content = content.replace(/\$?\{[a-z0-9_]+\}/gi, '<span class="doc-blank">——</span>')

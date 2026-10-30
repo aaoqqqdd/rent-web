@@ -32,8 +32,7 @@ export function renderLogin(data: LoginData): string {
       <div><div class="kicker">账号</div>
       <h2>注册 / 登录</h2></div>
       <p style="color:var(--muted-fg)">
-        下单前需注册一个账号（用于后续付款与在线签约）。已注册过？直接登录即可，
-        无需重复填写。注册后可用同一套邮箱和密码在下单页与账户中心通用。
+        登录或注册后，即可进入 Dashboard 管理租赁订单。
       </p>
     </div>
 
@@ -77,8 +76,8 @@ export function renderLogin(data: LoginData): string {
           </div>
         </div>
 
-        <div class="field" style="display:flex;gap:8px;align-items:flex-start">
-          <input type="checkbox" id="reg-agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
+        <div class="field legal-agreement">
+          <input type="checkbox" id="reg-agree" name="agree" value="1" required>
           <label for="reg-agree" style="font-weight:400;margin:0">我已阅读并同意
             <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与
             <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>

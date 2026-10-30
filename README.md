@@ -23,6 +23,7 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 | `/products` | 全部在售设备，按游戏本 / 轻薄本 / 工作站分组 | 全量 `devices`（排除 RETIRED） |
 | `/apply` | 下单表单：选设备 + 租期 + 取还方式 + 注册信息 | 设备下拉、价格、最短租期、可选自取点 |
 | `/gift-cards` | Square 礼品卡购买、余额查询和加值入口 | `SQUARE_GIFT_CARD_URL` |
+| `/referral` | 推广计划、参与方式、分成示例与最低 A$100 提现说明 | `systemSettings.referralSettings.defaultRate` / `settlementPeriod`（与 rent 同源） |
 | `/login`（`/register` 302 到此） | 独立注册 / 登录页。注册直接写 `users`，登录跳 `${APP_URL}/login` | 无（表单页） |
 | `/rental-guide` | 租赁流程 + 常见问题 | 无（静态文案） |
 | `/about` | 关于 + 联系方式 | 页面内联系方式来自 `systemSettings.companyDetails` |

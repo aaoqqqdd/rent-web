@@ -80,7 +80,7 @@ async function evaluate(cdp, sessionId, expression) {
   return result.result?.value
 }
 
-const ROUTES = ['/', '/products', '/products/d-rog', '/checkout', '/apply', '/login', '/rental-guide', '/about', '/order-lookup', '/announcements', '/gift-cards', '/terms']
+const ROUTES = ['/', '/products', '/products/d-rog', '/checkout', '/apply', '/login', '/referral', '/rental-guide', '/about', '/order-lookup', '/announcements', '/gift-cards', '/terms']
 const VIEWPORTS = [
   { name: 'mobile', width: 390, height: 844, mobile: true, dpr: 3 },
   { name: 'tablet', width: 768, height: 1024, mobile: true, dpr: 2 },

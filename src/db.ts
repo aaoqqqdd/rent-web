@@ -43,6 +43,29 @@ export interface SiteContact {
   logo: string
 }
 
+export interface ReferralConfig {
+  rate: number | null
+  settlementDays: number | null
+}
+
+/** 与 rent 的 systemSettings.referralSettings 及 services/referral.ts 保持一致。 */
+export async function getReferralConfig(env: Env): Promise<ReferralConfig> {
+  try {
+    const row = await env.RENT.prepare(
+      "SELECT value FROM systemSettings WHERE key = 'referralSettings'",
+    ).first<{ value: string }>()
+    // rent 在尚未保存配置时使用这两个默认值；读取失败则不展示未经确认的比例。
+    const settings = row?.value ? JSON.parse(row.value) : { defaultRate: 10, settlementPeriod: 30 }
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Invalid referral settings')
+    const rate = Number(settings.defaultRate || 0)
+    const days = Number(settings.settlementPeriod || 30)
+    if (!Number.isFinite(rate) || !Number.isFinite(days)) throw new Error('Invalid referral settings')
+    return { rate: Math.min(100, Math.max(0, rate)), settlementDays: Math.max(1, Math.floor(days)) }
+  } catch {
+    return { rate: null, settlementDays: null }
+  }
+}
+
 export type LegalDocumentKey =
   | 'userTerms'
   | 'rentalTerms'
@@ -59,6 +82,7 @@ export interface LegalDocumentData {
   content: string
   contentEn: string
   metadata: { version: string; lastUpdatedDate: string }
+  legalMetadata?: Record<string, { version: string; lastUpdatedDate: string }>
   companyDetails: Record<string, unknown>
   bankDetails: Record<string, unknown>
 }
@@ -712,14 +736,17 @@ export async function getLegalDocument(
       if (row.key === 'companyDetails') data.companyDetails = parsed
       if (row.key === 'bankDetails') data.bankDetails = parsed
       if (row.key === 'legalMetadata') {
-        const metadata = parsed[metadataKey]
-        if (metadata && typeof metadata === 'object') {
-          const record = metadata as Record<string, unknown>
-          data.metadata = {
-            version: String(record.version || '1.0'),
-            lastUpdatedDate: String(record.lastUpdatedDate || ''),
-          }
-        }
+        // 正文可能引用其他协议的版本变量，保留各协议独立的元数据。
+        data.legalMetadata = Object.fromEntries(Object.entries(parsed)
+          .filter(([, value]) => value && typeof value === 'object' && !Array.isArray(value))
+          .map(([key, value]) => {
+            const record = value as Record<string, unknown>
+            return [key, {
+              version: String(record.version || '1.0'),
+              lastUpdatedDate: String(record.lastUpdatedDate || ''),
+            }]
+          }))
+        data.metadata = data.legalMetadata[metadataKey] ?? data.metadata
       }
     }
   } catch {

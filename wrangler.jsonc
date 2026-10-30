@@ -27,7 +27,7 @@
 	],
 	"vars": {
 		// rent 主应用的公开地址，用于登录、账号中心和后续签约付款跳转。
-		"APP_URL": "https://rent.ydnw6zt6vj.workers.dev",
+		"APP_URL": "https://dashboard.geekslope.de5.net",
 		// 月租展示价 = 日租 × 该系数（取整）。仅用于官网展示，真实计费仍在 rent 内完成。
 		"MONTHLY_MULTIPLIER": "20",
 		// Cloudflare Turnstile 站点公钥。官网优先读取共享 D1 的

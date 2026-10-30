@@ -261,13 +261,16 @@ async function checkCouponCustomerEligibility(c: RentalContext, coupon: Record<s
   return null
 }
 
-/** 官网申请提交时立即为押金做预授权（PREAUTH 模式），审核通过后只扣租金，不再动押金。
- * 与主站 src/actions/stripePayments.ts 的 createDepositAuthorization 保持一致的窗口 / 降级规则。 */
-async function authorizeDepositForOrder(c: RentalContext, orderId: string, userId: string, depositAmount: number, paymentMethodId: string, cardBrand: string, rentalPeriodDays: number, customerId: string): Promise<void> {
+/** Stripe 短租合并授权租金、押金与租金手续费；礼品卡仍只授权信用卡押金。 */
+export async function authorizeCardForOrder(c: RentalContext, orderId: string, userId: string, depositAmount: number, paymentMethodId: string, cardBrand: string, rentalPeriodDays: number, customerId: string, rental?: { amount: number; feeRate: number }): Promise<void> {
+  const depositCents = cents(depositAmount)
+  const rentalCents = rental ? cents(Math.max(0, rental.amount)) : 0
+  const feeCents = Math.round(rentalCents * (rental?.feeRate || 0))
+  const authorizationCents = depositCents + rentalCents + feeCents
   const authorizationWindowDays = depositAuthorizationWindowDays(cardBrand)
   const requiresExtendedWindow = authorizationWindowDays === 30 && rentalPeriodDays > 7
   const createParams = new URLSearchParams({
-    amount: String(cents(depositAmount)),
+    amount: String(authorizationCents),
     currency: 'aud',
     customer: customerId,
     payment_method: paymentMethodId,
@@ -275,9 +278,12 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
     // 不显式限定为 card 会导致 Stripe 报 "not eligible for the requested card features"。
     'payment_method_types[0]': 'card',
     capture_method: 'manual',
-    description: `订单 ${orderId} 押金预授权`,
+    description: `订单 ${orderId} ${rental ? '租金+押金预授权' : '押金预授权'}`,
     'metadata[order_id]': orderId,
-    'metadata[type]': 'deposit_authorization',
+    'metadata[type]': rental ? 'rental_authorization' : 'deposit_authorization',
+    'metadata[customer_id]': userId,
+    'metadata[rental_amount]': String(rentalCents),
+    'metadata[processing_fee]': String(feeCents),
     'metadata[deposit_amount]': String(cents(depositAmount)),
     'metadata[card_brand]': cardBrand || 'unknown',
     'metadata[authorization_window_days]': String(authorizationWindowDays),
@@ -303,6 +309,7 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
       throw new Error(retryError instanceof Error ? retryError.message : '押金预授权失败，请更换信用卡后重试。')
     }
   }
+  if (Number(intent.amount) !== authorizationCents || String(intent.currency).toLowerCase() !== 'aud') throw new Error('信用卡预授权金额或币种不匹配。')
   if (!['requires_capture', 'succeeded'].includes(String(intent.status))) throw new Error('押金预授权未完成，请更换信用卡后重试。')
 
   if (requiresExtendedWindow) {
@@ -318,9 +325,9 @@ async function authorizeDepositForOrder(c: RentalContext, orderId: string, userI
   }
 
   await c.env.RENT.batch([
-    c.env.RENT.prepare(`INSERT OR IGNORE INTO payments (id, rental_id, customer_id, payment_method, amount, deposit_amount, rental_amount, currency, status, stripe_payment_intent_id)
-      VALUES (?, ?, ?, 'card', ?, ?, 0, 'AUD', 'pending', ?)`)
-      .bind(id('p'), orderId, userId, depositAmount, depositAmount, intent.id),
+    c.env.RENT.prepare(`INSERT OR IGNORE INTO payments (id, rental_id, customer_id, payment_method, amount, deposit_amount, rental_amount, processing_fee, currency, status, stripe_payment_intent_id)
+      VALUES (?, ?, ?, 'card', ?, ?, ?, ?, 'AUD', 'pending', ?)`)
+      .bind(id('p'), orderId, userId, authorizationCents / 100, depositAmount, rentalCents / 100, feeCents / 100, intent.id),
     c.env.RENT.prepare("UPDATE orders SET deposit_payment_mode = 'PREAUTH', stripe_deposit_payment_intent_id = ?, deposit_status = 'HELD', deposit_paid_at = COALESCE(deposit_paid_at, CURRENT_TIMESTAMP), deposit_held_amount = ? WHERE id = ?")
       .bind(intent.id, depositAmount, orderId),
   ])
@@ -772,11 +779,11 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
         await c.env.RENT.prepare('UPDATE orders SET square_gift_card_id = ? WHERE id = ?').bind(squareGiftCardId, orderId).run()
       }
       const depositMode = depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand)
-      // 短租：提交申请时就用已验证的卡对押金做预授权，审核通过后只需要扣租金。
+      // Stripe 短租只建立一笔合并预授权；审核后主站复用该授权。
       // 长租（SetupIntent 模式）不在这里扣款，损坏或逾期时才按实际费用从保存的卡扣。
       if (depositMode === 'PREAUTH' && deposit > 0) {
         try {
-          await authorizeDepositForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, rentalPlan.period.days, stripeCustomerId)
+          await authorizeCardForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, rentalPlan.period.days, stripeCustomerId, paymentProvider === 'stripe' ? { amount: Math.max(0, total - deposit), feeRate: settings.processingFeeRate } : undefined)
         } catch (error) {
           depositAuthError = error instanceof Error ? error.message : '押金预授权失败，请更换信用卡后重试。'
           break
@@ -805,7 +812,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
   const paymentBreakdown = paymentProvider === 'stripe'
     ? firstOrder?.deposit_payment_mode === 'PREAUTH'
-      ? `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已在信用卡上预授权；租金${deliveryFee ? `及配送费合计 AUD$${(totalRent + deliveryFee - totalDiscount).toFixed(2)}` : ` AUD$${(totalRent - totalDiscount).toFixed(2)}`} 将在审核通过后自动从同一张卡扣取。`
+      ? '信用卡预授权已完成。'
       : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金${deliveryFee ? `及配送费合计 AUD$${(totalRent + deliveryFee - totalDiscount).toFixed(2)}` : ` AUD$${(totalRent - totalDiscount).toFixed(2)}`} 将在审核通过后自动从同一张卡扣取。`
     : paymentProvider === 'square'
       ? firstOrder?.deposit_payment_mode === 'PREAUTH'

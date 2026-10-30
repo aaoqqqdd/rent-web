@@ -401,7 +401,7 @@ export function renderApply(data: ApplyData): string {
             <p id="square-gift-card-message" class="hint" aria-live="polite"></p>
           </div>
           <div class="form-card">
-            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3><p>信用卡用于押金预授权，符合条件的账户可使用余额支付</p></div></div>
+            <div class="form-card-head"><span>04</span><div><h3>支付方式</h3></div></div>
             <div class="payment-method-options" id="payment-method-options">
               <label class="payment-method-option choice-line">
                 <input type="radio" name="paymentMethod" value="card" checked>
@@ -421,7 +421,7 @@ export function renderApply(data: ApplyData): string {
                 <p id="stripe-wallet-message" class="hint" aria-live="polite"></p>
               </div>
               <div class="stripe-setup-box">
-                <div class="stripe-setup-head"><div><label>押金信用卡资料</label><p>仅用于押金预授权，不会立即收取租金。</p></div><span>SECURE / STRIPE</span></div>
+                <div class="stripe-setup-head"><div><label>信用卡资料</label></div><span>SECURE / STRIPE</span></div>
                 <div id="stripe-card-element" class="stripe-card-element"></div>
                 <p id="stripe-card-message" class="hint" aria-live="polite">正在加载安全付款组件…</p>
                 <button type="button" class="btn btn-ghost" id="stripe-card-confirm" disabled>验证</button>
@@ -439,19 +439,19 @@ export function renderApply(data: ApplyData): string {
       </div>
 
       <div class="field legal-agreement">
-        <input type="checkbox" id="agree" name="agree" value="1" style="width:auto;margin-top:3px" required>
+        <input type="checkbox" id="agree" name="agree" value="1" required>
         <label for="agree" style="font-weight:400;margin:0">我已阅读并同意 <a href="/service-terms" target="_blank" rel="noopener" style="color:var(--primary)">服务条款</a> 与 <a href="/privacy" target="_blank" rel="noopener" style="color:var(--primary)">隐私政策</a>。</label>
       </div>
       ${stripeScript}${squareScript}${turnstile}
 
       <div class="apply-expectations" aria-label="提交申请后的流程">
-        <div><span>提交时</span><strong>验证并预授权押金</strong><p>租金不会立即扣款；信用卡只用于押金预授权。</p></div>
+        <div><span>提交时</span><strong>信用卡预授权</strong></div>
         <div><span>审核时</span><strong>确认档期与费用</strong><p>我们会核对库存、地址、优惠码和最终配送安排。</p></div>
-        <div><span>确认后</span><strong>签约再付款</strong><p>档期确认后进入租赁系统，完成合同、付款和取机安排。</p></div>
+        <div><span>确认后</span><strong>确认取机安排</strong></div>
       </div>
 
       <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" style="margin-top:20px">提交申请</button>
-      <p class="form-note apply-submit-note">提交后，我们将审核你的订单，并在审核通过后联系你完成签约与付款。<br>个人信息仅用于处理本次租赁及相关服务。</p>
+      <p class="form-note apply-submit-note">提交后等待审核。<br>个人信息仅用于处理本次租赁及相关服务。</p>
       <p class="form-note">遇到问题？可返回 <a href="/products" style="color:var(--primary)">设备库</a> 或联系客服。</p>
     </form>
 
@@ -859,6 +859,9 @@ export function renderApply(data: ApplyData): string {
   function summaryRow(label, amount, className) {
     return '<div class="summary-row' + (className ? ' ' + className : '') + '"><span>' + label + '</span><span>' + amount + '</span></div>';
   }
+  function cardAuthorizationDeposit() {
+    return cartIds.reduce(function (total, id) { var days = termDays(termFor(id)); return total + (days > 0 && days < 30 ? productMap.get(id).deposit : 0); }, 0);
+  }
   function calculateRentalPayable() {
     var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
     var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(serviceFeeSlot).length * 100) / 100 : 0;
@@ -893,7 +896,7 @@ export function renderApply(data: ApplyData): string {
       ? Math.min(squareGiftCardBalance, rentalPayable)
       : 0;
     var giftCardRemaining = Math.max(0, rentalPayable - giftCardDeduction);
-    var payableTotal = selectedPaymentMethod === 'square' && squareGiftCardVerified ? giftCardRemaining : rentalPayable;
+    var payableTotal = selectedPaymentMethod === 'square' && squareGiftCardVerified ? giftCardRemaining : rentalPayable + (selectedPaymentMethod === 'card' ? cardAuthorizationDeposit() : 0);
     if (accountBalance !== null) {
       balancePaymentInput.disabled = accountBalance < total;
       if (balancePaymentInput.disabled && balancePaymentInput.checked) balancePaymentInput.checked = false;
@@ -915,7 +918,7 @@ export function renderApply(data: ApplyData): string {
       + '<div class="summary-count">' + count + uiText(' 台设备', ' device(s)') + '</div>'
       + '<div class="summary-rows">' + rows + '</div>'
       + '<div class="summary-divider"></div>'
-      + summaryRow(uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
+      + summaryRow(selectedPaymentMethod === 'card' && cardAuthorizationDeposit() > 0 ? uiText('预计预授权总额', 'Estimated authorisation total') : uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
       + summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit');
     if (squareGiftCardVerified && squareGiftCardBalance !== null) {
       var previewPayable = calculateRentalPayable();
@@ -1478,13 +1481,14 @@ export function renderApply(data: ApplyData): string {
       try {
         confirmed = await window.GeekSlopeUI.confirm({
           title: { zh: '确认提交租赁申请？', en: 'Submit your rental application?' },
-          message: { zh: '提交后将验证并预授权押金，租金不会立即扣款。请确认设备、租期与费用无误。', en: 'Your deposit will be verified and pre-authorised after submission; rent is not charged immediately. Check the devices, rental term and costs before continuing.' },
+          message: { zh: '请确认设备、租期与费用。', en: 'Check the devices, rental term and costs.' },
           details: [
             { label: { zh: '设备', en: 'Devices' }, value: cartIds.length + uiText(' 台 · ', ' device(s) · ') + deviceNames },
             { label: { zh: '租期', en: 'Rental term' }, value: formatDate(firstTerm.startDate) + ' – ' + formatDate(firstTerm.endDate) + (cartIds.length > 1 ? uiText('（每台设备可能不同）', ' (dates may differ per device)') : '') },
             { label: { zh: '取还方式', en: 'Handover' }, value: method.value === 'Delivery' ? uiText('送货上门', 'Delivery') : uiText('到店自取', 'Store pickup') },
             { label: { zh: '租金及手续费', en: 'Rent and fees' }, value: 'AUD $' + calculateRentalPayable().toFixed(2) },
-            { label: { zh: '押金（预授权）', en: 'Deposit (pre-authorised)' }, value: 'AUD $' + depositTotal.toFixed(2) }
+            { label: { zh: '押金额度', en: 'Deposit amount' }, value: 'AUD $' + depositTotal.toFixed(2) },
+            ...(selectedPaymentMethod === 'card' && cardAuthorizationDeposit() > 0 ? [{ label: { zh: '预计预授权总额', en: 'Estimated authorisation total' }, value: 'AUD $' + (calculateRentalPayable() + cardAuthorizationDeposit()).toFixed(2) }] : [])
           ],
           confirmText: { zh: '确认提交', en: 'Submit application' },
           cancelText: { zh: '返回检查', en: 'Go back and check' },

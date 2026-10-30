@@ -806,7 +806,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .refund-method-fixed strong { font-size: 15px; }
 .refund-method-fixed small { color: var(--muted-fg); font-size: 12px; }
 .legal-agreement { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }
-.legal-agreement input { width: 18px !important; min-height: 18px; margin: 3px 0 0; }
+.legal-agreement input { width: 18px; height: 18px; min-height: 18px; padding: 0; margin: 2px 0 0; accent-color: var(--primary); }
 .legal-agreement label { min-width: 0; line-height: 1.6; }
 .temporary-credentials { display: grid; gap: 8px; margin-top: 18px; padding: 18px; border: 1px solid rgba(89,229,193,.3); border-radius: 10px; background: rgba(89,229,193,.06); }
 .temporary-credentials > span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
@@ -859,8 +859,51 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .foot-bottom a { margin-left: 18px; }
 .foot-bottom a:hover { color: var(--primary); }
 
+/* ---------- referral program ---------- */
+.referral-hero .referral-hero-grid { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: 64px; }
+.page-hero.referral-hero h1 { font-size: clamp(38px, 4.3vw, 60px); }
+.referral-hero .referral-account-note { margin-bottom: 0; font-size: 13px; }
+.referral-receipt { min-width: 0; padding: 30px; border: 1px solid var(--border-bright); border-top: 3px solid var(--secondary); border-radius: 3px 3px 16px 16px; background: var(--bg); box-shadow: 0 24px 70px rgba(0,0,0,.25); }
+.referral-receipt-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+.referral-receipt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--secondary); }
+.referral-receipt h2 { font-size: 17px; letter-spacing: 0; }
+.referral-rate { display: block; margin: 12px 0; color: var(--secondary); font: 600 clamp(64px, 7vw, 96px)/1 var(--display); letter-spacing: -.06em; overflow-wrap: anywhere; }
+.referral-rate-unavailable { display: block; margin-top: 20px; color: var(--secondary); font-size: 24px; }
+.referral-receipt p { margin: 12px 0 24px; font-size: 13px; line-height: 1.7; }
+.referral-example { padding: 20px 0; border-top: 1px dashed var(--border-bright); }
+.referral-example > span, .referral-example small { color: var(--muted-fg); font-size: 12px; }
+.referral-example dl { margin: 12px 0; }
+.referral-example dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 6px 0; font-size: 13px; }
+.referral-example dt { color: var(--muted-fg); }
+.referral-example dd { margin: 0; font-family: var(--mono); white-space: nowrap; }
+.referral-example dl > .referral-example-total { margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
+.referral-example-total dd { color: var(--secondary); font-size: 22px; }
+.referral-withdraw-min { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; padding-top: 18px; border-top: 1px dashed var(--border-bright); }
+.referral-withdraw-min span { color: var(--muted-fg); font-size: 12px; }
+.referral-withdraw-min strong { margin-left: auto; font: 600 26px var(--display); }
+.referral-steps .inline-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 12px; font-size: 14px; }
+.referral-settlement { display: grid; grid-template-columns: 1fr 1fr; gap: 32px 72px; }
+.referral-settlement h2 { margin-top: 12px; font-size: clamp(28px, 3.5vw, 40px); }
+.referral-settlement p { margin-top: 18px; color: var(--muted-fg); font-size: 14px; }
+.referral-rules { margin: 0; }
+.referral-rules > div { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+.referral-rules dt { color: var(--muted-fg); font-size: 14px; }
+.referral-rules dd { margin: 0; text-align: right; font: 600 24px var(--display); }
+.referral-rules small { color: var(--muted-fg); font: 400 12px var(--font); }
+.referral-settlement .referral-settlement-note { grid-column: 1 / -1; margin-top: 0; padding-left: 18px; border-left: 2px solid var(--secondary); }
+@media (max-width: 900px) {
+  .referral-hero .referral-hero-grid, .referral-settlement { grid-template-columns: 1fr; gap: 36px; }
+  .referral-receipt { width: 100%; max-width: 560px; justify-self: center; }
+  .page-hero.referral-hero h1 { font-size: clamp(36px, 6vw, 60px); }
+}
+@media (max-width: 620px) {
+  .page-hero.referral-hero .wrap { padding-top: 52px; padding-bottom: 52px; }
+  .referral-receipt { padding: 24px; }
+  .referral-hero .hero-actions .btn { width: 100%; white-space: normal; }
+}
+
 /* ---------- responsive ---------- */
-@media (max-width: 1180px) {
+@media (max-width: 1280px) {
   .header-location { display: none; }
   .site-header .wrap { position: relative; gap: 10px; }
   .header-brand-group { flex: 1; }

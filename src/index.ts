@@ -7,6 +7,7 @@ import { STYLES, STYLE_VERSION } from './theme'
 import { renderPage, FAVICON_SVG } from './layout'
 import {
   getRentalConfig,
+  getReferralConfig,
   getDeviceAvailability,
   getLegalDocument,
   getSiteContact,
@@ -27,6 +28,7 @@ import { renderAbout, renderNotFound, renderOrderLookup, renderRentalGuide, rent
 import { renderLegalDocument } from './pages/legal'
 import { renderAnnouncementDetail, renderAnnouncements } from './pages/announcements'
 import { renderGiftCards } from './pages/gift-cards'
+import { renderReferral } from './pages/referral'
 import { createRentalSetupIntent, handleRentalRequest, lookupAccountBalance, parseRequestBody, previewRentalCoupon } from './public-rental'
 import { getPublicSquareGiftCardConfig, inspectSquareGiftCardNonce } from './squareGiftCard'
 import { autocompleteVictoriaAddresses } from './address'
@@ -78,7 +80,7 @@ export interface Env {
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
 const CSS_TTL = 86400
-const HTML_CACHE_VERSION = '20260926-i18n-v17'
+const HTML_CACHE_VERSION = '20261031-referral-program-legal-placeholders'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -105,7 +107,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to",
   "font-src 'self' https://fonts.gstatic.com https://*.tawk.to",
   "img-src 'self' data: https:",
-  "connect-src 'self' https://challenges.cloudflare.com https://api.stripe.com https://photon.komoot.io https://nominatim.openstreetmap.org https://connect.squareup.com https://connect.squareupsandbox.com https://tally.so https://*.tawk.to wss://*.tawk.to",
+  "connect-src 'self' https://dashboard.geekslope.de5.net https://challenges.cloudflare.com https://api.stripe.com https://photon.komoot.io https://nominatim.openstreetmap.org https://connect.squareup.com https://connect.squareupsandbox.com https://tally.so https://*.tawk.to wss://*.tawk.to",
   "frame-src https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://climate.stripe.com https://tally.so https://tawk.to https://*.tawk.to",
   "form-action 'self' https://app.squareup.com",
 ].join('; ')
@@ -161,7 +163,7 @@ app.onError((error, c) => {
 })
 
 function appUrl(env: Env): string {
-  return (env.APP_URL || 'https://rent.ydnw6zt6vj.workers.dev').replace(/\/$/, '')
+  return (env.APP_URL || 'https://dashboard.geekslope.de5.net').replace(/\/$/, '')
 }
 
 function siteUrl(requestUrl: string): string {
@@ -424,7 +426,7 @@ app.get('/robots.txt', (c) =>
 app.get('/sitemap.xml', async (c) => {
   const base = siteUrl(c.req.url)
   const products = await listProducts(c.env)
-  const paths = ['/', '/products', '/gift-cards', '/rental-guide', '/about', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
+  const paths = ['/', '/products', '/gift-cards', '/referral', '/rental-guide', '/about', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
   const productPaths = products.filter((product) => product.id).map((product) => `/products/${encodeURIComponent(product.id)}`)
   const urls = [...paths, ...productPaths].map((path) => `<url><loc>${xmlEsc(base + path)}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
@@ -727,7 +729,19 @@ async function renderLoginPage(
   return c.html(html, (opts.status ?? 200) as 200, { 'cache-control': 'private, no-store' })
 }
 
-app.get('/login', (c) => renderLoginPage(c, {}))
+app.get('/login', async (c) => {
+  if (await currentUser(c)) {
+    c.header('cache-control', 'private, no-store')
+    return c.redirect('/sso/start')
+  }
+  return renderLoginPage(c, { tab: c.req.query('tab') === 'register' ? 'register' : 'login' })
+})
+
+app.get('/api/session', async (c) => c.json(
+  { authenticated: Boolean(await currentUser(c)) },
+  200,
+  { 'cache-control': 'private, no-store', vary: 'Cookie' },
+))
 
 // rent 主应用里 /register 是独立注册页；这里统一收敛到本站的 /login 页注册面板。
 app.get('/register', (c) => renderLoginPage(c, { tab: 'register' }))
@@ -816,6 +830,22 @@ app.get('/rental-guide', (c) =>
         },
         rentalGuideFaqSchema(config),
       ],
+      user,
+    })
+  }),
+)
+
+app.get('/referral', (c) =>
+  cachedHtml(c, HTML_TTL, async (user) => {
+    const [contact, config] = await Promise.all([getSiteContact(c.env), getReferralConfig(c.env)])
+    return renderPage({
+      title: `推广计划 — ${contact.name}`,
+      description: '介绍朋友租赁 GeekSlope 设备，获得推广分成。了解邀请码、分成结算与最低 A$100 提现规则。',
+      body: renderReferral(config, appUrl(c.env)),
+      contact,
+      appUrl: appUrl(c.env),
+      path: '/referral',
+      siteUrl: siteUrl(c.req.url),
       user,
     })
   }),

@@ -11,9 +11,11 @@ export interface HeaderOptions {
 
 export function renderSiteHeader(options: HeaderOptions, contact: SiteContact): string {
     const active = (path: string): string => options.path === path || options.path.startsWith(`${path}/`) ? ' aria-current="page"' : ''
-    const accountAction = options.user
-        ? /* html */ `<span class="nav-account"><a class="btn btn-primary header-account" href="/sso/start">进入用户中心</a><a class="nav-logout" href="/logout" data-confirm-logout>退出</a></span>`
-        : /* html */ `<a class="btn btn-primary header-account" href="/login">登录 / 注册</a>`
+    const accountAction = /* html */ `<span class="nav-account" data-account-actions data-site-authenticated="${options.user ? 'true' : 'false'}" data-dashboard-url="${esc(options.appUrl)}">
+      <a class="btn btn-primary header-account" data-account-login href="/login?tab=login"${options.user ? ' hidden' : ''}>登录 / 注册</a>
+      <a class="btn btn-primary header-account" data-account-dashboard href="${esc(options.user ? '/sso/start' : options.appUrl)}"${options.user ? '' : ' hidden'}>进入 Dashboard</a>
+      <a class="nav-logout" href="/logout" data-confirm-logout${options.user ? '' : ' hidden'}>退出</a>
+    </span>`
     return /* html */ `
 <a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
 <header class="site-header">
@@ -28,6 +30,7 @@ export function renderSiteHeader(options: HeaderOptions, contact: SiteContact): 
     <nav class="nav" id="site-nav" aria-label="主导航">
       <a href="/products"${active('/products')} data-i18n="navProducts">产品目录</a>
       <a href="/gift-cards"${active('/gift-cards')} data-i18n="navGiftCards">礼品卡</a>
+      <a href="/referral"${active('/referral')}>推广计划</a>
       <a href="/rental-guide"${active('/rental-guide')} data-i18n="navGuide">租赁说明</a>
       <a href="/about"${active('/about')} data-i18n="navAbout">关于我们</a>
       <a href="/order-lookup"${active('/order-lookup')} data-i18n="navLookup">订单查询</a>

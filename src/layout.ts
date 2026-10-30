@@ -6,6 +6,7 @@ import { ENGLISH_COPY, ENGLISH_PATTERNS } from './i18n'
 import type { SessionUser } from './auth'
 import { esc } from './escape'
 import { renderSiteHeader } from './components/site-header'
+import { ACCOUNT_STATUS_SCRIPT } from './components/account-status'
 import { renderSiteFooter } from './components/site-footer'
 import { renderFeedbackUi, FEEDBACK_SCRIPT } from './components/feedback'
 import { FAVICON_SVG } from './components/brand'
@@ -117,6 +118,7 @@ ${opts.body}
 </main>
 ${renderFeedbackUi()}
 ${renderSiteFooter(opts.contact)}
+<script>${ACCOUNT_STATUS_SCRIPT}</script>
 <script>
 (() => {
   var englishCopy = ${englishCopy};
