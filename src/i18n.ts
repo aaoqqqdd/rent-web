@@ -110,7 +110,8 @@ export const ENGLISH_COPY: Record<string, string> = {
   // Home
   'MELBOURNE · 设备租赁': 'MELBOURNE · DEVICE RENTAL', '设备不用拥有，': 'You do not need to own the device,',
   '进度照样向前。': 'to keep moving forward.', '打开设备库': 'Browse devices', '先了解怎么租': 'See how renting works',
-  '✓ 提交不扣款': '✓ No charge on application', '✓ 最快当天可取': '✓ Pickup as Soon as Today', '✓ 本地技术支持': '✓ Local technical support',
+  '✓ 提交不扣款': '✓ No charge on application', '✓ 最快两小时内取货': '✓ Pickup in as little as 2 hours', '✓ 本地技术支持': '✓ Local technical support',
+  '最快两小时内取货，具体取货时间以库存和订单确认为准。': 'Pickup in as little as 2 hours, subject to stock availability and order confirmation.',
   '实时租赁概览': 'Live rental overview', '实时现货': 'Available now', '起租价格': 'Discounted daily starting rate',
   '申请状态': 'Application status', '确认档期': 'Availability review', '浏览全部库存': 'Browse all inventory',
   '交付前检测': 'Pre-delivery inspection', '租期可调整': 'Flexible rental term', '本地交付': 'Local delivery', '租期内支持': 'Support throughout your rental',

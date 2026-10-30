@@ -99,7 +99,7 @@ export function renderHome(data: HomeData): string {
         <a class="btn btn-primary btn-lg" href="/products">打开设备库 <span>→</span></a>
         <a class="btn btn-ghost btn-lg" href="/rental-guide">先了解怎么租</a>
       </div>
-      <div class="hero-notes"><span>✓ 提交不扣款</span><span>✓ 最快当天可取</span><span>✓ 本地技术支持</span></div>
+      <div class="hero-notes"><span>✓ 提交不扣款</span><span>✓ 最快两小时内取货</span><span>✓ 本地技术支持</span></div>
     </div>
     <div class="rental-console" aria-label="实时租赁概览">
       <div class="console-head"><span><i></i> RENTAL DESK / LIVE</span><span>${new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span></div>
@@ -181,7 +181,7 @@ export function renderHome(data: HomeData): string {
     <div class="section-head"><div><div class="kicker">租之前先知道</div><h2>把预算和交付安排一次看明白</h2></div><p>产品页展示的是实时基础信息，最终金额和档期会在提交申请后确认。</p></div>
     <div class="info-grid three">
       <article class="info-card"><span>费用</span><h3>租金 + 押金</h3><p>租金按日租价乘以实际租期计算；押金在设备归还并验收无误后按规则退回。</p></article>
-      <article class="info-card"><span>交付</span><h3>配送或到店自取</h3><p>墨尔本 CBD 与周边地区可安排配送，其他郊区可咨询自取地点。配送费会随地址确认。</p></article>
+      <article class="info-card"><span>交付</span><h3>配送或到店自取</h3><p>最快两小时内取货，具体取货时间以库存和订单确认为准。</p><p>墨尔本 CBD 与周边地区可安排配送，其他郊区可咨询自取地点。配送费会随地址确认。</p></article>
       <article class="info-card"><span>适合</span><h3>短期项目与临时升级</h3><p>课程作业、剪辑渲染、开发测试、游戏活动或差旅办公，都可以按实际使用时间申请。</p></article>
     </div>
     <div class="home-essentials-note"><strong>当前最短租期：${esc(config.minimumRentalDays)} 天</strong><span>提交申请不会立即扣款，确认档期后才进入合同与付款。</span><a class="text-link" href="/rental-guide">查看完整租赁规则 <span>→</span></a></div>
