@@ -26,13 +26,13 @@ export function renderLogin(data: LoginData): string {
        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
     : ''
   return /* html */ `
-<section class="section">
+<section class="section" data-auth-page>
   <div class="wrap form-wrap auth-wrap">
     <div class="section-head">
       <div><div class="kicker">账号</div>
       <h2>注册 / 登录</h2></div>
       <p style="color:var(--muted-fg)">
-        登录或注册后，即可进入 Dashboard 管理租赁订单。
+        登录或注册后，即可进入控制台管理租赁订单。
       </p>
     </div>
 

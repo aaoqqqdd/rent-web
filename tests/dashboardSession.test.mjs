@@ -12,20 +12,20 @@ const { renderPage } = await bundled('src/layout.ts')
 const { default: worker } = await bundled('src/index.ts')
 const DASHBOARD = 'https://dashboard.geekslope.de5.net'
 
-function browser({ initialSite = false, site = false, dashboard = false } = {}) {
+function browser({ initialSite = false, site = false, dashboard = false, authPage = false } = {}) {
   const login = { hidden: initialSite }, account = { hidden: !initialSite, href: initialSite ? '/sso/start' : DASHBOARD }, logout = { hidden: !initialSite }
-  const events = new Map(), requests = []
+  const events = new Map(), requests = [], redirects = []
   const status = { site, dashboard }
   const document = {
     visibilityState: 'visible',
-    querySelector: () => ({
+    querySelector: selector => selector === '[data-auth-page]' ? (authPage ? {} : null) : ({
       getAttribute: key => key === 'data-dashboard-url' ? DASHBOARD : String(initialSite),
       querySelector: key => ({ '[data-account-login]': login, '[data-account-dashboard]': account, '[data-confirm-logout]': logout })[key],
     }),
     addEventListener: (name, callback) => events.set(name, callback),
   }
   runInNewContext(ACCOUNT_STATUS_SCRIPT, {
-    document, window: { addEventListener: (name, callback) => events.set(name, callback) }, URL, AbortSignal,
+    document, window: { addEventListener: (name, callback) => events.set(name, callback), location: { replace: url => redirects.push(url) } }, URL, AbortSignal,
     async fetch(url, options) {
       requests.push({ url, options })
       const value = url === '/api/session' ? status.site : status.dashboard
@@ -33,7 +33,7 @@ function browser({ initialSite = false, site = false, dashboard = false } = {}) 
       return { ok: true, json: async () => ({ authenticated: value }) }
     },
   })
-  return { login, account, logout, requests, status, async refresh(event = 'pageshow') { await events.get(event)(); await new Promise(resolve => setImmediate(resolve)) } }
+  return { login, account, logout, requests, redirects, status, async refresh(event = 'pageshow') { await events.get(event)(); await new Promise(resolve => setImmediate(resolve)) } }
 }
 
 test('dashboard-only login shows direct dashboard entry without a website cookie', async () => {
@@ -43,10 +43,37 @@ test('dashboard-only login shows direct dashboard entry without a website cookie
   assert.equal(b.account.hidden, false)
   assert.equal(b.account.href, DASHBOARD)
   assert.equal(b.logout.hidden, true)
+  assert.deepEqual(b.redirects, [])
   for (const { options } of b.requests) {
     assert.equal(options.credentials, 'include')
     assert.equal(options.cache, 'no-store')
   }
+})
+
+test('authenticated login and registration pages automatically enter the dashboard', async () => {
+  for (const [site, dashboard, destination] of [[false, true, DASHBOARD], [true, false, '/sso/start'], [true, true, DASHBOARD]]) {
+    const b = browser({ authPage: true, site, dashboard })
+    await b.refresh()
+    assert.deepEqual(b.redirects, [destination])
+  }
+})
+
+test('logged-out and unverified auth pages retain their forms without redirecting', async () => {
+  for (const status of [false, 'error']) {
+    const b = browser({ authPage: true, site: status, dashboard: status })
+    await b.refresh()
+    assert.deepEqual(b.redirects, [])
+    assert.equal(b.login.hidden, false)
+  }
+})
+
+test('an auth page restored after dashboard login redirects when the tab becomes visible', async () => {
+  const b = browser({ authPage: true })
+  await b.refresh()
+  assert.deepEqual(b.redirects, [])
+  b.status.dashboard = true
+  await b.refresh('visibilitychange')
+  assert.deepEqual(b.redirects, [DASHBOARD])
 })
 
 test('logged-out visitors retain the login and registration entry', async () => {
@@ -115,14 +142,20 @@ test('website session endpoint validates cookies and returns no account details'
 })
 
 test('logged-in website users bypass login and guests start on the login tab', async () => {
-  const response = await worker.fetch(new Request('https://geekslope.de5.net/login', { headers: { cookie: `session=${token}` } }), env(true))
-  assert.equal(response.status, 302)
-  assert.equal(response.headers.get('location'), '/sso/start')
-  assert.match(response.headers.get('cache-control'), /no-store/)
+  for (const path of ['/login', '/login?tab=register', '/register']) {
+    const response = await worker.fetch(new Request(`https://geekslope.de5.net${path}`, { headers: { cookie: `session=${token}` } }), env(true))
+    assert.equal(response.status, 302)
+    assert.equal(response.headers.get('location'), '/sso/start')
+    assert.match(response.headers.get('cache-control'), /no-store/)
+  }
   const guest = await worker.fetch(new Request('https://geekslope.de5.net/login'), env())
   assert.match(await guest.text(), /class="auth-tab is-active" data-tab="login"/)
   const registration = await worker.fetch(new Request('https://geekslope.de5.net/login?tab=register'), env())
   assert.match(await registration.text(), /class="auth-tab is-active" data-tab="register"/)
+  const registerAlias = await worker.fetch(new Request('https://geekslope.de5.net/register'), env())
+  const registerHtml = await registerAlias.text()
+  assert.match(registerHtml, /class="auth-tab is-active" data-tab="register"/)
+  assert.match(registerHtml, /data-auth-page/)
 })
 
 test('both header states render valid scripts and translated dashboard copy', () => {

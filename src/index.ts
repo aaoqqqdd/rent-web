@@ -729,12 +729,13 @@ async function renderLoginPage(
   return c.html(html, (opts.status ?? 200) as 200, { 'cache-control': 'private, no-store' })
 }
 
-app.get('/login', async (c) => {
+// 登录和注册入口都跳过已登录用户，官网会话通过 SSO 进入控制台。
+app.on('GET', ['/login', '/register'], async (c) => {
   if (await currentUser(c)) {
     c.header('cache-control', 'private, no-store')
     return c.redirect('/sso/start')
   }
-  return renderLoginPage(c, { tab: c.req.query('tab') === 'register' ? 'register' : 'login' })
+  return renderLoginPage(c, { tab: c.req.path === '/register' || c.req.query('tab') === 'register' ? 'register' : 'login' })
 })
 
 app.get('/api/session', async (c) => c.json(
@@ -742,9 +743,6 @@ app.get('/api/session', async (c) => c.json(
   200,
   { 'cache-control': 'private, no-store', vary: 'Cookie' },
 ))
-
-// rent 主应用里 /register 是独立注册页；这里统一收敛到本站的 /login 页注册面板。
-app.get('/register', (c) => renderLoginPage(c, { tab: 'register' }))
 
 const LEGAL_PAGES: Array<{
   paths: string[]

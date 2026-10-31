@@ -31,6 +31,9 @@ export const ACCOUNT_STATUS_SCRIPT = /* javascript */ `
       dashboard.hidden = !signedIn;
       dashboard.href = dashboardAuthenticated ? dashboardUrl : '/sso/start';
       logout.hidden = !siteAuthenticated;
+      if (signedIn && document.querySelector('[data-auth-page]')) {
+        window.location.replace(dashboardAuthenticated ? dashboardUrl : '/sso/start');
+      }
     } finally { pending = false; }
   }
   window.addEventListener('pageshow', refresh);
