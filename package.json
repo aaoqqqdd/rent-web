@@ -12,14 +12,14 @@
     "i18n:audit": "node scripts/i18n-audit.mjs"
   },
   "dependencies": {
-    "hono": "^4.13.7",
-    "sanitize-html": "^2.17.7"
+    "hono": "^4.13.11",
+    "sanitize-html": "^2.18.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",
     "@types/sanitize-html": "^2.16.1",
     "typescript": "^5.8.3",
-    "wrangler": "^4.147.0"
+    "wrangler": "^4.156.0"
   },
   "overrides": {
     "sharp": "^0.35.4"
