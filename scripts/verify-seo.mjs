@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 
 const base = process.argv[2] || 'http://127.0.0.1:8811'
-const canonicalOrigin = 'https://www.geekslope.de5.net'
+const canonicalOrigin = 'https://geekslope.de5.net'
 let checkedPages = 0
 
 async function read(path, expectedStatus = 200) {
@@ -39,7 +39,7 @@ async function page(path, { canonicalPath = path.split('?')[0], noindex = false,
 }
 
 const { text: robots } = await read('/robots.txt')
-assert.match(robots, /User-agent: \*\s+Allow: \//)
+assert.match(robots, /User-agent: \*\s+Content-Signal: ai-train=no, search=yes, ai-input=yes\s+Allow: \//)
 assert.ok(robots.includes(`Sitemap: ${canonicalOrigin}/sitemap.xml`))
 assert.match(robots, /Disallow: \/api\//)
 assert.ok(!robots.includes('Disallow: /login'), 'Forms must be crawlable to expose noindex')

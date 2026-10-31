@@ -80,7 +80,7 @@ src/pages/legal.ts    法律 / 合规文档页外壳（正文实时读 D1，见 
 ## 登录 / SSO 流程
 
 - 顶栏按钮：未登录 →「登录 / 注册」(`/login?tab=login`)；官网已登录 →「进入 Dashboard」(`/sso/start`) +「退出」(`/logout`)。
-- 官网 `www.geekslope.de5.net` 在页面加载及切回标签页时，通过浏览器携带 Cookie 查询 dashboard 的 `/public/session`（仅放行 `PUBLIC_WEB_ORIGIN`，只返回登录布尔值，禁止缓存）。dashboard 已登录时，按钮直达 `https://dashboard.geekslope.de5.net`；官网自身会话另由 `/api/session` 校验。不要在服务端代查 dashboard Cookie，也不要把个人登录态写入营销页缓存。
+- 官网 `geekslope.de5.net` 在页面加载及切回标签页时，通过浏览器携带 Cookie 查询 dashboard 的 `/public/session`（仅放行 `PUBLIC_WEB_ORIGIN`，只返回登录布尔值，禁止缓存）。dashboard 已登录时，按钮直达 `https://dashboard.geekslope.de5.net`；官网自身会话另由 `/api/session` 校验。不要在服务端代查 dashboard Cookie，也不要把个人登录态写入营销页缓存。
 - `POST /login`：同源校验 → `web-login` 限流（10 次 / 10 分钟 / IP）→ `verifyCredentials`
   （`users` 表，仅 `status='active' AND account_type='formal'`）→ `createSession` 写 `auth_sessions`
   + 下发官网域 `session` cookie（12h，勾「记住」30d）→ 302 到 `/sso/start`。

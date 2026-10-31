@@ -1,14 +1,37 @@
 // All deployment aliases share the public marketing site's canonical URLs.
-export const SITE_URL = 'https://www.geekslope.de5.net'
+export const SITE_URL = 'https://geekslope.de5.net'
+export const CONTENT_SIGNAL = 'ai-train=no, search=yes, ai-input=yes'
 
-// Keep public HTML crawlable (including noindex forms so crawlers see that
-// directive). The wildcard also covers AI search crawlers such as OAI-SearchBot.
-export const ROBOTS_TXT = `User-agent: *
+// Specific bot groups do not inherit wildcard rules. Reuse the same exclusions
+// so allowing AI search never also grants permission to crawl account APIs.
+const PUBLIC_CRAWL_RULES = `Content-Signal: ${CONTENT_SIGNAL}
 Allow: /
 Disallow: /api/
 Disallow: /sso/
 Disallow: /logout
-Disallow: /healthz
+Disallow: /healthz`
+
+const SEARCH_AND_USER_AGENTS = [
+  'OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot',
+  'ChatGPT-User', 'Claude-User', 'Perplexity-User',
+]
+const BLOCKED_AGENTS = [
+  'GPTBot', 'ClaudeBot', 'Google-Extended', 'Applebot-Extended',
+  'CCBot', 'Bytespider', 'Amazonbot',
+  // Legacy token requested by the site owner; current Claude search and user
+  // fetchers are explicitly allowed above instead of granting this old token.
+  'Claude-Web',
+]
+
+export const ROBOTS_TXT = `User-agent: *
+${PUBLIC_CRAWL_RULES}
+
+# Search indexing and user-requested retrieval of public pages.
+${SEARCH_AND_USER_AGENTS.map((agent) => `User-agent: ${agent}\n${PUBLIC_CRAWL_RULES}`).join('\n\n')}
+
+# Model training and legacy crawlers. Google-Extended also controls Gemini
+# grounding; blocking it preserves the training opt-out, not all Gemini uses.
+${BLOCKED_AGENTS.map((agent) => `User-agent: ${agent}\nContent-Signal: ${CONTENT_SIGNAL}\nDisallow: /`).join('\n\n')}
 
 Sitemap: ${SITE_URL}/sitemap.xml
 `
@@ -40,4 +63,7 @@ export const LLMS_TXT = `# GeekSlope — 墨尔本电脑租赁 / Melbourne compu
 - [服务条款 / Service terms](${SITE_URL}/service-terms)
 - [隐私政策 / Privacy](${SITE_URL}/privacy)
 - [站点地图 / Sitemap](${SITE_URL}/sitemap.xml)
+- [API 目录 / API catalog](${SITE_URL}/.well-known/api-catalog)
+- [公开接口说明 / Public API documentation](${SITE_URL}/api-docs.md)
+- [认证说明 / Authentication](${SITE_URL}/auth.md)
 `

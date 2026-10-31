@@ -105,9 +105,9 @@ test('public referral route includes current settings, navigation, canonical URL
     assert.match(html, /A\$75\.00/)
     assert.match(html, /21 天/)
     assert.match(html, /href="\/referral">推广计划<\/a>/)
-    assert.match(html, /rel="canonical" href="https:\/\/www\.example\.test\/referral"/)
+    assert.match(html, /rel="canonical" href="https:\/\/geekslope\.de5\.net\/referral"/)
     const sitemap = await worker.fetch(new Request('https://www.example.test/sitemap.xml'), siteEnv)
-    assert.match(await sitemap.text(), /<loc>https:\/\/www\.example\.test\/referral<\/loc>/)
+    assert.match(await sitemap.text(), /<loc>https:\/\/geekslope\.de5\.net\/referral<\/loc>/)
     await Promise.all(pending)
   } finally {
     globalThis.caches = previousCaches

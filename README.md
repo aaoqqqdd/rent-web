@@ -17,6 +17,8 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 
 SEO 的关键词分布、规范域名、AI 爬虫规则、验证方法与发布后的 Search Console / Bing 提交步骤见 [SEO 说明](docs/seo.md)。
 
+代理发现入口：`/.well-known/api-catalog`、`/openapi.json`、`/api-docs.md`、`/auth.md`。首页通过 HTTP `Link` 指向这些公开资源；文档仅声明现有只读能力与人工认证流程，未接入代理代付协议。
+
 ## 页面与数据
 
 | 路由 | 内容 | 实时数据 |

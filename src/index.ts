@@ -4,7 +4,9 @@
 
 import { Hono, type Context } from 'hono'
 import { STYLES, STYLE_VERSION } from './theme'
-import { SITE_URL, ROBOTS_TXT, LLMS_TXT } from './seo'
+import { SITE_URL, ROBOTS_TXT, LLMS_TXT, CONTENT_SIGNAL } from './seo'
+import { acceptsMarkdown, htmlToMarkdown } from './markdown'
+import { API_CATALOG, API_DOCS, AUTH_MD, DISCOVERY_LINK_HEADER, OPENAPI_DOCUMENT } from './discovery'
 import { renderPage, FAVICON_SVG } from './layout'
 import {
   getRentalConfig,
@@ -81,7 +83,7 @@ export interface Env {
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
 const CSS_TTL = 86400
-const HTML_CACHE_VERSION = '20261031-google-tag-manager'
+const HTML_CACHE_VERSION = '20261031-crawler-policy-apex-domain'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -116,6 +118,7 @@ const CONTENT_SECURITY_POLICY = [
 /** 每个响应都必须带的安全响应头（HTML / JSON / 静态资源 / 404 都一样）。 */
 function securityHeaders(protocol: string): Array<[string, string]> {
   const headers: Array<[string, string]> = [
+    ['content-signal', CONTENT_SIGNAL],
     ['content-security-policy', CONTENT_SECURITY_POLICY],
     ['x-content-type-options', 'nosniff'],
     ['x-frame-options', 'DENY'],
@@ -154,6 +157,9 @@ app.use('*', async (c, next) => {
   // Hono 的 prepared headers 不会合并进去 —— 实测所有走边缘缓存的页面因此丢掉了 CSP、
   // X-Frame-Options、nosniff、HSTS 等全部安全头。链结束后统一补写到最终响应上。
   applySecurityHeaders(c.res.headers, protocol)
+  if (c.req.path === '/' || c.req.path === '/.well-known/api-catalog') {
+    c.res.headers.append('link', DISCOVERY_LINK_HEADER)
+  }
   if (/^\/(?:api(?:\/|$)|sso(?:\/|$)|logout$|healthz$)/.test(c.req.path)) {
     c.res.headers.set('x-robots-tag', 'noindex, nofollow')
   }
@@ -197,18 +203,20 @@ async function cachedHtml(
   build: (user: SessionUser | null) => Promise<string | { html: string; status: number }>,
 ): Promise<Response> {
   const authed = hasSessionCookie(c.req.header('cookie') ?? null)
+  const markdown = acceptsMarkdown(c.req.path, c.req.header('Accept'))
   const cache = caches.default
   // 样式指纹同时作为 HTML 缓存命名空间。改版部署后立即使用新缓存，
   // 避免 caches.default 在 TTL 内继续返回上一版本的导航和页面结构。
   const cacheUrl = new URL(c.req.url)
   cacheUrl.searchParams.set('__site_v', `${HTML_CACHE_VERSION}-${STYLE_VERSION}`)
+  cacheUrl.searchParams.set('__site_format', markdown ? 'markdown' : 'html')
   const key = new Request(cacheUrl.toString(), { method: 'GET' })
   if (!authed) {
     const hit = await cache.match(key)
     if (hit) {
       const headers = new Headers(hit.headers)
       headers.set('cache-control', 'no-cache, must-revalidate')
-      headers.set('vary', 'Cookie')
+      headers.set('vary', 'Accept, Cookie')
       return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers })
     }
   }
@@ -216,20 +224,27 @@ async function cachedHtml(
   const built = await build(user)
   const html = typeof built === 'string' ? built : built.html
   const status = typeof built === 'string' ? 200 : built.status
-  const res = new Response(html, {
+  const converted = markdown ? htmlToMarkdown(html) : null
+  const body = converted ? converted.body : html
+  const contentType = converted ? 'text/markdown; charset=utf-8' : 'text/html; charset=utf-8'
+  const representationHeaders = {
+    'content-type': contentType,
+    // Keep both the format and login state distinct in downstream caches.
+    vary: 'Accept, Cookie',
+    ...(converted?.robots ? { 'x-robots-tag': converted.robots } : {}),
+  }
+  const res = new Response(body, {
     status,
     headers: {
-      'content-type': 'text/html; charset=utf-8',
+      ...representationHeaders,
       'cache-control': authed ? 'private, no-store' : 'no-cache, must-revalidate',
-      // 登录态页面按 Cookie 区分，禁止共享缓存 / 中间代理把一个人的顶栏发给另一个人。
-      vary: 'Cookie',
     },
   })
   if (!authed && status === 200) {
-    const cachedRes = new Response(html, {
+    const cachedRes = new Response(body, {
       status,
       headers: {
-        'content-type': 'text/html; charset=utf-8',
+        ...representationHeaders,
         'cache-control': `public, max-age=${ttl}`,
       },
     })
@@ -246,6 +261,25 @@ app.get('/styles.css', (c) => {
 })
 
 app.get('/healthz', (c) => c.text('ok'))
+
+app.get('/.well-known/api-catalog', (c) => c.body(JSON.stringify(API_CATALOG), 200, {
+  'content-type': 'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"',
+  'cache-control': 'public, max-age=300',
+}))
+
+app.get('/openapi.json', (c) => c.json(OPENAPI_DOCUMENT, 200, {
+  'cache-control': 'public, max-age=300',
+}))
+
+app.get('/api-docs.md', (c) => c.body(API_DOCS, 200, {
+  'content-type': 'text/markdown; charset=utf-8',
+  'cache-control': 'public, max-age=300',
+}))
+
+app.get('/auth.md', (c) => c.body(AUTH_MD, 200, {
+  'content-type': 'text/markdown; charset=utf-8',
+  'cache-control': 'public, max-age=300',
+}))
 
 app.get('/api/public-notices', async (c) => {
   const requestedLimit = Number(c.req.query('limit') || 20)
@@ -419,7 +453,9 @@ app.get('/favicon.ico', (c) =>
   }),
 )
 
-app.get('/robots.txt', (c) => c.text(ROBOTS_TXT))
+app.get('/robots.txt', (c) => c.text(ROBOTS_TXT, 200, {
+  'cache-control': 'public, max-age=300',
+}))
 
 app.get('/llms.txt', (c) => c.text(LLMS_TXT, 200, {
   'cache-control': 'public, max-age=3600',
@@ -438,7 +474,7 @@ app.get('/sitemap.xml', async (c) => {
   const productPaths = products.filter((product) => product.id).map((product) => `/products/${encodeURIComponent(product.id)}`)
   const noticePaths = notices.map((notice) => `/announcements/${encodeURIComponent(notice.id)}`)
   const legalPaths = legalDocuments.filter(({ document }) => document.content || document.contentEn).map(({ path }) => path)
-  const urls = [...paths, ...productPaths, ...noticePaths, ...legalPaths].map((path) => `<url><loc>${xmlEsc(SITE_URL + path)}</loc></url>`).join('')
+  const urls = [...new Set([...paths, ...productPaths, ...noticePaths, ...legalPaths])].map((path) => `<url><loc>${xmlEsc(SITE_URL + path)}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
     'content-type': 'application/xml; charset=utf-8',
     'cache-control': 'public, max-age=60',
