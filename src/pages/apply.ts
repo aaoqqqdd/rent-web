@@ -24,7 +24,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     name: product.name,
     model: product.model,
     categoryLabel: product.categoryLabel,
-    available: product.available,
+    available: product.bookable ?? product.available,
     day: product.pricePerDay,
     weeklyDiscountPercent: product.weeklyDiscountPercent,
     monthlyDiscountPercent: product.monthlyDiscountPercent,
@@ -83,7 +83,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   function dateUnavailable(id, date) {
     if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
     var item = availability[id] || {};
-    return (item.unavailableDates || []).indexOf(date) >= 0
+    return item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0
       || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'))
       || periodPassed(date, 'AM');
   }
@@ -288,7 +288,7 @@ export function renderApply(data: ApplyData): string {
     id: product.id,
     name: product.name,
     model: product.model,
-    available: product.available,
+    available: product.bookable ?? product.available,
     day: product.pricePerDay,
     weeklyDiscountPercent: product.weeklyDiscountPercent,
     monthlyDiscountPercent: product.monthlyDiscountPercent,
@@ -814,7 +814,7 @@ export function renderApply(data: ApplyData): string {
     var globalSlots = UNAVAILABLE_TIME_SLOTS[date] || []; var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
     var weekday = new Date(date + 'T00:00:00Z').getUTCDay();
     var weeklyUnavailable = UNAVAILABLE_PICKUP_HOURS.some(function (range) { return Number(range.weekday) === weekday && timeToMinutes(info.value) >= timeToMinutes(range.start) && timeToMinutes(info.value) < timeToMinutes(range.end); });
-    return weeklyUnavailable || (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0) || globalSlots.indexOf(info.value) >= 0 || globalSlots.indexOf(info.category) >= 0 || deviceSlots.indexOf(info.value) >= 0 || deviceSlots.indexOf(info.category) >= 0;
+    return item.unavailable || weeklyUnavailable || (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0) || globalSlots.indexOf(info.value) >= 0 || globalSlots.indexOf(info.category) >= 0 || deviceSlots.indexOf(info.value) >= 0 || deviceSlots.indexOf(info.category) >= 0;
   }
   function periodUnavailable(id, date, period) {
     var item = DEVICE_AVAILABILITY[id] || {};
@@ -824,7 +824,7 @@ export function renderApply(data: ApplyData): string {
   function dateUnavailable(id, date) {
     if (!date || UNAVAILABLE_DATES.indexOf(date) >= 0) return Boolean(date);
     var item = DEVICE_AVAILABILITY[id] || {};
-    return (item.unavailableDates || []).indexOf(date) >= 0 || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
+    return item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0 || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
   }
   function periodPassed(date, period) {
     return date === today && melbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60);

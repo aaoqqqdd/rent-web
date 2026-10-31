@@ -21,13 +21,16 @@ export interface Product {
   depositAmount: number
   description: string
   available: boolean
-  demoAvailableFrom: string | null
+  demoAvailableFrom?: string | null
+  bookable?: boolean
+  availableFrom?: string
   category: 'gaming' | 'ultrabook' | 'workstation'
   categoryLabel: string
   specs: string[]
 }
 
 export interface DeviceAvailability {
+  unavailable?: boolean
   unavailableDates: string[]
   rentalRanges: Array<{ startDate: string; endDate: string }>
   unavailablePeriods: Record<string, Array<'AM' | 'PM'>>
@@ -137,13 +140,28 @@ function deviceDiscount(row: Record<string, unknown>, snakeName: string, camelNa
   return num(row[snakeName] ?? row[camelName])
 }
 
+/** 租期占用由订单校验；设备维护、损坏和退役仍禁止下单。 */
+export function isDeviceBookable(row: Record<string, unknown>): boolean {
+  if (row.deleted_at || row.demo_available_from) return false
+  const status = String(row.status ?? '').toLowerCase()
+  const lifecycle = String(row.lifecycle_status ?? row.lifecycleStatus ?? '').toUpperCase()
+  if (['maintenance', 'retired'].includes(status) || ['MAINTENANCE', 'DAMAGED', 'RETIRED'].includes(lifecycle)) return false
+  return lifecycle ? ['READY', 'RESERVED', 'RENTED', 'RETURNED', 'INSPECTION'].includes(lifecycle) : ['available', 'rented'].includes(status)
+}
+
+export function productAvailabilityLabel(product: Product): string {
+  if (product.demoAvailableFrom) {
+    const [year, month, day] = product.demoAvailableFrom.split('-').map(Number)
+    return `${year}-${month}-${day}后可用`
+  }
+  return product.available ? '现货可租' : product.availableFrom ? `${product.availableFrom} 后可租` : '可预约'
+}
+
 function toProduct(row: Record<string, unknown>): Product {
   const category = categorize(row)
   const specs = [row.gpu, row.cpu, row.ram && `${row.ram} RAM`, row.storage]
     .map((s) => String(s ?? '').trim())
     .filter(Boolean)
-  const demoDate = String(row.demo_available_from ?? '')
-  const demoAvailableFrom = /^\d{4}-\d{2}-\d{2}$/.test(demoDate) ? demoDate : null
   const statusRaw = String(row.status ?? '').toLowerCase()
   const lifecycleRaw = String(row.lifecycle_status ?? '').toUpperCase()
   // 现货 = 生命周期就绪（READY/RESERVED）；无 lifecycle 字段时退回旧 status。
@@ -165,34 +183,54 @@ function toProduct(row: Record<string, unknown>): Product {
     monthlyDiscountPercent: deviceDiscount(row, 'monthly_discount_percent', 'monthlyDiscountPercent'),
     depositAmount: num(row.depositAmount ?? row.deposit_amount),
     description: String(row.description ?? ''),
-    available: inStock && !demoAvailableFrom,
-    demoAvailableFrom,
+    available: inStock && isDeviceBookable(row),
+    bookable: isDeviceBookable(row),
+    demoAvailableFrom: row.demo_available_from ? String(row.demo_available_from) : null,
     category,
     categoryLabel: CATEGORY_LABEL[category],
     specs,
   }
 }
 
-export function productAvailabilityLabel(product: Product, unavailableLabel = '可预约'): string {
-  if (product.demoAvailableFrom) {
-    const [year, month, day] = product.demoAvailableFrom.split('-').map(Number)
-    return `${year}-${month}-${day}后可用`
-  }
-  return product.available ? '现货可租' : unavailableLabel
-}
-
 /** 全部在售（非退役）设备，按日租价升序。 */
 export async function listProducts(env: Env): Promise<Product[]> {
   try {
     const { results } = await env.RENT.prepare('SELECT * FROM devices').all<Record<string, unknown>>()
-    return (results ?? [])
+    const products = (results ?? [])
       .filter((row) => {
         const lifecycle = String(row.lifecycle_status ?? row.lifecycleStatus ?? '').toUpperCase()
         const status = String(row.status ?? '').toLowerCase()
-        return lifecycle !== 'RETIRED' && status !== 'retired'
+        return !row.deleted_at && lifecycle !== 'RETIRED' && status !== 'retired'
       })
       .map(toProduct)
       .sort((a, b) => a.pricePerDay - b.pricePerDay)
+    try {
+      const [orders, config] = await Promise.all([
+        env.RENT.prepare("SELECT deviceId, startDate, endDate, endPeriod FROM orders WHERE deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') ORDER BY startDate").all<{ deviceId: string; startDate: string | null; endDate: string | null; endPeriod: string | null }>(),
+        getRentalConfig(env),
+      ])
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+      for (const product of products) {
+        if (!product.bookable) continue
+        const bookings = (orders.results ?? []).filter(order => order.deviceId === product.id)
+        if (bookings.some(order => !order.startDate || !order.endDate)) {
+          product.available = false
+          product.bookable = false
+          continue
+        }
+        const ranges = bookings.map(order => ({
+          start: shiftDate(order.startDate!.slice(0, 10), -config.bufferDays),
+          end: shiftDate(order.endDate!.slice(0, 10), config.bufferDays + (config.bufferDays || order.endPeriod === 'PM' ? 1 : 0)),
+        }))
+        let next = today
+        for (const range of ranges) if (range.start <= next && next < range.end) next = range.end
+        product.available = next === today
+        if (!product.available) product.availableFrom = next
+      }
+    } catch {
+      // 旧数据库仍使用设备状态展示；下单时再次校验档期。
+    }
+    return products
   } catch {
     return []
   }
@@ -218,7 +256,7 @@ export async function getDeviceAvailability(
     const availability = result[deviceId]
     try {
       const rows = await env.RENT.prepare(
-        'SELECT unavailable_date FROM device_unavailable_dates WHERE device_id = ? ORDER BY unavailable_date',
+        'SELECT unavailable_date FROM device_unavailable_dates WHERE device_id = ? AND deleted_at IS NULL ORDER BY unavailable_date',
       ).bind(deviceId).all<{ unavailable_date?: unknown }>()
       availability.unavailableDates = (rows.results ?? [])
         .map((row) => String(row.unavailable_date ?? '').slice(0, 10))
@@ -228,7 +266,7 @@ export async function getDeviceAvailability(
     }
     try {
       const rows = await env.RENT.prepare(
-        "SELECT startDate, endDate FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL ORDER BY startDate",
+        "SELECT startDate, endDate FROM orders WHERE deviceId = ? AND deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL ORDER BY startDate",
       ).bind(deviceId).all<{ startDate?: unknown; endDate?: unknown }>()
       availability.rentalRanges = (rows.results ?? [])
         .map((row) => ({
@@ -241,9 +279,10 @@ export async function getDeviceAvailability(
           endDate: shiftDate(endDate, Math.max(0, Math.floor(bufferDays))),
         }))
       const periodRows = await env.RENT.prepare(
-        "SELECT startDate, endDate, startPeriod, endPeriod FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL ORDER BY startDate",
+        "SELECT startDate, endDate, startPeriod, endPeriod FROM orders WHERE deviceId = ? AND deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') ORDER BY startDate",
       ).bind(deviceId).all<{ startDate?: unknown; endDate?: unknown; startPeriod?: unknown; endPeriod?: unknown }>()
       for (const row of periodRows.results ?? []) {
+        if (!row.startDate || !row.endDate) { availability.unavailable = true; continue }
         let date = shiftDate(String(row.startDate ?? '').slice(0, 10), -Math.max(0, Math.floor(bufferDays)))
         const endDate = shiftDate(String(row.endDate ?? '').slice(0, 10), Math.max(0, Math.floor(bufferDays)))
         const startPeriod = bufferDays ? 'AM' : (String(row.startPeriod || 'AM') === 'PM' ? 'PM' : 'AM')
@@ -263,7 +302,7 @@ export async function getDeviceAvailability(
     }
     try {
       const rows = await env.RENT.prepare(
-        'SELECT unavailable_date, time_slot FROM device_unavailable_time_slots WHERE device_id = ? ORDER BY unavailable_date, time_slot',
+        'SELECT unavailable_date, time_slot FROM device_unavailable_time_slots WHERE device_id = ? AND deleted_at IS NULL ORDER BY unavailable_date, time_slot',
       ).bind(deviceId).all<{ unavailable_date?: unknown; time_slot?: unknown }>()
       for (const row of rows.results ?? []) {
         const date = String(row.unavailable_date ?? '').slice(0, 10)

@@ -40,7 +40,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       <span class="detail-category">${esc(product.categoryLabel)}</span>
     </div>
     <div class="detail-copy">
-      <div class="status-line"><span class="tag ${product.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(product, '当前可预约'))}</span><span>库存实时同步</span></div>
+      <div class="status-line"><span class="tag ${product.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(product))}</span><span>库存实时同步</span></div>
       <p class="detail-brand">${esc(product.brand || product.categoryLabel)}</p>
       <h1>${esc(product.name)}</h1>
       ${product.model ? `<p class="detail-model">型号 ${esc(product.model)}</p>` : ''}
@@ -63,7 +63,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <p class="hint detail-date-message" id="detail-date-message" aria-live="polite"></p>
       </div>
       <div class="detail-actions">
-        <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button" ${product.available ? '' : 'disabled'}>加入购物车并查看</button>
+        <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button" ${(product.bookable ?? product.available) ? '' : 'disabled'}>加入购物车并查看</button>
         <a class="btn btn-ghost btn-lg" href="/about?subject=${encodeURIComponent(`咨询 ${product.name}`)}#contact">咨询这台设备</a>
       </div>
       <p class="microcopy">先提交申请，不会立即扣款。我们确认档期后再安排签约与付款。</p>
@@ -121,7 +121,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var endPicker = document.getElementById('detail-end-date-picker');
   var button = document.getElementById('detail-add-cart');
   var dateMessage = document.getElementById('detail-date-message');
-  var productAvailable = ${product.available ? 'true' : 'false'};
+  var productAvailable = ${(product.bookable ?? product.available) ? 'true' : 'false'};
   var minimumDays = ${config.minimumRentalDays};
   var globalUnavailableDates = ${scriptJson(config.unavailableDates)};
   var globalUnavailableTimeSlots = ${scriptJson(config.unavailableTimeSlots)};
@@ -172,7 +172,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var item = availability[${JSON.stringify(product.id)}] || {};
     var globalSlots = globalUnavailableTimeSlots[value] || [];
     var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[value] || []) : [];
-    return (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || periodPassed(value, 'AM');
+    return item.unavailable || (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || periodPassed(value, 'AM');
   };
   var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
   var periodUnavailable = function (date, period) {
@@ -183,11 +183,15 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service'];
     return occupied.indexOf(period) >= 0 || group.every(function (slot) { return slots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
   };
+  var rangeUnavailable = function (from, until) {
+    for (var value = from; value && value <= until; value = addDays(value, 1)) if (isUnavailable(value) || periodUnavailable(value, 'AM') || (value < until && periodUnavailable(value, 'PM'))) return true;
+    return false;
+  };
   var pickerDateDisabled = function (role, value) {
     if (!availabilityReady || value < start.min || isUnavailable(value)) return true;
     if (role !== 'end') return false;
     var startValue = readDateValue(start);
-    return !startValue || value < end.min || (periodUnavailable(startValue, 'AM') && periodUnavailable(startValue, 'PM')) || periodUnavailable(value, 'AM') && periodUnavailable(value, 'PM');
+    return !startValue || value < end.min || rangeUnavailable(startValue, value) || (periodUnavailable(startValue, 'AM') && periodUnavailable(startValue, 'PM')) || periodUnavailable(value, 'AM') && periodUnavailable(value, 'PM');
   };
   var renderPicker = function (picker, input, toggle, role, month) {
     var year = month.getFullYear();
@@ -253,7 +257,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       startValue = nextAvailable(startValue);
       setDateValue(start, startValue);
     }
-    var startError = startValue < start.min ? pastDateMessage : periodPassed(startValue, 'AM') ? cutoffMessage : isUnavailable(startValue) ? unavailableDateMessage : '';
+    var startError = startValue < start.min ? pastDateMessage : periodPassed(startValue, 'AM') ? cutoffMessage : isUnavailable(startValue) || periodUnavailable(startValue, 'AM') ? unavailableDateMessage : '';
     start.setCustomValidity(startError ? localize(startError) : '');
     end.min = nextAvailable(addDays(startValue, minimumDays));
     end.dataset.minIso = end.min;
@@ -262,7 +266,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       endValue = end.min;
       setDateValue(end, endValue);
     }
-    var endError = !endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : periodPassed(endValue, 'AM') ? cutoffMessage : isUnavailable(endValue) ? unavailableDateMessage : '';
+    var endError = !endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : periodPassed(endValue, 'AM') ? cutoffMessage : isUnavailable(endValue) || rangeUnavailable(startValue, endValue) ? unavailableDateMessage : '';
     end.setCustomValidity(endError ? localize(endError) : '');
     showDateMessage(startError || endError, Boolean(startError || endError));
   };

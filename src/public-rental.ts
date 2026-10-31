@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import { getRentalConfig } from './db'
+import { getRentalConfig, isDeviceBookable } from './db'
 import { combinePersonName, currentUser, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
@@ -596,15 +596,14 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     }
     if (period.days < config.minimumRentalDays) return json(c, 400, { ok: false, message: `每台设备的最短租赁时间为 ${config.minimumRentalDays} 天。` })
     const device = await c.env.RENT.prepare('SELECT * FROM devices WHERE id = ?').bind(deviceId).first<Record<string, unknown>>()
-    const lifecycle = String(device?.lifecycle_status || device?.lifecycleStatus || '').toUpperCase()
-    const available = device && !device.demo_available_from && (String(device.status || '').toLowerCase() === 'available' || lifecycle === 'READY' || lifecycle === 'RESERVED')
+    const available = device && isDeviceBookable(device)
     if (!available) return json(c, 409, { ok: false, message: `${String(device?.name || '该设备')} 当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。` })
     const deviceUnavailableDates = new Set<string>()
     const deviceUnavailableSlots = new Set<string>()
     try {
-      const unavailable = await c.env.RENT.prepare('SELECT unavailable_date FROM device_unavailable_dates WHERE device_id = ?').bind(deviceId).all<{ unavailable_date?: unknown }>()
+      const unavailable = await c.env.RENT.prepare('SELECT unavailable_date FROM device_unavailable_dates WHERE device_id = ? AND deleted_at IS NULL').bind(deviceId).all<{ unavailable_date?: unknown }>()
       for (const row of unavailable.results || []) deviceUnavailableDates.add(String(row.unavailable_date || ''))
-      const slots = await c.env.RENT.prepare('SELECT unavailable_date, time_slot FROM device_unavailable_time_slots WHERE device_id = ?').bind(deviceId).all<{ unavailable_date?: unknown; time_slot?: unknown }>()
+      const slots = await c.env.RENT.prepare('SELECT unavailable_date, time_slot FROM device_unavailable_time_slots WHERE device_id = ? AND deleted_at IS NULL').bind(deviceId).all<{ unavailable_date?: unknown; time_slot?: unknown }>()
       for (const row of slots.results || []) deviceUnavailableSlots.add(`${String(row.unavailable_date || '').slice(0, 10)}:${String(row.time_slot || '')}`)
     } catch {
       // 兼容尚未部署设备级不可用规则表的旧数据库。
@@ -635,11 +634,11 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     }
     if (blockedDate) return json(c, 409, { ok: false, message: `${String(device.name || '设备')} 在所选日期不可用。` })
     try {
-      const conflicts = await c.env.RENT.prepare("SELECT startDate, endDate, startPeriod, endPeriod FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate IS NOT NULL AND endDate IS NOT NULL").bind(deviceId).all<{ startDate?: unknown; endDate?: unknown; startPeriod?: unknown; endPeriod?: unknown }>()
+      const conflicts = await c.env.RENT.prepare("SELECT startDate, endDate, startPeriod, endPeriod FROM orders WHERE deviceId = ? AND deleted_at IS NULL AND status NOT IN ('completed', 'cancelled')").bind(deviceId).all<{ startDate?: unknown; endDate?: unknown; startPeriod?: unknown; endPeriod?: unknown }>()
       const conflictStart = shiftDate(term.startDate, -config.bufferDays)
       const conflictEnd = shiftDate(term.endDate, config.bufferDays)
       const conflictRows = conflicts.results || []
-      const conflict = conflictRows.some((row) => periodsOverlap(
+      const conflict = conflictRows.some((row) => !row.startDate || !row.endDate || periodsOverlap(
         conflictStart, config.bufferDays ? 'AM' : term.startPeriod, conflictEnd, config.bufferDays ? 'PM' : term.endPeriod,
         String(row.startDate || '').slice(0, 10), String(row.startPeriod || 'AM'), String(row.endDate || '').slice(0, 10), String(row.endPeriod || 'AM'),
       ))
@@ -648,7 +647,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       // 提交时仍保留日期范围校验，兼容旧数据库的订单字段。
       const conflictStart = shiftDate(term.startDate, -config.bufferDays)
       const conflictEnd = shiftDate(term.endDate, config.bufferDays)
-      const conflict = await c.env.RENT.prepare("SELECT id FROM orders WHERE deviceId = ? AND status NOT IN ('completed', 'cancelled') AND startDate < ? AND endDate > ? LIMIT 1").bind(deviceId, conflictEnd, conflictStart).first()
+      const conflict = await c.env.RENT.prepare("SELECT id FROM orders WHERE deviceId = ? AND deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') AND (startDate IS NULL OR endDate IS NULL OR (startDate < ? AND endDate > ?)) LIMIT 1").bind(deviceId, conflictEnd, conflictStart).first()
       if (conflict) return json(c, 409, { ok: false, message: `${String(device?.name || '设备')} 在所选日期已有订单。` })
     }
     devices.push(device as Record<string, unknown>)
