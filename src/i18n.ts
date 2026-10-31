@@ -1,13 +1,17 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
-  // Referral program: rate and settlement period come from rent's shared settings.
+  // Referral program: tier rules and settlement period come from rent's shared settings.
   '推广计划': 'Referrals', 'GEEKSLOPE · 推广计划': 'GEEKSLOPE · Referral program',
   '介绍朋友租赁 GeekSlope 设备，获得推广分成。了解邀请码、分成结算与最低 A$100 提现规则。': 'Refer friends to rent GeekSlope devices and earn commission. Learn about referral codes, settlement and the A$100 minimum withdrawal.',
   '好设备，值得分享。': 'Good devices are worth sharing.', '朋友下单，你得分成。': 'Refer a friend. Earn commission.',
   '把 GeekSlope 推荐给需要电脑的朋友。通过你的邀请码注册并完成符合条件的租赁订单后，你就能获得推广分成。': 'Recommend GeekSlope to friends who need a computer. Earn commission when they register with your referral code and complete an eligible rental order.',
   '进入推广中心': 'Open referral centre', '了解参与方式': 'How to take part', '还没有账号？': 'New to GeekSlope?', '先注册 GeekSlope 账号': 'Create a GeekSlope account',
   '你的推广分成': 'Your referral commission', '分成比例暂不可用': 'Commission rate unavailable',
+  '基础分成（1 级）': 'Base commission (Level 1)', '1 级分成示例': 'Level 1 commission example',
+  '推荐等级': 'Referral levels', '有效推荐越多，分成比例越高。': 'More qualifying referrals. Higher commission.',
+  '最高等级分成': 'Top-level commission',
+  '有效推荐需完成符合条件且已付款的租赁订单，相关奖励未被取消或撤销；仅注册或提交申请不计入。当前等级与实际分成以推广中心记录为准。': 'A qualifying referral requires a completed, paid eligible rental with a reward that has not been cancelled or reversed. Registration or an application alone does not count. Check the referral centre for your current level and actual commission.',
   '请到推广中心查看当前比例，或联系客服确认。': 'Check the current rate in the referral centre or contact us to confirm.',
   '按符合条件的订单金额计算，不含押金。': 'Based on the eligible order amount, excluding the deposit.',
   '分成示例': 'Commission example', '符合条件的金额': 'Eligible amount', '分成比例': 'Commission rate', '预计分成': 'Estimated commission',
@@ -46,6 +50,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '订单查询': 'Order Details', '购物车': 'Cart', '进入用户中心': 'Account', '退出': 'Log out',
   '登录 / 注册': 'Log in / Register', '进入 Dashboard': 'Go to Dashboard', '退出登录（同时退出 rent）': 'Log out of both sites',
   '登录或注册后，即可进入 Dashboard 管理租赁订单。': 'Log in or register to manage your rental orders in the Dashboard.',
+  '登录或注册后，即可进入控制台管理租赁订单。': 'Log in or register to manage your rental orders in the Dashboard.',
   '产品': 'Products', '服务': 'Services', '条款': 'Legal', '礼品卡': 'Gift cards',
   'GEEKSLOPE · 礼品卡': 'GEEKSLOPE · Gift cards',
   '把下一次升级，': 'Give the next upgrade', '送给值得的人。': 'to someone who deserves it.',
@@ -611,6 +616,11 @@ export const ENGLISH_PATTERNS: Array<[string, string]> = [
   ['^(\\d{4}-\\d{1,2}-\\d{1,2})后可用$', 'Available after $1'],
   ['^(\\d{4}-\\d{2}-\\d{2}) 后可租$', 'Available after $1'],
   ['^推广计划 — (.+)$', 'Referral program — $1'],
+  ['^最高可达 ([\\d.]+)%$', 'Earn up to $1%'],
+  ['^每累计 (\\d+) 位有效推荐，提升 1 级，分成增加 ([\\d.]+) 个百分点；最高 (\\d+) 级。$', 'Every $1 qualifying referrals raises your level by 1 and your commission by $2 percentage points, up to Level $3.'],
+  ['^(\\d+) 级$', 'Level $1'],
+  ['^有效推荐 (\\d+)–(\\d+) 人$', '$1–$2 qualifying referrals'],
+  ['^有效推荐 (\\d+) 人及以上$', '$1+ qualifying referrals'],
   ['^(\\d+) 天$', '$1 days'],
   ['^(.+)｜墨尔本电脑租赁、游戏本与工作站短租$', '$1 | Melbourne computer, gaming laptop and workstation rental'],
   ['^墨尔本电脑租赁设备库 — (.+)$', 'Melbourne computer rental catalogue — $1'],

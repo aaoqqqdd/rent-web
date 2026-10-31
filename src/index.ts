@@ -915,7 +915,8 @@ app.post('/api/order-lookup', async (c) => {
 app.post('/login', async (c) => {
   const form = await c.req.parseBody()
   const account = String(form.account ?? '').trim()
-  const password = String(form.password ?? '')
+  // 与 rent 的 POST /login 一致，避免复制时夹带的首尾空白导致两站校验结果不同。
+  const password = String(form.password ?? '').trim()
   const remember = form.remember === '1' || form.remember === 'on'
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown')
     .trim()

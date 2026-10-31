@@ -5,6 +5,11 @@ export function renderReferral(config: ReferralConfig, appUrl: string): string {
   const referralUrl = `${appUrl}/customer/referral`
   const rate = config.rate === null ? null : `${config.rate}%`
   const exampleReward = config.rate === null ? null : (1000 * config.rate / 100).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const tiersAvailable = config.rate !== null && config.levelLimit !== null && config.referralsPerLevel !== null && config.rateIncreasePerLevel !== null
+  const maxRate = tiersAvailable ? Number(Math.min(100, config.rate! + (config.levelLimit! - 1) * config.rateIncreasePerLevel!).toFixed(2)) : null
+  // Show the first levels and the final level if the administrator configures a long ladder.
+  const levels = tiersAvailable ? Array.from({ length: Math.min(config.levelLimit!, 3) }, (_, index) => index + 1) : []
+  if (tiersAvailable && config.levelLimit! > 3) levels.push(config.levelLimit!)
   return /* html */ `
 <section class="page-hero referral-hero">
   <div class="wrap referral-hero-grid">
@@ -20,13 +25,29 @@ export function renderReferral(config: ReferralConfig, appUrl: string): string {
     </div>
     <aside class="referral-receipt" aria-labelledby="referral-rate-title">
       <div class="referral-receipt-head"><span class="section-code">SHARE / EARN</span><span class="referral-receipt-dot" aria-hidden="true"></span></div>
-      <h2 id="referral-rate-title">你的推广分成</h2>
+      <h2 id="referral-rate-title">基础分成（1 级）</h2>
       ${rate === null ? '<strong class="referral-rate-unavailable">分成比例暂不可用</strong><p>请到推广中心查看当前比例，或联系客服确认。</p>' : `<strong class="referral-rate">${esc(rate)}</strong><p>按符合条件的订单金额计算，不含押金。</p>
-      <div class="referral-example"><span>分成示例</span><dl><div><dt>符合条件的金额</dt><dd>A$1,000.00</dd></div><div><dt>分成比例</dt><dd>${esc(rate)}</dd></div><div class="referral-example-total"><dt>预计分成</dt><dd>A$${esc(exampleReward)}</dd></div></dl><small>仅为计算示例，实际分成以订单结算为准。</small></div>`}
+      ${maxRate === null ? '' : `<p class="referral-rate-growth">${esc(`最高可达 ${maxRate}%`)}</p>`}
+      <div class="referral-example"><span>1 级分成示例</span><dl><div><dt>符合条件的金额</dt><dd>A$1,000.00</dd></div><div><dt>分成比例</dt><dd>${esc(rate)}</dd></div><div class="referral-example-total"><dt>预计分成</dt><dd>A$${esc(exampleReward)}</dd></div></dl><small>仅为计算示例，实际分成以订单结算为准。</small></div>`}
       <div class="referral-withdraw-min"><span>最低提现金额</span><strong>A$100</strong><span>100 澳元</span></div>
     </aside>
   </div>
 </section>
+
+${tiersAvailable ? `<section class="section alt" aria-labelledby="referral-levels-title">
+  <div class="wrap">
+    <div class="section-head"><div><div class="kicker">推荐等级</div><h2 id="referral-levels-title">有效推荐越多，分成比例越高。</h2></div><p>${esc(`每累计 ${config.referralsPerLevel} 位有效推荐，提升 1 级，分成增加 ${config.rateIncreasePerLevel} 个百分点；最高 ${config.levelLimit} 级。`)}</p></div>
+    <div class="referral-levels">
+      ${levels.map(level => {
+        const threshold = (level - 1) * config.referralsPerLevel!
+        const lastLevel = level === config.levelLimit
+        const tierRate = Number(Math.min(100, config.rate! + (level - 1) * config.rateIncreasePerLevel!).toFixed(2))
+        return `<article class="referral-level"><h3>${esc(`${level} 级`)}</h3><strong>${esc(`${tierRate}%`)}</strong><p>${esc(lastLevel ? `有效推荐 ${threshold} 人及以上` : `有效推荐 ${threshold}–${level * config.referralsPerLevel! - 1} 人`)}</p></article>`
+      }).join('')}
+    </div>
+    <p class="referral-level-note">有效推荐需完成符合条件且已付款的租赁订单，相关奖励未被取消或撤销；仅注册或提交申请不计入。当前等级与实际分成以推广中心记录为准。</p>
+  </div>
+</section>` : ''}
 
 <section class="section" id="how-to-refer">
   <div class="wrap">
@@ -43,7 +64,8 @@ export function renderReferral(config: ReferralConfig, appUrl: string): string {
   <div class="wrap referral-settlement">
     <div><div class="kicker">分成与提现</div><h2>分享有回报，结算有记录。</h2><p>在推广中心查看推荐记录、待结算分成和可提现金额，再按页面提示提交提现申请。</p></div>
     <dl class="referral-rules">
-      <div><dt>分成比例</dt><dd>${rate === null ? '请到推广中心确认' : esc(rate)}</dd></div>
+      <div><dt>基础分成（1 级）</dt><dd>${rate === null ? '请到推广中心确认' : esc(rate)}</dd></div>
+      <div><dt>最高等级分成</dt><dd>${maxRate === null ? '请到推广中心确认' : esc(`${maxRate}%`)}</dd></div>
       <div><dt>结算周期</dt><dd>${config.settlementDays === null ? '请到推广中心确认' : esc(`${config.settlementDays} 天`)}</dd></div>
       <div><dt>最低提现金额</dt><dd>A$100 <small>（100 澳元）</small></dd></div>
     </dl>

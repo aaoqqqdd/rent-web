@@ -50,6 +50,9 @@ export interface SiteContact {
 export interface ReferralConfig {
   rate: number | null
   settlementDays: number | null
+  levelLimit: number | null
+  referralsPerLevel: number | null
+  rateIncreasePerLevel: number | null
 }
 
 /** 与 rent 的 systemSettings.referralSettings 及 services/referral.ts 保持一致。 */
@@ -58,15 +61,24 @@ export async function getReferralConfig(env: Env): Promise<ReferralConfig> {
     const row = await env.RENT.prepare(
       "SELECT value FROM systemSettings WHERE key = 'referralSettings'",
     ).first<{ value: string }>()
-    // rent 在尚未保存配置时使用这两个默认值；读取失败则不展示未经确认的比例。
-    const settings = row?.value ? JSON.parse(row.value) : { defaultRate: 10, settlementPeriod: 30 }
+    // 与 rent/domain/referral.ts 的默认值兼容；读取失败则不展示未经确认的比例。
+    const settings = row?.value ? JSON.parse(row.value) : {}
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Invalid referral settings')
-    const rate = Number(settings.defaultRate || 0)
-    const days = Number(settings.settlementPeriod || 30)
-    if (!Number.isFinite(rate) || !Number.isFinite(days)) throw new Error('Invalid referral settings')
-    return { rate: Math.min(100, Math.max(0, rate)), settlementDays: Math.max(1, Math.floor(days)) }
+    const rate = Number(settings.defaultRate ?? 10)
+    const days = Number(settings.settlementPeriod ?? 30)
+    const levelLimit = Number(settings.levelLimit ?? 3)
+    const referralsPerLevel = Number(settings.referralsPerLevel ?? 5)
+    const rateIncreasePerLevel = Number(settings.rateIncreasePerLevel ?? 0)
+    if (![rate, days, levelLimit, referralsPerLevel, rateIncreasePerLevel].every(Number.isFinite)) throw new Error('Invalid referral settings')
+    return {
+      rate: Math.min(100, Math.max(0, rate)),
+      settlementDays: Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(days))),
+      levelLimit: Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(levelLimit))),
+      referralsPerLevel: Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(referralsPerLevel))),
+      rateIncreasePerLevel: Math.min(100, Math.max(0, rateIncreasePerLevel)),
+    }
   } catch {
-    return { rate: null, settlementDays: null }
+    return { rate: null, settlementDays: null, levelLimit: null, referralsPerLevel: null, rateIncreasePerLevel: null }
   }
 }
 

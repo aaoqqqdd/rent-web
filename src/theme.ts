@@ -870,6 +870,13 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .referral-rate { display: block; margin: 12px 0; color: var(--secondary); font: 600 clamp(64px, 7vw, 96px)/1 var(--display); letter-spacing: -.06em; overflow-wrap: anywhere; }
 .referral-rate-unavailable { display: block; margin-top: 20px; color: var(--secondary); font-size: 24px; }
 .referral-receipt p { margin: 12px 0 24px; font-size: 13px; line-height: 1.7; }
+.referral-receipt .referral-rate-growth { color: var(--secondary); font-size: 16px; }
+.referral-levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 20px; }
+.referral-level { min-width: 0; padding: 28px; border: 1px solid var(--border-bright); border-radius: 12px; background: var(--bg); }
+.referral-level h3 { font-size: 16px; }
+.referral-level > strong { display: block; margin: 18px 0; color: var(--secondary); font: 600 56px/1 var(--display); overflow-wrap: anywhere; }
+.referral-level p, .referral-level-note { color: var(--muted-fg); font-size: 14px; }
+.referral-level-note { margin-top: 24px; }
 .referral-example { padding: 20px 0; border-top: 1px dashed var(--border-bright); }
 .referral-example > span, .referral-example small { color: var(--muted-fg); font-size: 12px; }
 .referral-example dl { margin: 12px 0; }
