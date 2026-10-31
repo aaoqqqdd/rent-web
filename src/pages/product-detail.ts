@@ -1,7 +1,7 @@
 // 单台设备详情页。数据直接来自设备表，提供完整配置、费用口径与下单入口。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, productAvailabilityLabel, type Product, type RentalConfig } from '../db'
 
 interface ProductDetailData {
   product: Product
@@ -40,7 +40,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       <span class="detail-category">${esc(product.categoryLabel)}</span>
     </div>
     <div class="detail-copy">
-      <div class="status-line"><span class="tag ${product.available ? '' : 'tag-muted'}"><i></i>${product.available ? '现货可租' : '当前可预约'}</span><span>库存实时同步</span></div>
+      <div class="status-line"><span class="tag ${product.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(product, '当前可预约'))}</span><span>库存实时同步</span></div>
       <p class="detail-brand">${esc(product.brand || product.categoryLabel)}</p>
       <h1>${esc(product.name)}</h1>
       ${product.model ? `<p class="detail-model">型号 ${esc(product.model)}</p>` : ''}
@@ -63,7 +63,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <p class="hint detail-date-message" id="detail-date-message" aria-live="polite"></p>
       </div>
       <div class="detail-actions">
-        <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button">加入购物车并查看</button>
+        <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button" ${product.available ? '' : 'disabled'}>加入购物车并查看</button>
         <a class="btn btn-ghost btn-lg" href="/about?subject=${encodeURIComponent(`咨询 ${product.name}`)}#contact">咨询这台设备</a>
       </div>
       <p class="microcopy">先提交申请，不会立即扣款。我们确认档期后再安排签约与付款。</p>

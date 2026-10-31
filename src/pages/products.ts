@@ -1,7 +1,7 @@
 // 产品目录。实时读库，按类别分组展示全部在售设备。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyRentalRate, type Product } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, productAvailabilityLabel, type Product } from '../db'
 
 function card(p: Product): string {
   const daily = p.pricePerDay > 0 ? `$${p.pricePerDay}/day` : '询价'
@@ -20,7 +20,7 @@ function card(p: Product): string {
       <span class="device-base"></span>
       <span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span>
     </div>
-    <div class="card-top"><span class="tag ${p.available ? '' : 'tag-muted'}"><i></i>${p.available ? '现货可租' : '可预约'}</span><span class="card-code">${esc(p.brand || p.categoryLabel)}</span></div>
+    <div class="card-top"><span class="tag ${p.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(p))}</span><span class="card-code">${esc(p.brand || p.categoryLabel)}</span></div>
     <h3><a href="${detailHref}">${esc(p.name)}</a></h3>
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>

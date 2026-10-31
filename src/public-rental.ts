@@ -597,7 +597,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     if (period.days < config.minimumRentalDays) return json(c, 400, { ok: false, message: `每台设备的最短租赁时间为 ${config.minimumRentalDays} 天。` })
     const device = await c.env.RENT.prepare('SELECT * FROM devices WHERE id = ?').bind(deviceId).first<Record<string, unknown>>()
     const lifecycle = String(device?.lifecycle_status || device?.lifecycleStatus || '').toUpperCase()
-    const available = device && (String(device.status || '').toLowerCase() === 'available' || lifecycle === 'READY' || lifecycle === 'RESERVED')
+    const available = device && !device.demo_available_from && (String(device.status || '').toLowerCase() === 'available' || lifecycle === 'READY' || lifecycle === 'RESERVED')
     if (!available) return json(c, 409, { ok: false, message: `${String(device?.name || '该设备')} 当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。` })
     const deviceUnavailableDates = new Set<string>()
     const deviceUnavailableSlots = new Set<string>()

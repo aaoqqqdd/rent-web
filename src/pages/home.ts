@@ -1,7 +1,7 @@
 // 首页。结构还原参考稿：Hero → 四大保障 → 为你精选（实时读库）→ 三步流程 → 收尾 CTA。
 
 import { esc } from '../layout'
-import { monthlyRentalRate, weeklyRentalRate, type Product, type RentalConfig } from '../db'
+import { monthlyRentalRate, weeklyRentalRate, productAvailabilityLabel, type Product, type RentalConfig } from '../db'
 
 const FEATURES = [
   { t: '交付前检测', d: '基础功能、外观与配件逐项确认，拿到手即可开工', ic: 'M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z' },
@@ -29,7 +29,7 @@ function productCard(p: Product, index: number): string {
   return /* html */ `
   <article class="card product-card featured-card">
     <div class="product-visual compact-visual" aria-hidden="true"><span class="device-screen"><i></i></span><span class="device-base"></span><span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span></div>
-    <div class="card-top"><span class="tag"><i></i>${esc(CARD_TAGS[index] ?? '精选')}</span><span class="card-code">${esc(p.categoryLabel)}</span></div>
+    <div class="card-top"><span class="tag ${p.demoAvailableFrom ? 'tag-muted' : ''}"><i></i>${esc(p.demoAvailableFrom ? productAvailabilityLabel(p) : CARD_TAGS[index] ?? '精选')}</span><span class="card-code">${esc(p.categoryLabel)}</span></div>
     <h3><a href="${detailHref}">${esc(p.name)}</a></h3>
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
@@ -39,7 +39,7 @@ function productCard(p: Product, index: number): string {
       <div><div class="lbl">月租</div><div class="val">${p.monthlyDiscountPercent > 0 ? `<del class="price-original">$${monthlyOriginal.toFixed(2)}/month</del>` : ''}${esc(monthly)}</div></div>
     </div>
     ${p.depositAmount > 0 ? `<div class="deposit">押金 $${esc(p.depositAmount)}</div>` : ''}
-    <div class="card-actions"><a class="btn btn-ghost" href="${detailHref}">详情</a><a class="btn btn-primary" href="${detailHref}">选择租期</a></div>
+    <div class="card-actions"><a class="btn btn-ghost" href="${detailHref}">详情</a><a class="btn btn-primary" href="${p.demoAvailableFrom ? `/about?subject=${encodeURIComponent(`咨询 ${p.name}`)}#contact` : detailHref}">${p.demoAvailableFrom ? '预约咨询' : '选择租期'}</a></div>
   </article>`
 }
 

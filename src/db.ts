@@ -21,6 +21,7 @@ export interface Product {
   depositAmount: number
   description: string
   available: boolean
+  demoAvailableFrom: string | null
   category: 'gaming' | 'ultrabook' | 'workstation'
   categoryLabel: string
   specs: string[]
@@ -141,6 +142,8 @@ function toProduct(row: Record<string, unknown>): Product {
   const specs = [row.gpu, row.cpu, row.ram && `${row.ram} RAM`, row.storage]
     .map((s) => String(s ?? '').trim())
     .filter(Boolean)
+  const demoDate = String(row.demo_available_from ?? '')
+  const demoAvailableFrom = /^\d{4}-\d{2}-\d{2}$/.test(demoDate) ? demoDate : null
   const statusRaw = String(row.status ?? '').toLowerCase()
   const lifecycleRaw = String(row.lifecycle_status ?? '').toUpperCase()
   // 现货 = 生命周期就绪（READY/RESERVED）；无 lifecycle 字段时退回旧 status。
@@ -162,11 +165,20 @@ function toProduct(row: Record<string, unknown>): Product {
     monthlyDiscountPercent: deviceDiscount(row, 'monthly_discount_percent', 'monthlyDiscountPercent'),
     depositAmount: num(row.depositAmount ?? row.deposit_amount),
     description: String(row.description ?? ''),
-    available: inStock,
+    available: inStock && !demoAvailableFrom,
+    demoAvailableFrom,
     category,
     categoryLabel: CATEGORY_LABEL[category],
     specs,
   }
+}
+
+export function productAvailabilityLabel(product: Product, unavailableLabel = '可预约'): string {
+  if (product.demoAvailableFrom) {
+    const [year, month, day] = product.demoAvailableFrom.split('-').map(Number)
+    return `${year}-${month}-${day}后可用`
+  }
+  return product.available ? '现货可租' : unavailableLabel
 }
 
 /** 全部在售（非退役）设备，按日租价升序。 */

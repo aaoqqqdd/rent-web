@@ -608,6 +608,7 @@ export const ENGLISH_COPY: Record<string, string> = {
 // Dynamic values are handled after exact-copy lookup. Keep these rules specific so
 // product names and administrator-authored content are never rewritten accidentally.
 export const ENGLISH_PATTERNS: Array<[string, string]> = [
+  ['^(\\d{4}-\\d{1,2}-\\d{1,2})后可用$', 'Available after $1'],
   ['^推广计划 — (.+)$', 'Referral program — $1'],
   ['^(\\d+) 天$', '$1 days'],
   ['^(.+)｜墨尔本电脑租赁、游戏本与工作站短租$', '$1 | Melbourne computer, gaming laptop and workstation rental'],
