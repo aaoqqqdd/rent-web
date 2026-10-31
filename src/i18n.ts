@@ -147,6 +147,7 @@ export const ENGLISH_COPY: Record<string, string> = {
   '详情': 'Details', '查看详情': 'View details', '选择租期': 'Choose term', '加入购物车': 'Add to cart', '已加入购物车': 'Added to cart',
   '结账时输入优惠码': 'Enter this promo code at checkout', '去挑选设备': 'Browse devices', '立减': 'Save',
   '最新消息': 'Latest updates', '通告与优惠': 'Updates and offers', '网站通告': 'Site announcement', '优惠活动': 'Promotion',
+  '协议更新': 'Terms update', '优惠码': 'Promo code',
   '这里会同步展示网站最新通告和当前有效的优惠码。': 'The latest site announcements and currently valid promo codes appear here.',
   '暂时没有最新通告': 'There are no current announcements', '有新的服务消息或优惠活动时，会在这里显示。': 'New service updates and promotions will appear here.',
   '通告不存在或已失效': 'Announcement unavailable', '这条消息可能已经撤回，或优惠码已过期。': 'This message may have been withdrawn, or the promo code may have expired.',

@@ -139,14 +139,24 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Manager"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, opts.contact)}
-<aside class="site-announcement" data-site-announcement hidden aria-label="最新消息">
+<div data-site-announcement hidden>
+<aside class="site-announcement" data-notice-banner="policy" hidden aria-label="协议更新">
   <div class="wrap site-announcement-inner">
-    <span class="site-announcement-label">最新消息</span>
+    <span class="site-announcement-label">协议更新</span>
     <a class="site-announcement-link" data-site-announcement-link href="/announcements">
       <strong data-site-announcement-title></strong><span data-site-announcement-action>查看详情 <span aria-hidden="true">→</span></span>
     </a>
   </div>
 </aside>
+<aside class="site-announcement" data-notice-banner="coupon" hidden aria-label="优惠码">
+  <div class="wrap site-announcement-inner">
+    <span class="site-announcement-label">优惠码</span>
+    <a class="site-announcement-link" data-site-announcement-link href="/products">
+      <strong data-site-announcement-title></strong><span data-site-announcement-action>去挑选设备 <span aria-hidden="true">→</span></span>
+    </a>
+  </div>
+</aside>
+</div>
 <main id="main-content">
 ${opts.body}
 </main>
@@ -163,7 +173,7 @@ ${renderSiteFooter(opts.contact)}
   var originalTitle = document.title;
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
-  var activeAnnouncementNotice = null;
+  var activeNotices = [];
   var SKIP_SELECTOR = 'script,style,[data-no-translate],[data-i18n],[data-i18n-attr]';
   var TRANSLATED_ATTRIBUTES = ['placeholder', 'aria-label', 'title', 'alt', 'value', 'aria-valuetext', 'aria-roledescription', 'label'];
   // NOTE: this whole block lives inside a TS template literal; every regex
@@ -319,25 +329,52 @@ ${renderSiteFooter(opts.contact)}
     }
     saved.node.nodeValue = saved.prefix + value + saved.suffix;
   }
-  function renderAnnouncementNotice(notice) {
-    var announcement = document.querySelector('[data-site-announcement]');
-    if (!announcement || !notice) return;
-    var title = announcement.querySelector('[data-site-announcement-title]');
-    var link = announcement.querySelector('[data-site-announcement-link]');
-    var action = announcement.querySelector('[data-site-announcement-action]');
-    if (!title || !link) return;
-    var english = currentLanguage === 'en';
-    var isCoupon = notice.kind === 'coupon' && notice.couponCode;
-    var benefit = english ? (notice.couponBenefitEn || notice.couponBenefitZh || '') : (notice.couponBenefitZh || '');
-    title.textContent = isCoupon
-      ? (english ? '🎉 New offer live! Enter promo code ' : '🎉 新优惠上线！使用优惠码 ') + notice.couponCode + (benefit ? ' ' + benefit : '')
-      : english && notice.titleEn ? notice.titleEn
+  function announcementTitle(notice, english) {
+    if (notice.kind === 'coupon' && notice.couponCode) {
+      var benefit = english ? (notice.couponBenefitEn || notice.couponBenefitZh || '') : (notice.couponBenefitZh || '');
+      return (english ? '🎉 New offer live! Enter promo code ' : '🎉 新优惠上线！使用优惠码 ') + notice.couponCode + (benefit ? ' ' + benefit : '');
+    }
+    return english && notice.titleEn ? notice.titleEn
       : (!notice.isAdminAnnouncement && english ? (englishFor(notice.title || '最新通告') || 'Latest update') : (notice.title || '最新通告'));
-    link.href = isCoupon
-      ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
-      : '/announcements/' + encodeURIComponent(notice.id);
-    if (action) action.firstChild.textContent = currentCopy(isCoupon ? '去挑选设备 ' : '查看详情 ', isCoupon ? 'Browse devices ' : 'View details ');
-    announcement.hidden = false;
+  }
+  function renderNoticeBanners() {
+    var announcement = document.querySelector('[data-site-announcement]');
+    if (!announcement) return;
+    announcement.querySelectorAll('[data-notice-banner]').forEach(function (banner) {
+      var isCoupon = banner.getAttribute('data-notice-banner') === 'coupon';
+      var notice = activeNotices.find(function (item) {
+        return isCoupon ? item.kind === 'coupon' && item.couponCode
+          : item.kind === 'announcement' && item.isAdminAnnouncement === false;
+      });
+      banner.hidden = !notice;
+      if (!notice) return;
+      banner.querySelector('[data-site-announcement-title]').textContent = announcementTitle(notice, currentLanguage === 'en');
+      banner.querySelector('[data-site-announcement-link]').href = isCoupon
+        ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
+        : '/announcements/' + encodeURIComponent(notice.id);
+      banner.querySelector('[data-site-announcement-action]').firstChild.textContent = currentCopy(isCoupon ? '去挑选设备 ' : '查看详情 ', isCoupon ? 'Browse devices ' : 'View details ');
+    });
+    announcement.hidden = !announcement.querySelector('[data-notice-banner]:not([hidden])');
+  }
+  function showAnnouncementNotice(notice) {
+    if (!notice || !window.GeekSlopeUI || document.querySelector('dialog[open]')) return;
+    var seenKey = 'geekslope-announcement-seen';
+    var version = JSON.stringify(notice);
+    try { if (sessionStorage.getItem(seenKey) === version) return; } catch (_) {}
+    var message = notice.message || '';
+    var messageEn = notice.messageEn || message;
+    // Public policy notices may contain <strong> markers; the feedback layer uses plain text.
+    var plainText = function (text) { return String(text).replace(/<\\/?strong>/gi, ''); };
+    window.GeekSlopeUI.confirm({
+      title: { zh: announcementTitle(notice, false), en: announcementTitle(notice, true) },
+      message: { zh: plainText(message), en: plainText(messageEn) },
+      confirmText: { zh: '查看详情', en: 'View details' },
+      cancelText: { zh: '关闭通知', en: 'Close notification' }
+    }).then(function (confirmed) {
+      if (confirmed) window.location.href = '/announcements/' + encodeURIComponent(notice.id);
+    });
+    // Keep navigation within this visit quiet; updated notices can still appear.
+    try { sessionStorage.setItem(seenKey, version); } catch (_) {}
   }
   function updateMeta(english) {
     var title = english ? (englishFor(originalTitle) || originalTitle) : originalTitle;
@@ -390,7 +427,7 @@ ${renderSiteFooter(opts.contact)}
     });
     document.querySelectorAll('[data-language]').forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-language') === (english ? 'en' : 'zh')); });
     translateTree(document.body);
-    renderAnnouncementNotice(activeAnnouncementNotice);
+    renderNoticeBanners();
     renderCouponCallouts();
     renderCouponMessages();
     renderNoticeTexts();
@@ -523,14 +560,15 @@ ${renderSiteFooter(opts.contact)}
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
   if (announcement) {
-    fetch('/api/public-notices?limit=1', { headers: { accept: 'application/json' } })
+    fetch('/api/public-notices?limit=100', { headers: { accept: 'application/json' } })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (data) {
-        var notice = data && data.notices && data.notices[0];
-        if (!notice) return;
-        activeAnnouncementNotice = notice;
-        renderAnnouncementNotice(notice);
+        activeNotices = data && Array.isArray(data.notices) ? data.notices : [];
+        renderNoticeBanners();
         syncOverlayOffset();
+        showAnnouncementNotice(activeNotices.find(function (notice) {
+          return notice.kind === 'announcement' && notice.isAdminAnnouncement === true;
+        }));
       })
       .catch(function () {});
   }
