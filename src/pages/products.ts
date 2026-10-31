@@ -59,7 +59,7 @@ export function renderProducts(data: ProductsData): string {
 <section class="page-hero compact">
   <div class="wrap">
     <div class="kicker">实时设备库</div>
-    <h1>${couponCode ? `参与优惠码 ${esc(couponCode)} 的设备` : '找到适合这一段旅程的电脑'}</h1>
+    <h1>${couponCode ? `参与优惠码 ${esc(couponCode)} 的设备` : '墨尔本电脑与笔记本租赁设备库'}</h1>
     <p>${couponCode ? '以下设备可使用当前优惠码，选择后即可在结账时自动校验。' : '配置、日租价与库存状态直接同步。按用途筛选，再查看完整规格和费用说明。'}</p>
   </div>
 </section>

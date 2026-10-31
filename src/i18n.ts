@@ -1,6 +1,28 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
+  // Local computer rental search intent; keep the visible copy bilingual.
+  '提供中文与英文服务的墨尔本电脑、游戏本、商务笔记本与工作站租赁。': 'Melbourne computer, gaming laptop, business laptop and workstation rental with Chinese and English service.',
+  '墨尔本电脑租赁，': 'Melbourne computer rental,',
+  '按需租，轻松用。': 'ready when you need it.',
+  '为墨尔本华人、留学生与本地团队提供中文和英文电脑租赁服务，覆盖游戏本、商务笔记本与台式工作站。': 'Computer and laptop hire in Melbourne for Chinese-speaking residents, international students and local teams, with gaming laptops, business laptops and desktop workstations. Chinese and English service available.',
+  '墨尔本本地 · 中文服务': 'LOCAL MELBOURNE · CHINESE & ENGLISH',
+  '在墨尔本租电脑，先按用途选': 'Find a Melbourne rental computer for your task',
+  '学习与办公': 'Study and work',
+  '留学生与办公笔记本租赁': 'Laptop hire for students and office work',
+  '课程作业、差旅办公或原电脑送修期间，可按需要申请笔记本短租、周租或月租；请先确认课程软件与操作系统要求。': 'Apply for short-term, weekly or monthly laptop hire for coursework, business trips or while your computer is being repaired. Check your software and operating system requirements first.',
+  '游戏与活动': 'Gaming and events',
+  '游戏本与电竞电脑租赁': 'Gaming laptop and computer rental',
+  '按游戏、活动和外接显示器需求比较显卡、内存与接口，具体性能以设备配置和实际软件要求为准。': 'Compare graphics, memory and ports for your games, events and external displays. Performance depends on the device specifications and software requirements.',
+  '创作与开发': 'Creative work and development',
+  '剪辑、渲染与工作站租赁': 'Workstation hire for editing and rendering',
+  '视频剪辑、三维渲染与开发测试，可先提供软件、项目规模与使用天数，再确认工作站配置及档期。': 'Tell us your software, project size and rental duration for video editing, 3D rendering or development testing so we can confirm workstation specifications and availability.',
+  '查看墨尔本配送与自取说明': 'Melbourne delivery and pickup details',
+  '墨尔本华人和留学生租电脑，可以用中文咨询吗？': 'Can Chinese-speaking residents and students enquire in Chinese?',
+  '可以。我们提供中文与英文服务，可咨询笔记本、游戏本和工作站的配置、租期、押金与取还安排。留学生可说明课程需要的软件，具体配置与可租档期由我们确认。': 'Yes. Enquire in Chinese or English about laptop, gaming laptop and workstation specifications, rental periods, deposits and handover. Students can share their course software requirements so we can confirm suitable devices and availability.',
+  '可以按日租、周租或月租电脑吗？': 'Can I rent a computer daily, weekly or monthly?',
+  '可以按实际使用时间申请短租或较长租期。设备库展示日租、周租与月租参考价，最短租期与准确费用以所选日期和审核后的订单为准。': 'Apply for a short or longer rental based on the time you need. The catalogue shows daily, weekly and monthly reference rates. Minimum duration and exact fees depend on your dates and the reviewed order.',
+  '墨尔本电脑与笔记本租赁设备库': 'Melbourne computer rental and laptop hire catalogue',
   // Referral program: tier rules and settlement period come from rent's shared settings.
   '推广计划': 'Referrals', 'GEEKSLOPE · 推广计划': 'GEEKSLOPE · Referral program',
   '介绍朋友租赁 GeekSlope 设备，获得推广分成。了解邀请码、分成结算与最低 A$100 提现规则。': 'Refer friends to rent GeekSlope devices and earn commission. Learn about referral codes, settlement and the A$100 minimum withdrawal.',
@@ -613,6 +635,9 @@ export const ENGLISH_COPY: Record<string, string> = {
 // Dynamic values are handled after exact-copy lookup. Keep these rules specific so
 // product names and administrator-authored content are never rewritten accidentally.
 export const ENGLISH_PATTERNS: Array<[string, string]> = [
+  ['^墨尔本电脑租赁｜华人中文服务、笔记本短租 — (.+)$', 'Melbourne computer rental & laptop hire | Chinese service — $1'],
+  ['^(.+) 提供墨尔本电脑租赁与中文服务，涵盖游戏本、商务笔记本和工作站，适合留学生、办公与创作项目。查看日租、周租、月租及实时库存；CBD 及周边可配送，其他郊区预约自取，确认后签约付款。$', '$1 offers Melbourne computer rental and laptop hire with Chinese and English service for students, work and creative projects. Compare daily, weekly and monthly rates and live stock. CBD and nearby delivery or arranged pickup; sign and pay after confirmation.'],
+  ['^(.+) 墨尔本电脑租赁价格与配置 — (.+)$', '$1 computer rental in Melbourne: pricing and specifications — $2'],
   ['^(\\d{4}-\\d{1,2}-\\d{1,2})后可用$', 'Available after $1'],
   ['^(\\d{4}-\\d{2}-\\d{2}) 后可租$', 'Available after $1'],
   ['^推广计划 — (.+)$', 'Referral program — $1'],

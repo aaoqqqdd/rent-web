@@ -15,6 +15,8 @@ GeekSlope 电脑租赁的对外营销官网。**独立部署**的 Cloudflare Wor
 - `/gift-cards` 礼品卡入口：跳转到 Square eGift Card order site，支持购买、查询余额和 Reload / Add money
 - 边缘缓存（`caches.default`）：HTML 60 秒、CSS 1 天
 
+SEO 的关键词分布、规范域名、AI 爬虫规则、验证方法与发布后的 Search Console / Bing 提交步骤见 [SEO 说明](docs/seo.md)。
+
 ## 页面与数据
 
 | 路由 | 内容 | 实时数据 |

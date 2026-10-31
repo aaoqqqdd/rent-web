@@ -4,6 +4,7 @@
 
 import { Hono, type Context } from 'hono'
 import { STYLES, STYLE_VERSION } from './theme'
+import { SITE_URL, ROBOTS_TXT, LLMS_TXT } from './seo'
 import { renderPage, FAVICON_SVG } from './layout'
 import {
   getRentalConfig,
@@ -80,7 +81,7 @@ export interface Env {
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
 const CSS_TTL = 86400
-const HTML_CACHE_VERSION = '20261031-referral-program-legal-placeholders'
+const HTML_CACHE_VERSION = '20261031-google-tag-manager'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -103,12 +104,12 @@ const CONTENT_SECURITY_POLICY = [
   "frame-ancestors 'none'",
   // Tawk.to 客服组件（layout.ts 注入）在修复「缓存页丢安全头」之后才会真正受 CSP 约束，
   // 因此这里显式放行它的脚本 / 内嵌框 / WebSocket，避免聊天窗口静默失效。
-  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://tally.so https://web.squarecdn.com https://sandbox.web.squarecdn.com https://embed.tawk.to",
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://tally.so https://web.squarecdn.com https://sandbox.web.squarecdn.com https://embed.tawk.to https://www.googletagmanager.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.tawk.to",
   "font-src 'self' https://fonts.gstatic.com https://*.tawk.to",
   "img-src 'self' data: https:",
-  "connect-src 'self' https://dashboard.geekslope.de5.net https://challenges.cloudflare.com https://api.stripe.com https://photon.komoot.io https://nominatim.openstreetmap.org https://connect.squareup.com https://connect.squareupsandbox.com https://tally.so https://*.tawk.to wss://*.tawk.to",
-  "frame-src https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://climate.stripe.com https://tally.so https://tawk.to https://*.tawk.to",
+  "connect-src 'self' https://dashboard.geekslope.de5.net https://challenges.cloudflare.com https://api.stripe.com https://photon.komoot.io https://nominatim.openstreetmap.org https://connect.squareup.com https://connect.squareupsandbox.com https://tally.so https://*.tawk.to wss://*.tawk.to https://www.googletagmanager.com https://*.google-analytics.com https://*.google.com",
+  "frame-src https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://climate.stripe.com https://tally.so https://tawk.to https://*.tawk.to https://www.googletagmanager.com",
   "form-action 'self' https://app.squareup.com",
 ].join('; ')
 
@@ -153,6 +154,9 @@ app.use('*', async (c, next) => {
   // Hono 的 prepared headers 不会合并进去 —— 实测所有走边缘缓存的页面因此丢掉了 CSP、
   // X-Frame-Options、nosniff、HSTS 等全部安全头。链结束后统一补写到最终响应上。
   applySecurityHeaders(c.res.headers, protocol)
+  if (/^\/(?:api(?:\/|$)|sso(?:\/|$)|logout$|healthz$)/.test(c.req.path)) {
+    c.res.headers.set('x-robots-tag', 'noindex, nofollow')
+  }
 })
 
 app.onError((error, c) => {
@@ -164,10 +168,6 @@ app.onError((error, c) => {
 
 function appUrl(env: Env): string {
   return (env.APP_URL || 'https://dashboard.geekslope.de5.net').replace(/\/$/, '')
-}
-
-function siteUrl(requestUrl: string): string {
-  return new URL(requestUrl).origin
 }
 
 const DEFAULT_SQUARE_GIFT_CARD_ID = 'MLP6ZYA585ZQT'
@@ -419,19 +419,29 @@ app.get('/favicon.ico', (c) =>
   }),
 )
 
-app.get('/robots.txt', (c) =>
-  c.text(`User-agent: *\nAllow: /\nSitemap: ${siteUrl(c.req.url)}/sitemap.xml\n`),
-)
+app.get('/robots.txt', (c) => c.text(ROBOTS_TXT))
+
+app.get('/llms.txt', (c) => c.text(LLMS_TXT, 200, {
+  'cache-control': 'public, max-age=3600',
+}))
 
 app.get('/sitemap.xml', async (c) => {
-  const base = siteUrl(c.req.url)
-  const products = await listProducts(c.env)
-  const paths = ['/', '/products', '/gift-cards', '/referral', '/rental-guide', '/about', '/announcements', '/terms', '/service-terms', '/privacy', '/software-terms', '/refund-policy', '/cookies', '/complaints', '/acceptable-use', '/consumer-rights', '/rental-terms']
+  const [products, notices, legalDocuments] = await Promise.all([
+    listProducts(c.env),
+    listPublicNotices(c.env, 100),
+    Promise.all(LEGAL_PAGES.map(async (page) => ({
+      path: page.paths[0],
+      document: await getLegalDocument(c.env, page.documentKey, page.metadataKey),
+    }))),
+  ])
+  const paths = ['/', '/products', '/gift-cards', '/referral', '/rental-guide', '/about', '/announcements']
   const productPaths = products.filter((product) => product.id).map((product) => `/products/${encodeURIComponent(product.id)}`)
-  const urls = [...paths, ...productPaths].map((path) => `<url><loc>${xmlEsc(base + path)}</loc></url>`).join('')
+  const noticePaths = notices.map((notice) => `/announcements/${encodeURIComponent(notice.id)}`)
+  const legalPaths = legalDocuments.filter(({ document }) => document.content || document.contentEn).map(({ path }) => path)
+  const urls = [...paths, ...productPaths, ...noticePaths, ...legalPaths].map((path) => `<url><loc>${xmlEsc(SITE_URL + path)}</loc></url>`).join('')
   return c.body(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, 200, {
     'content-type': 'application/xml; charset=utf-8',
-    'cache-control': 'public, max-age=3600',
+    'cache-control': 'public, max-age=60',
   })
 })
 
@@ -452,21 +462,24 @@ app.get('/', (c) =>
     }
     const body = renderHome(homeData)
     return renderPage({
-      title: `${contact.name}｜墨尔本电脑租赁、游戏本与工作站短租`,
-      description: `${contact.name} 提供墨尔本游戏本、商务本和工作站租赁。实时查看配置、日租价与库存，支持本地配送或自取，确认档期后再签约付款。`,
+      title: `墨尔本电脑租赁｜华人中文服务、笔记本短租 — ${contact.name}`,
+      description: `${contact.name} 提供墨尔本电脑租赁与中文服务，涵盖游戏本、商务笔记本和工作站，适合留学生、办公与创作项目。查看日租、周租、月租及实时库存；CBD 及周边可配送，其他郊区预约自取，确认后签约付款。`,
       body,
       contact,
       appUrl: appUrl(c.env),
       path: '/',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       structuredData: [
         {
           '@type': 'Service',
-          '@id': `${siteUrl(c.req.url)}/#computer-rental`,
+          '@id': `${SITE_URL}/#computer-rental`,
           name: '墨尔本电脑租赁服务',
+          alternateName: 'Melbourne computer and laptop hire',
+          url: `${SITE_URL}/`,
+          description: '提供中文与英文服务的墨尔本电脑、游戏本、商务笔记本与工作站租赁。',
           serviceType: '电脑、游戏本与工作站租赁',
           areaServed: { '@type': 'City', name: 'Melbourne' },
-          provider: { '@id': `${siteUrl(c.req.url)}/#organization` },
+          provider: { '@id': `${SITE_URL}/#organization` },
         },
         homeFaqSchema(homeData),
       ],
@@ -488,7 +501,7 @@ app.get('/announcements', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/announcements',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       user,
     })
   }),
@@ -510,7 +523,7 @@ app.get('/announcements/:id', (c) =>
         contact,
         appUrl: appUrl(c.env),
         path: `/announcements/${encodeURIComponent(c.req.param('id'))}`,
-        siteUrl: siteUrl(c.req.url),
+        siteUrl: SITE_URL,
         robots: notice ? 'index, follow' : 'noindex, follow',
         user,
       }),
@@ -539,19 +552,19 @@ app.get('/products', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/products',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       structuredData: {
         '@type': 'CollectionPage',
-        '@id': `${siteUrl(c.req.url)}/products#webpage`,
-        url: `${siteUrl(c.req.url)}/products`,
+        '@id': `${SITE_URL}/products#webpage`,
+        url: `${SITE_URL}/products`,
         name: '墨尔本电脑租赁设备库',
-        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
+        isPartOf: { '@id': `${SITE_URL}/#website` },
         mainEntity: {
           '@type': 'ItemList',
           numberOfItems: visibleProducts.length,
           itemListElement: visibleProducts.filter((product) => product.id).map((product, index) => ({
             '@type': 'ListItem', position: index + 1, name: product.name,
-            url: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}`,
+            url: `${SITE_URL}/products/${encodeURIComponent(product.id)}`,
           })),
         },
       },
@@ -578,24 +591,24 @@ app.get('/products/:id', (c) =>
           contact,
           appUrl: appUrl(c.env),
           path: c.req.path,
-          siteUrl: siteUrl(c.req.url),
+          siteUrl: SITE_URL,
           robots: 'noindex, follow',
           user,
         }),
       }
     }
     return renderPage({
-      title: `${product.name} 电脑租赁价格与配置 — ${contact.name}`,
+      title: `${product.name} 墨尔本电脑租赁价格与配置 — ${contact.name}`,
       description: `在墨尔本租赁 ${product.name}${product.model ? ` ${product.model}` : ''}。查看 CPU、显卡、内存、存储、日租价、押金、库存和取还说明。`,
       body: renderProductDetail({ product, config }),
       contact,
       appUrl: appUrl(c.env),
       path: `/products/${encodeURIComponent(product.id)}`,
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       structuredData: [
         {
           '@type': 'Product',
-          '@id': `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}#product`,
+          '@id': `${SITE_URL}/products/${encodeURIComponent(product.id)}#product`,
           name: product.name,
           description: product.description || `${product.name} 电脑租赁`,
           category: product.categoryLabel,
@@ -603,21 +616,21 @@ app.get('/products/:id', (c) =>
           ...(product.model ? { model: product.model } : {}),
           ...(product.pricePerDay > 0 ? {
             offers: {
-              '@type': 'Offer', url: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}`,
+              '@type': 'Offer', url: `${SITE_URL}/products/${encodeURIComponent(product.id)}`,
               priceCurrency: 'AUD', price: product.pricePerDay,
               availability: product.available ? 'https://schema.org/InStock' : 'https://schema.org/PreOrder',
               businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
               priceSpecification: { '@type': 'UnitPriceSpecification', price: product.pricePerDay, priceCurrency: 'AUD', unitText: 'DAY' },
-              seller: { '@id': `${siteUrl(c.req.url)}/#organization` },
+              seller: { '@id': `${SITE_URL}/#organization` },
             }
           } : {}),
         },
         {
           '@type': 'BreadcrumbList',
           itemListElement: [
-            { '@type': 'ListItem', position: 1, name: '首页', item: `${siteUrl(c.req.url)}/` },
-            { '@type': 'ListItem', position: 2, name: '设备库', item: `${siteUrl(c.req.url)}/products` },
-            { '@type': 'ListItem', position: 3, name: product.name, item: `${siteUrl(c.req.url)}/products/${encodeURIComponent(product.id)}` },
+            { '@type': 'ListItem', position: 1, name: '首页', item: `${SITE_URL}/` },
+            { '@type': 'ListItem', position: 2, name: '设备库', item: `${SITE_URL}/products` },
+            { '@type': 'ListItem', position: 3, name: product.name, item: `${SITE_URL}/products/${encodeURIComponent(product.id)}` },
           ],
         },
       ],
@@ -636,7 +649,7 @@ app.get('/gift-cards', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/gift-cards',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       user,
     })
   }),
@@ -657,7 +670,7 @@ app.get('/apply', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/apply',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       robots: 'noindex, follow',
       user,
     })
@@ -688,7 +701,7 @@ app.get('/checkout', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/checkout',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       robots: 'noindex, follow',
       user,
     })
@@ -722,7 +735,7 @@ async function renderLoginPage(
     contact,
     appUrl: appUrl(c.env),
     path: '/login',
-    siteUrl: siteUrl(c.req.url),
+    siteUrl: SITE_URL,
     robots: 'noindex, follow',
     user: null,
   })
@@ -779,7 +792,8 @@ for (const page of LEGAL_PAGES) {
         contact,
         appUrl: appUrl(c.env),
         path: page.paths[0],
-        siteUrl: siteUrl(c.req.url),
+        siteUrl: SITE_URL,
+        robots: document.content || document.contentEn ? 'index, follow' : 'noindex, follow',
         user,
       })
     }),
@@ -817,14 +831,14 @@ app.get('/rental-guide', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/rental-guide',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       structuredData: [
         {
           '@type': 'WebPage',
-          '@id': `${siteUrl(c.req.url)}/rental-guide#webpage`,
-          url: `${siteUrl(c.req.url)}/rental-guide`,
+          '@id': `${SITE_URL}/rental-guide#webpage`,
+          url: `${SITE_URL}/rental-guide`,
           name: '电脑租赁流程、押金与配送说明',
-          isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
+          isPartOf: { '@id': `${SITE_URL}/#website` },
         },
         rentalGuideFaqSchema(config),
       ],
@@ -843,7 +857,7 @@ app.get('/referral', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/referral',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       user,
     })
   }),
@@ -862,14 +876,14 @@ app.get('/about', (c) =>
       contact,
       appUrl: appUrl(c.env),
       path: '/about',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       structuredData: {
         '@type': 'AboutPage',
-        '@id': `${siteUrl(c.req.url)}/about#webpage`,
-        url: `${siteUrl(c.req.url)}/about`,
+        '@id': `${SITE_URL}/about#webpage`,
+        url: `${SITE_URL}/about`,
         name: `关于 ${contact.name}`,
-        isPartOf: { '@id': `${siteUrl(c.req.url)}/#website` },
-        about: { '@id': `${siteUrl(c.req.url)}/#organization` },
+        isPartOf: { '@id': `${SITE_URL}/#website` },
+        about: { '@id': `${SITE_URL}/#organization` },
       },
       user,
     })
@@ -885,7 +899,7 @@ app.get('/order-lookup', (c) =>
   cachedHtml(c, HTML_TTL, async (user) => {
     const contact = await getSiteContact(c.env)
     const orders = user ? await listOrdersForUser(c.env, user.id, appUrl(c.env)) : []
-    return renderPage({ title: `订单查询 — ${contact.name}`, description: '查看电脑租赁订单当前状态、合同、密码和取还详情。', body: renderOrderLookup(appUrl(c.env), orders, await getTurnstileSiteKey(c)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: siteUrl(c.req.url), robots: 'noindex, nofollow', user })
+    return renderPage({ title: `订单查询 — ${contact.name}`, description: '查看电脑租赁订单当前状态、合同、密码和取还详情。', body: renderOrderLookup(appUrl(c.env), orders, await getTurnstileSiteKey(c)), contact, appUrl: appUrl(c.env), path: '/order-lookup', siteUrl: SITE_URL, robots: 'noindex, nofollow', user })
   }),
 )
 
@@ -970,7 +984,7 @@ app.notFound(async (c) => {
       contact,
       appUrl: appUrl(c.env),
       path: '*',
-      siteUrl: siteUrl(c.req.url),
+      siteUrl: SITE_URL,
       robots: 'noindex, nofollow',
       user: null,
     }),

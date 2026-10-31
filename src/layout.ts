@@ -10,6 +10,7 @@ import { ACCOUNT_STATUS_SCRIPT } from './components/account-status'
 import { renderSiteFooter } from './components/site-footer'
 import { renderFeedbackUi, FEEDBACK_SCRIPT } from './components/feedback'
 import { FAVICON_SVG } from './components/brand'
+import { SITE_URL } from './seo'
 
 export { FAVICON_SVG }
 
@@ -31,7 +32,7 @@ export interface PageOptions {
 }
 
 export function renderPage(opts: PageOptions): string {
-  const siteUrl = (opts.siteUrl || opts.appUrl).replace(/\/$/, '')
+  const siteUrl = (opts.siteUrl || SITE_URL).replace(/\/$/, '')
   const canonicalPath = opts.path === '*' ? '/' : opts.path
   const canonicalUrl = siteUrl + canonicalPath
   const organization: Record<string, unknown> = {
@@ -39,18 +40,30 @@ export function renderPage(opts: PageOptions): string {
     '@id': `${siteUrl}/#organization`,
     name: opts.contact.name,
     url: siteUrl,
-    email: opts.contact.email,
-    telephone: opts.contact.phone,
+    areaServed: { '@type': 'City', name: 'Melbourne', containedInPlace: { '@type': 'State', name: 'Victoria, Australia' } },
+    knowsLanguage: ['zh-CN', 'en-AU'],
+    // The D1 fallback contact details are placeholders, not business facts.
+    ...(opts.contact.email !== 'hello@geekslope.com' ? { email: opts.contact.email } : {}),
+    ...(opts.contact.phone !== '400-888-0000' ? { telephone: opts.contact.phone } : {}),
+    contactPoint: { '@type': 'ContactPoint', contactType: 'customer service', availableLanguage: ['Chinese', 'English'], url: `${siteUrl}/about#contact` },
   }
   if (/^https?:\/\//i.test(opts.contact.logo)) organization.logo = opts.contact.logo
   const pageSchemas = Array.isArray(opts.structuredData)
     ? opts.structuredData
     : opts.structuredData ? [opts.structuredData] : []
+  const webpageId = `${canonicalUrl}#webpage`
+  const webpage = {
+    '@type': 'WebPage', '@id': webpageId, url: canonicalUrl,
+    name: opts.title, description: opts.description, inLanguage: 'zh-CN',
+    isPartOf: { '@id': `${siteUrl}/#website` },
+    about: { '@id': `${siteUrl}/#organization` },
+  }
   const structuredData = JSON.stringify({
     '@context': 'https://schema.org',
     '@graph': [
       organization,
       { '@type': 'WebSite', '@id': `${siteUrl}/#website`, url: siteUrl, name: opts.contact.name, inLanguage: 'zh-CN', publisher: { '@id': `${siteUrl}/#organization` } },
+      ...(pageSchemas.some((schema) => schema['@id'] === webpageId) ? [] : [webpage]),
       ...pageSchemas,
     ],
   }).replace(/</g, '\\u003c')
@@ -61,6 +74,23 @@ export function renderPage(opts: PageOptions): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Google Tag Manager -->
+<script>
+(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-WNG9QDTP');
+</script>
+<!-- End Google Tag Manager -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9RVM8D3FG2"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-9RVM8D3FG2');
+</script>
 <script>
 (() => {
   // Resolve the presentation language before CSS/paint so html[lang] and
@@ -84,7 +114,7 @@ export function renderPage(opts: PageOptions): string {
 </script>
 <title>${esc(opts.title)}</title>
 <meta name="description" content="${esc(opts.description)}">
-<meta name="robots" content="${esc(opts.robots || 'index, follow, max-image-preview:large')}">
+<meta name="robots" content="${esc(opts.robots || 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1')}">
 <meta property="og:title" content="${esc(opts.title)}">
 <meta property="og:description" content="${esc(opts.description)}">
 <meta property="og:type" content="website">
@@ -104,6 +134,10 @@ export function renderPage(opts: PageOptions): string {
 <script type="application/ld+json">${structuredData}</script>
 </head>
 <body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-WNG9QDTP"
+height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Manager"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
 ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, opts.contact)}
 <aside class="site-announcement" data-site-announcement hidden aria-label="最新消息">
   <div class="wrap site-announcement-inner">

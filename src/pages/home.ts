@@ -53,6 +53,8 @@ interface HomeData {
 
 function homeFaqItems(config: RentalConfig, deliverySummary: string, pickupSummary: string): Array<{ q: string; a: string }> {
   return [
+    { q: '墨尔本华人和留学生租电脑，可以用中文咨询吗？', a: '可以。我们提供中文与英文服务，可咨询笔记本、游戏本和工作站的配置、租期、押金与取还安排。留学生可说明课程需要的软件，具体配置与可租档期由我们确认。' },
+    { q: '可以按日租、周租或月租电脑吗？', a: '可以按实际使用时间申请短租或较长租期。设备库展示日租、周租与月租参考价，最短租期与准确费用以所选日期和审核后的订单为准。' },
     { q: '提交申请会立即扣款吗？', a: '不会。申请先由我们确认档期和费用，之后才进入在线签约与付款。' },
     { q: '哪些区域可以送货或自取？', a: `可配送区域包括 ${deliverySummary}；${pickupSummary}。` },
     { q: '最短可以租多久？', a: `当前最短租期为 ${config.minimumRentalDays} 天，具体可用档期以下单页校验为准。` },
@@ -93,7 +95,7 @@ export function renderHome(data: HomeData): string {
   <div class="wrap hero-grid">
     <div class="hero-copy">
       <span class="eyebrow">MELBOURNE · 设备租赁</span>
-      <h1>设备不用拥有，<em>进度照样向前。</em></h1>
+      <h1>墨尔本电脑租赁，<em>按需租，轻松用。</em></h1>
       <p>给课程作业、临时项目、游戏周末和创作冲刺准备的电脑。配置与库存实时同步，${esc(fromLine)}<span class="hero-subnote">提交申请后再确认档期、签约与付款。</span></p>
       <div class="hero-actions">
         <a class="btn btn-primary btn-lg" href="/products">打开设备库 <span>→</span></a>
@@ -207,6 +209,18 @@ export function renderHome(data: HomeData): string {
     <div class="faq-list">
       ${homeFaqItems(config, deliverySummary, pickupSummary).map((item) => `<details><summary>${esc(item.q)}</summary><p>${esc(item.a)}</p></details>`).join('')}
     </div>
+  </div>
+</section>
+
+<section class="section" id="melbourne-computer-rental">
+  <div class="wrap">
+    <div class="section-head"><div><div class="kicker">墨尔本本地 · 中文服务</div><h2>在墨尔本租电脑，先按用途选</h2></div><p>为墨尔本华人、留学生与本地团队提供中文和英文电脑租赁服务，覆盖游戏本、商务笔记本与台式工作站。</p></div>
+    <div class="info-grid three">
+      <a class="info-card linked" href="/products?category=ultrabook"><span>学习与办公</span><h3>留学生与办公笔记本租赁</h3><p>课程作业、差旅办公或原电脑送修期间，可按需要申请笔记本短租、周租或月租；请先确认课程软件与操作系统要求。</p></a>
+      <a class="info-card linked" href="/products?category=gaming"><span>游戏与活动</span><h3>游戏本与电竞电脑租赁</h3><p>按游戏、活动和外接显示器需求比较显卡、内存与接口，具体性能以设备配置和实际软件要求为准。</p></a>
+      <a class="info-card linked" href="/products?category=workstation"><span>创作与开发</span><h3>剪辑、渲染与工作站租赁</h3><p>视频剪辑、三维渲染与开发测试，可先提供软件、项目规模与使用天数，再确认工作站配置及档期。</p></a>
+    </div>
+    <div class="center-cta"><a class="text-link" href="/rental-guide#delivery">查看墨尔本配送与自取说明 <span>→</span></a></div>
   </div>
 </section>
 
