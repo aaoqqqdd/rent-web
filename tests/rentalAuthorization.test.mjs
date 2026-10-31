@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
 
 const bundle = buildSync({ entryPoints: ['src/public-rental.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', minify: true })
-const { authorizeCardForOrder } = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'))
+const { authorizeCardForOrder, settleRejectedApplication } = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'))
 
 function setup(t, overrides = {}) {
   const calls = [], statements = []
@@ -83,4 +83,40 @@ test('checkout renders valid scripts and shows the combined authorization summar
   for (const script of scripts) assert.doesNotThrow(() => new Function(script))
   assert.match(html, /预计预授权总额/)
   assert.doesNotMatch(html, /仅用于押金预授权，不会立即收取租金/)
+})
+
+test('automatic rejection releases the entire uncaptured authorization without capture or refund', async t => {
+  const { context, statements } = setup(t)
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls.push({ url: String(url), method: init.method, key: init.headers['Idempotency-Key'] })
+    return Response.json({ id: 'pi_hold', status: String(url).endsWith('/cancel') ? 'canceled' : 'requires_capture' })
+  })
+  await settleRejectedApplication(context, { id: 'loser', userId: 'customer', stripe_deposit_payment_intent_id: 'pi_hold' })
+  assert.deepEqual(calls.map(call => call.method), ['GET', 'POST'])
+  assert.equal(calls[1].url, 'https://api.stripe.com/v1/payment_intents/pi_hold/cancel')
+  assert.equal(calls[1].key, 'web-conflict-release-loser')
+  assert.ok(statements.some(statement => statement.sql.includes("status = 'failed'") && statement.values[0] === 'loser'))
+  assert.ok(statements.some(statement => statement.sql.includes('deposit_held_amount = 0')))
+})
+
+test('already released authorizations can be settled again without another cancellation', async t => {
+  const { context, statements } = setup(t)
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls.push(init.method)
+    return Response.json({ id: 'pi_hold', status: 'canceled' })
+  })
+  await settleRejectedApplication(context, { id: 'loser', userId: 'customer', stripe_deposit_payment_intent_id: 'pi_hold' })
+  assert.deepEqual(calls, ['GET'])
+  assert.equal(statements.length, 2)
+})
+
+test('a captured or unsuccessfully cancelled authorization is kept for review', async t => {
+  for (const status of ['succeeded', 'requires_capture']) {
+    const { context, statements } = setup(t)
+    t.mock.method(globalThis, 'fetch', async () => Response.json({ id: 'pi_hold', status }))
+    await assert.rejects(() => settleRejectedApplication(context, { id: 'loser', userId: 'customer', stripe_deposit_payment_intent_id: 'pi_hold' }))
+    assert.equal(statements.length, 0)
+  }
 })

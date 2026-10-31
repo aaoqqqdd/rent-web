@@ -109,6 +109,16 @@ test('calendar and server reject occupied terms but allow a later free term thro
   assert.equal((await free.json()).message, '该账号当前无法下单，请联系客服。')
 })
 
+test('pending applications still block the calendar and later overlapping submissions, including longer rentals', async t => {
+  const { env, order, request } = setup(t)
+  order(date(2), date(4), 'pending_approval')
+  const calendar = (await getDeviceAvailability(env, ['pc'])).pc
+  assert.deepEqual(calendar.unavailablePeriods[date(3)], ['AM', 'PM'])
+  const response = await request(date(1), date(15))
+  assert.equal(response.status, 409)
+  assert.match((await response.json()).message, /已有订单/)
+})
+
 test('unknown return dates block the calendar and server while maintenance remains unavailable', async t => {
   const { env, db, order, request } = setup(t)
   order(null, null)

@@ -605,7 +605,7 @@ export function renderApply(data: ApplyData): string {
 
   function splitContactName(value) {
     var name = String(value || '').trim();
-    var parts = name.split(/\s+/).filter(Boolean);
+    var parts = name.split(/\\s+/).filter(Boolean);
     if (parts.length > 1) return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] };
     if (/^[\u3400-\u9fff]{2,}$/.test(name)) return { firstName: name.slice(1), lastName: name.slice(0, 1) };
     return { firstName: name, lastName: '' };
@@ -1166,6 +1166,7 @@ export function renderApply(data: ApplyData): string {
         paymentMethods: {
           applePay: 'always',
           googlePay: 'always',
+          link: 'never',
         },
         emailRequired: true,
         phoneNumberRequired: true,

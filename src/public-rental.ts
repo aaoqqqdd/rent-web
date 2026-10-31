@@ -5,6 +5,7 @@ import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
 import { verifyTurnstile } from './turnstile'
 import { markDeliveryQuoteUsed, validateDeliveryQuote } from './delivery'
+import { APPLICATION_REJECTION_REASON, cancelPreparingApplications, finalizeRentalApplications, type RejectedApplication } from './rental-conflicts'
 
 type RentalContext = Context<{ Bindings: Env }>
 
@@ -453,13 +454,72 @@ export async function lookupAccountBalance(c: RentalContext, email: string): Pro
   }
 }
 
-async function createAdminNotifications(c: RentalContext, orderId: string, message: string): Promise<void> {
+async function createAdminNotifications(c: RentalContext, orderId: string, message: string, paymentReview = false): Promise<void> {
   try {
     const admins = await c.env.RENT.prepare("SELECT id FROM users WHERE role = 'ADMIN' AND status != 'inactive'").all<{ id: string }>()
     await c.env.RENT.batch((admins.results || []).map((admin) => c.env.RENT.prepare(
-      `INSERT INTO notifications (id, recipient_id, type, title, message, order_id) VALUES (?, ?, 'rental_application', ?, ?, ?)`,
-    ).bind(id('notice'), admin.id, '官网新租赁申请待确认', message, orderId)))
+      `INSERT INTO notifications (id, recipient_id, type, title, message, order_id)
+       SELECT ?, ?, ?, ?, ?, ? WHERE ? = 1 OR EXISTS (SELECT 1 FROM orders WHERE id = ? AND status = 'pending_approval')`,
+    ).bind(id('notice'), admin.id, paymentReview ? 'system_alert' : 'rental_application', paymentReview ? '信用卡预授权需要处理' : '官网新租赁申请待确认', message, orderId, paymentReview ? 1 : 0, orderId)))
   } catch { /* notifications must not undo a successfully created order */ }
+}
+
+export async function settleRejectedApplication(c: RentalContext, order: RejectedApplication): Promise<void> {
+  // Cancellation is already committed. Never capture or refund a paid charge:
+  // paid orders cannot enter arbitration in the first place.
+  if (order.stripe_deposit_payment_intent_id) {
+    const intentId = order.stripe_deposit_payment_intent_id
+    const intent = await stripeRequest(c, `payment_intents/${intentId}`)
+    if (intent.status !== 'canceled') {
+      if (intent.status !== 'requires_capture') throw new Error('Rejected application authorization requires review')
+      const cancelled = await stripeRequest(c, `payment_intents/${intentId}/cancel`, new URLSearchParams(), `web-conflict-release-${order.id}`)
+      if (cancelled.status !== 'canceled') throw new Error('Rejected application authorization was not released')
+    }
+    await c.env.RENT.batch([
+      c.env.RENT.prepare("UPDATE payments SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE rental_id = ? AND stripe_payment_intent_id = ? AND status = 'pending'").bind(order.id, intentId),
+      c.env.RENT.prepare("UPDATE orders SET deposit_status = 'NOT_REQUIRED', deposit_held_amount = 0, settlement_status = 'SETTLED' WHERE id = ? AND status = 'cancelled'").bind(order.id),
+    ])
+  }
+}
+
+async function releasePreparingApplications(c: RentalContext, orderIds: string[]): Promise<void> {
+  const cancelled = await cancelPreparingApplications(c.env.RENT, orderIds)
+  for (const order of cancelled) {
+    try { await settleRejectedApplication(c, order) }
+    catch (error) {
+      console.error('Incomplete rental authorization release failed', order.id, error)
+      await createAdminNotifications(c, order.id, '申请创建失败，信用卡预授权释放失败，请检查并处理。', true)
+    }
+  }
+}
+
+async function finishRejectedApplications(c: RentalContext, orders: RejectedApplication[]): Promise<void> {
+  for (const order of orders) {
+    try {
+      await settleRejectedApplication(c, order)
+    } catch (error) {
+      console.error('Rejected rental authorization release failed', order.id, error)
+      await createAdminNotifications(c, order.id, '档期冲突申请已自动拒绝，信用卡预授权释放失败，请检查并处理。', true)
+    }
+    // Pending applications can have reserved coupons from the dashboard. Release
+    // the reservation once, in the same transaction as its usage-count restore.
+    try {
+      await c.env.RENT.batch([
+        c.env.RENT.prepare(`UPDATE coupons SET used_count = MAX(0, used_count - (
+          SELECT COUNT(*) FROM coupon_redemptions r WHERE r.coupon_id = coupons.id AND r.order_id = ? AND r.status IN ('RESERVED', 'REDEEMED'))),
+          updated_at = CURRENT_TIMESTAMP WHERE COALESCE(restore_on_cancellation, 1) <> 0 AND id IN (
+          SELECT coupon_id FROM coupon_redemptions WHERE order_id = ? AND status IN ('RESERVED', 'REDEEMED'))`).bind(order.id, order.id),
+        c.env.RENT.prepare("UPDATE coupon_redemptions SET status = CASE WHEN status = 'REDEEMED' THEN 'REVERSED' ELSE 'RELEASED' END, cancelled_at = CURRENT_TIMESTAMP WHERE order_id = ? AND status IN ('RESERVED', 'REDEEMED')").bind(order.id),
+      ])
+    } catch (error) { console.error('Rejected rental coupon release failed', order.id, error) }
+    try {
+      await c.env.RENT.batch([
+        c.env.RENT.prepare("UPDATE notifications SET deleted_at = CURRENT_TIMESTAMP WHERE order_id = ? AND type = 'rental_application' AND deleted_at IS NULL").bind(order.id),
+        c.env.RENT.prepare("INSERT INTO notifications (id, recipient_id, type, title, message, order_id) VALUES (?, ?, 'rental_application_rejected', ?, ?, ?)")
+          .bind(id('notice'), order.userId, '租赁申请未通过', APPLICATION_REJECTION_REASON, order.id),
+      ])
+    } catch (error) { console.error('Rejected rental notification failed', order.id, error) }
+  }
 }
 
 export async function previewRentalCoupon(c: RentalContext, deviceIds: string[], days: number, code: string, terms?: unknown, customerEmail = ''): Promise<Record<string, unknown>> {
@@ -512,6 +572,7 @@ export async function previewRentalCoupon(c: RentalContext, deviceIds: string[],
 }
 
 export async function handleRentalRequest(c: RentalContext, body: Record<string, unknown>): Promise<Response> {
+  const submittedAt = new Date().toISOString()
   const ip = (c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0] || 'unknown').trim()
   if (!(await enforceRateLimit(c.env, 'web-rental-request', ip, 10, 600))) return json(c, 429, { ok: false, message: '提交请求过于频繁，请稍后重试。' })
   if (!(await verifyTurnstile(c, String(body['cf-turnstile-response'] || ''), ip))) return json(c, 400, { ok: false, message: '人机验证失败，请重试。' })
@@ -761,8 +822,8 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       const note = `【官网申请 ${batch}】联系人：${contactName} / 电话：${contactPhone} / ${deliveryMethod === 'Delivery' ? '送货至' : '自取点'}：${location}${body.rentalNote ? `\n客户备注：${String(body.rentalNote).trim().slice(0, 350)}` : ''}`.slice(0, 500)
       await c.env.RENT.prepare(
         `INSERT INTO orders (id, orderNo, userId, deviceId, startDate, endDate, startPeriod, endPeriod, rentalPeriod, status, paymentMethod, totalAmount, depositAmount, contractId, pickupTimeSlot, returnTimeSlot, pickupLocation, returnLocation, deliveryMethod, deliveryFee, rentalNote, coupon_code, discount_amount, serviceFee, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, orderDeliveryFee, note, discounts[index] > 0 ? couponCode : null, discounts[index], serviceFee, new Date().toISOString()).run()
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, orderDeliveryFee, note, discounts[index] > 0 ? couponCode : null, discounts[index], serviceFee, submittedAt).run()
       orderIds.push(orderId)
       // payment_provider 在共享主站中区分 Stripe 卡与礼品卡；旧数据库没有该列时，
       // 保留 card / balance 的历史兼容路径，但不能静默丢弃客户明确选择的 Square。
@@ -790,25 +851,39 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       }
     }
   } catch (error) {
-    if (orderIds.length) await c.env.RENT.batch(orderIds.map((orderId) => c.env.RENT.prepare('DELETE FROM orders WHERE id = ?').bind(orderId)))
+    await releasePreparingApplications(c, orderIds)
     console.error('Website rental order insertion failed:', error)
     return json(c, 500, { ok: false, message: '订单创建失败，请稍后重试。' })
   }
   if (depositAuthError) {
-    if (orderIds.length) await c.env.RENT.batch(orderIds.map((orderId) => c.env.RENT.prepare('DELETE FROM orders WHERE id = ?').bind(orderId)))
+    await releasePreparingApplications(c, orderIds)
     return json(c, 402, { ok: false, message: depositAuthError })
   }
+  let resolution: Awaited<ReturnType<typeof finalizeRentalApplications>>
+  try {
+    resolution = await finalizeRentalApplications(c.env.RENT, orderIds, config.bufferDays)
+  } catch (error) {
+    console.error('Rental application arbitration failed', error)
+    await releasePreparingApplications(c, orderIds)
+    return json(c, 500, { ok: false, message: '订单创建失败，请稍后重试。' })
+  }
+  await finishRejectedApplications(c, resolution.rejected)
+  const acceptedIds = resolution.acceptedIds
+  const rejectedOrderIds = orderIds.filter(orderId => !acceptedIds.includes(orderId))
+  if (!acceptedIds.length) return json(c, 409, { ok: false, rejectedOrderIds, message: APPLICATION_REJECTION_REASON })
   try {
     await markDeliveryQuoteUsed(c, deliveryQuoteId)
   } catch (error) {
     console.error('Delivery quote finalization failed', error)
   }
-  const totalRent = fees.reduce((sum, fee) => sum + fee, 0)
-  const totalDeposit = devices.reduce((sum, device) => sum + numberValue(device.depositAmount, device.deposit_amount), 0)
-  const totalDiscount = discounts.reduce((sum, discount) => sum + discount, 0)
-  const totalServiceFee = serviceFees.reduce((sum, fee) => sum + fee, 0)
-  await createAdminNotifications(c, orderIds[0], `官网新申请：${contactName} 申请 ${devices.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${totalServiceFee ? `，时段服务费 AUD$${totalServiceFee.toFixed(2)}` : ''}${deliveryFee ? `，配送费 AUD$${deliveryFee.toFixed(2)}` : ''}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
-  const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(orderIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
+  const acceptedIndexes = orderIds.map((orderId, index) => acceptedIds.includes(orderId) ? index : -1).filter(index => index >= 0)
+  const totalRent = acceptedIndexes.reduce((sum, index) => sum + fees[index], 0)
+  const totalDeposit = acceptedIndexes.reduce((sum, index) => sum + numberValue(devices[index].depositAmount, devices[index].deposit_amount), 0)
+  const totalDiscount = acceptedIndexes.reduce((sum, index) => sum + discounts[index], 0)
+  const totalServiceFee = acceptedIndexes.reduce((sum, index) => sum + serviceFees[index], 0)
+  deliveryFee = acceptedIndexes.reduce((sum, index) => sum + (index === devices.length - 1 ? Number((deliveryFee - sharedDeliveryFee * Math.max(0, devices.length - 1)).toFixed(2)) : sharedDeliveryFee), 0)
+  await createAdminNotifications(c, acceptedIds[0], `官网新申请：${contactName} 申请 ${acceptedIds.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${totalServiceFee ? `，时段服务费 AUD$${totalServiceFee.toFixed(2)}` : ''}${deliveryFee ? `，配送费 AUD$${deliveryFee.toFixed(2)}` : ''}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
+  const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(acceptedIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
   const paymentBreakdown = paymentProvider === 'stripe'
     ? firstOrder?.deposit_payment_mode === 'PREAUTH'
       ? '信用卡预授权已完成。'
@@ -818,7 +893,10 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
         ? `礼品卡将在审核通过并签约后用于支付租金及服务费；押金 AUD$${totalDeposit.toFixed(2)} 已在另一张信用卡上预授权。`
         : `礼品卡将在审核通过并签约后用于支付租金及服务费；押金 AUD$${totalDeposit.toFixed(2)} 已通过信用卡验证并保存，归还验收后按规则结算。`
       : ''
-  return json(c, 200, { ok: true, orderId: orderIds[0], orderIds, orderCount: orderIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: rentalPlans.get(deviceIds[0])?.period.days || 0, message: `${accountCreated ? '账号已注册，' : ''}${orderIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}` })
+  const message = rejectedOrderIds.length
+    ? `${acceptedIds.length} 台设备的申请已提交，${rejectedOrderIds.length} 台设备因档期冲突已自动拒绝，请在账号中查看。`
+    : `${accountCreated ? '账号已注册，' : ''}${acceptedIds.length} 台设备的申请已提交。${paymentBreakdown || '管理员确认后会联系你安排签约与付款。'}`
+  return json(c, 200, { ok: true, orderId: acceptedIds[0], orderIds: acceptedIds, rejectedOrderIds, orderCount: acceptedIds.length, accountCreated, temporaryPassword: temporaryPassword || null, orderNo: firstOrder?.orderNo || null, rentalPeriod: rentalPlans.get(deviceIds[acceptedIndexes[0]])?.period.days || 0, message })
 }
 
 // 请求体硬上限：中间件的 Content-Length 检查挡不住 `Transfer-Encoding: chunked`
