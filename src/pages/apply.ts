@@ -1163,6 +1163,10 @@ export function renderApply(data: ApplyData): string {
       } catch (_) {}
       var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance, locale: stripeLocale });
       var walletElement = walletElements.create('expressCheckout', {
+        paymentMethods: {
+          applePay: 'always',
+          googlePay: 'always',
+        },
         emailRequired: true,
         phoneNumberRequired: true,
         billingAddressRequired: true,
