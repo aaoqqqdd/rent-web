@@ -1,6 +1,17 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
+  '申请退款': 'Request a refund',
+  '保存付款方式': 'Save payment method',
+  '长租付款方式': 'Long-term payment schedule',
+  '月付': 'Pay monthly',
+  '首期支付一个月租金和押金': 'First payment: one month of rent and the deposit',
+  '一次性付清 · 免押金': 'Pay in full · No deposit',
+  '适用于租期 60 天及以上的设备': 'For devices rented for 60 days or more',
+  '长租设备押金': 'Long-term device deposit',
+  '免押金': 'Waived',
+  '长租设备一次性付清全部租金，免押金。': 'Pay the full rental amount for long-term devices with no deposit.',
+  '长租设备一次性付清全部租金，免押金；其他设备按各自租期计费。审核通过并签约后付款。': 'Long-term devices are paid in full with no deposit; other devices follow their own rental terms. Payment follows approval and signing.',
   '设备档期冲突，系统优先保留租期较长的申请；租期相同时保留先提交的申请。': 'The device has a booking conflict. Longer rentals take priority; for equal terms, the earlier application is kept.',
   // Local computer rental search intent; keep the visible copy bilingual.
   '提供中文与英文服务的墨尔本电脑、游戏本、商务笔记本与工作站租赁。': 'Melbourne computer, gaming laptop, business laptop and workstation rental with Chinese and English service.',

@@ -8,16 +8,29 @@ export interface RentalPricingDevice {
   monthly_discount_percent?: unknown
 }
 
+/** Shared with checkout; only qualifying full-term payments waive the deposit. */
+export function rentalPaymentPlan(days: number, requestedMode: unknown, provider: string, deposit: number) {
+  const prepaid = days >= 60 && (requestedMode === 'FULL' || provider !== 'stripe')
+  return {
+    billingMode: provider === 'stripe' && days >= 30 && !prepaid ? 'MONTHLY' as const : 'FULL' as const,
+    deposit: prepaid ? 0 : deposit,
+    prepaid,
+  }
+}
+
 /** Self-contained so cart and checkout can use the server calculation in their scripts. */
 export function rentalPriceBreakdown(device: RentalPricingDevice, rentalDays: number) {
-  const number = (...values: unknown[]) => {
-    for (const value of values) {
-      const parsed = Number(value)
-      if (Number.isFinite(parsed)) return parsed
-    }
-    return 0
+  // Object methods stay self-contained when Wrangler preserves function names.
+  const { number, money } = {
+    number(...values: unknown[]) {
+      for (const value of values) {
+        const parsed = Number(value)
+        if (Number.isFinite(parsed)) return parsed
+      }
+      return 0
+    },
+    money(value: number) { return Number(value.toFixed(2)) },
   }
-  const money = (value: number) => Number(value.toFixed(2))
   const days = Math.max(0, number(rentalDays))
   const daily = Math.max(0, number(device.pricePerDay, device.price_per_day, device.day))
   const weeklyDiscount = Math.min(100, Math.max(0, number(device.weeklyDiscountPercent, device.weekly_discount_percent)))
@@ -43,7 +56,7 @@ export function rentalPriceBreakdown(device: RentalPricingDevice, rentalDays: nu
 
 /** Coupon allocation follows the main app's proportional installment allocation. */
 export function firstRentalInstallment(total: number, days: number, monthlyRate: number, discount = 0): number {
-  const cents = (amount: number) => Math.round(amount * 100)
+  const { cents } = { cents(amount: number) { return Math.round(amount * 100) } }
   const net = Math.max(0, cents(total) - cents(discount))
   if (days <= 30 || !total) return net / 100
   return Math.min(net, Math.round(net * cents(monthlyRate) / cents(total))) / 100

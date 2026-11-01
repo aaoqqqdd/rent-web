@@ -50,6 +50,7 @@ export interface OrderView {
   amountDue: number
   paymentStatus: string
   depositStatus: string
+  refundUrl?: string
   device: {
     name: string
     model: string
@@ -290,6 +291,10 @@ async function hydrateOrders(env: Env, rows: Record<string, unknown>[], appUrl: 
       amountDue: numberValue(row, 'amount_due', 'amountDue'),
       paymentStatus: PAYMENT_STATUS_LABELS[value(row, 'payment_status', 'paymentStatus').toLowerCase()] || value(row, 'payment_status', 'paymentStatus'),
       depositStatus: DEPOSIT_STATUS_LABELS[value(row, 'deposit_status', 'depositStatus').toUpperCase()] || value(row, 'deposit_status', 'depositStatus'),
+      refundUrl: id && !value(row, 'handover_completed_at', 'handoverCompletedAt') && !value(row, 'deleted_at')
+        && ['draft', 'pending_approval', 'approved', 'awaiting_signature', 'pending_payment', 'paid', 'pending_pickup'].includes(rawStatus)
+        ? `${appUrl}/customer/orders/${encodeURIComponent(id)}/refund-request`
+        : undefined,
       device: {
         name: value(row, 'device_name') || '设备',
         model: value(row, 'device_model'),

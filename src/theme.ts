@@ -799,6 +799,9 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .apply-submit-note { margin-top: 8px; font-size: 11px; }
 .choice-line { display: block; margin-top: 11px; color: var(--fg); font-size: 13px; font-weight: 400 !important; }
 .choice-line input { width: auto; min-height: auto; margin-right: 7px; accent-color: var(--primary); }
+.rental-billing-options { margin: 20px 0 0; padding: 0; border: 0; min-width: 0; }
+.rental-billing-options legend { margin-bottom: 10px; font-weight: 600; }
+.rental-billing-options .choice-line + .choice-line { margin-top: 10px; }
 .payment-method-options { display: grid; gap: 10px; margin-top: 14px; }
 .payment-method-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 8px; margin-top: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.025); cursor: pointer; }
 .payment-method-option:hover { border-color: rgba(124,108,255,.55); }
@@ -850,6 +853,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .lookup-wrap .field { margin-bottom: 14px; }
 .lookup-wrap .field label { font-size: 12px; }
 .lookup-wrap .btn { min-height: 42px; padding: 10px 16px; font-size: 13px; }
+.lookup-wrap .btn.order-refund-action { min-height: 44px; }
 .lookup-result h2 { font-size: clamp(28px, 4vw, 40px); }
 .lookup-result .form-intro { margin-bottom: 16px; font-size: 12px; }
 
@@ -999,7 +1003,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
   .lookup-wrap .form-card { padding: 20px 18px; }
   .lookup-wrap .btn { width: 100%; }
   .order-record-head { flex-direction: column; gap: 12px; padding: 20px 18px; }
-  .order-record-head-actions { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
+  .order-record-head-actions { width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
   .order-payment-contract-row { grid-template-columns: 1fr; }
   .order-record-section { padding: 20px 18px; }
   .lookup-data-list > div { grid-template-columns: 1fr; gap: 4px; }

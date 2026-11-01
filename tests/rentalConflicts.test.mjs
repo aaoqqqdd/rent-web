@@ -191,10 +191,10 @@ function requestSetup(t) {
   const today = new Date().toISOString().slice(0, 10)
   const date = days => new Date(Date.parse(today + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10)
   const env = { RENT: rent, STRIPE_SECRET_KEY: 'sk_test_fake', STRIPE_PUBLISHABLE_KEY: 'pk_test_fake' }
-  const request = (days, ids = ['pc']) => handleRentalRequest({ env, req: { header() {} }, json: (body, status) => Response.json(body, { status }) }, {
+  const request = (days, ids = ['pc'], extra = {}) => handleRentalRequest({ env, req: { header() {} }, json: (body, status) => Response.json(body, { status }) }, {
     deviceIds: ids, startDate: date(10), endDate: date(10 + days), startPeriod: 'AM', endPeriod: 'AM',
     firstName: 'Test', lastName: 'User', contactEmail: 'test@example.test', contactPhone: '0412345678',
-    agree: '1', paymentMethod: 'card', stripeSetupIntentId: 'seti_test', pickupTimeSlot: 'morning', returnTimeSlot: 'morning',
+    agree: '1', paymentMethod: 'card', stripeSetupIntentId: 'seti_test', pickupTimeSlot: 'morning', returnTimeSlot: 'morning', ...extra,
   })
   return { ...fixture, request }
 }
@@ -210,7 +210,7 @@ test('monthly applications persist the discounted total and pricing snapshot wit
   assert.equal(order.billing_mode, 'MONTHLY')
   assert.equal(order.deposit_payment_mode, 'PAID')
   assert.equal(order.deposit_method, 'card_hold')
-  assert.deepEqual(JSON.parse(order.rental_pricing_json), { pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
+  assert.deepEqual(JSON.parse(order.rental_pricing_json), { billingMode: 'MONTHLY', depositAmountBeforeWaiver: 300, pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM payments').get().count, 0)
   assert.match(result.message, /后续每 30 天自动扣取租金/)
 })
@@ -260,4 +260,46 @@ test('a cart with one concurrent conflict keeps its unrelated device and reports
   const accepted = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.orderIds[0])
   assert.equal(accepted.deviceId, 'other')
   assert.equal(accepted.status, 'pending_approval')
+})
+
+
+test('full-payment applications persist zero deposit and full rent without preauthorisation', async t => {
+  const { db, request } = requestSetup(t)
+  const response = await request(120, ['pc'], { billingMode: 'FULL', depositAmount: 9999, totalAmount: 1 })
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.orderId)
+  assert.equal(order.totalAmount, 2400)
+  assert.equal(order.depositAmount, 0)
+  assert.equal(order.billing_mode, 'FULL')
+  assert.equal(order.deposit_status, 'NOT_REQUIRED')
+  assert.equal(order.deposit_payment_mode, 'PAID')
+  assert.equal(JSON.parse(order.rental_pricing_json).depositAmountBeforeWaiver, 300)
+  assert.equal(JSON.parse(order.rental_pricing_json).billingMode, 'FULL')
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM payments').get().count, 0)
+  assert.match(result.message, /一次性付清全部租金，免押金/)
+  assert.doesNotMatch(result.message, /每 30 天/)
+})
+
+test('shorter subscriptions cannot waive the deposit by requesting full payment', async t => {
+  const { db, request } = requestSetup(t)
+  const response = await request(59, ['pc'], { billingMode: 'FULL', depositAmount: 0 })
+  const result = await response.json()
+  assert.equal(response.status, 200)
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.orderId)
+  assert.equal(order.depositAmount, 300)
+  assert.equal(order.billing_mode, 'MONTHLY')
+})
+
+test('full-payment mixed carts keep deposits and monthly billing for shorter subscriptions', async t => {
+  const { db, request } = requestSetup(t)
+  const response = await request(120, ['pc', 'other'], { billingMode: 'FULL', deviceTerms: {
+    pc: { startDate: '2030-01-01', endDate: '2030-05-01', startPeriod: 'AM', endPeriod: 'AM' },
+    other: { startDate: '2030-01-01', endDate: '2030-02-15', startPeriod: 'AM', endPeriod: 'AM' },
+  } })
+  assert.equal(response.status, 200)
+  assert.deepEqual(db.prepare('SELECT deviceId, depositAmount, billing_mode FROM orders ORDER BY deviceId').all().map(row => ({ ...row })), [
+    { deviceId: 'other', depositAmount: 400, billing_mode: 'MONTHLY' },
+    { deviceId: 'pc', depositAmount: 0, billing_mode: 'FULL' },
+  ])
 })

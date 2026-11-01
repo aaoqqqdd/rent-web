@@ -4,7 +4,7 @@
 import { esc } from '../layout'
 import type { Product, RentalConfig } from '../db'
 import { createPickupAvailability } from '../pickup-availability'
-import { rentalPriceBreakdown, firstRentalInstallment } from '../rental-pricing'
+import { rentalPriceBreakdown, firstRentalInstallment, rentalPaymentPlan } from '../rental-pricing'
 
 interface ApplyData {
   products: Product[]
@@ -424,6 +424,17 @@ export function renderApply(data: ApplyData): string {
                 </label>
               </div>
             </div>
+            <fieldset id="rental-billing-options" class="rental-billing-options" hidden>
+              <legend>长租付款方式</legend>
+              <label class="payment-method-option choice-line">
+                <input type="radio" name="billingMode" value="MONTHLY" checked>
+                <span class="payment-method-copy"><strong>月付</strong><small>首期支付一个月租金和押金</small></span>
+              </label>
+              <label class="payment-method-option choice-line">
+                <input type="radio" name="billingMode" value="FULL">
+                <span class="payment-method-copy"><strong>一次性付清 · 免押金</strong><small>适用于租期 60 天及以上的设备</small></span>
+              </label>
+            </fieldset>
             <div class="stripe-payment-box">
               <div class="stripe-wallet-box" id="stripe-wallet-box" hidden>
                 <div class="stripe-setup-head"><div><label id="stripe-wallet-title">快捷支付</label><p id="stripe-wallet-description">使用可用的快捷支付方式验证。</p></div><span id="stripe-wallet-badge">EXPRESS CHECKOUT</span></div>
@@ -455,7 +466,7 @@ export function renderApply(data: ApplyData): string {
       ${stripeScript}${squareScript}${turnstile}
 
       <div class="apply-expectations" aria-label="提交申请后的流程">
-        <div><span>提交时</span><strong>信用卡预授权</strong></div>
+        <div><span>提交时</span><strong id="submission-payment-note">信用卡预授权</strong></div>
         <div><span>审核时</span><strong>确认档期与费用</strong><p>我们会核对库存、地址、优惠码和最终配送安排。</p></div>
         <div><span>确认后</span><strong>确认取机安排</strong></div>
       </div>
@@ -869,6 +880,21 @@ export function renderApply(data: ApplyData): string {
     for (var index = 0; index < cartIds.length; index += 1) { var error = termError(cartIds[index], termFor(cartIds[index])); if (error) return error; }
     return '';
   }
+  function paymentPlanFor(id) {
+    var payment = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
+    var billing = form.querySelector('input[name="billingMode"]:checked')?.value || 'MONTHLY';
+    return (${rentalPaymentPlan.toString()})(termDays(termFor(id)), billing, payment === 'card' ? 'stripe' : payment === 'square' ? 'square' : 'internal', productMap.get(id).deposit);
+  }
+  function refreshBillingOptions() {
+    var box = document.getElementById('rental-billing-options');
+    var payment = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
+    var eligible = cartIds.some(function (id) { return termDays(termFor(id)) >= 60; });
+    box.hidden = payment !== 'card' || !eligible;
+    if (!eligible) form.querySelector('input[name="billingMode"][value="MONTHLY"]').checked = true;
+    var refund = form.querySelector('.refund-method-fixed');
+    refund.hidden = cartIds.every(function (id) { return paymentPlanFor(id).deposit === 0; });
+    document.getElementById('submission-payment-note').textContent = cardAuthorizationDeposit() > 0 ? uiText('信用卡预授权', 'Card pre-authorisation') : uiText('保存付款方式', 'Save payment method');
+  }
   function summaryRow(label, amount, className) {
     return '<div class="summary-row' + (className ? ' ' + className : '') + '"><span>' + label + '</span><span>' + amount + '</span></div>';
   }
@@ -881,7 +907,7 @@ export function renderApply(data: ApplyData): string {
   function rentalBreakdown(product, days) { return (${rentalPriceBreakdown.toString()})(product, days); }
   function checkoutAmounts() {
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var amounts = { original: 0, monthlyDiscount: 0, weeklyDiscount: 0, rent: 0, firstRent: 0, monthlyDeposit: 0, deposit: 0, serviceFee: 0, hasMonthly: false };
+    var amounts = { original: 0, monthlyDiscount: 0, weeklyDiscount: 0, rent: 0, firstRent: 0, monthlyDeposit: 0, deposit: 0, serviceFee: 0, hasMonthly: false, hasPrepaid: false };
     var serviceMultiplier = method.value === 'Pickup' ? ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(serviceFeeSlot).length : 0;
     var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
     var sharedDeliveryFee = cartIds.length ? Math.round(deliveryFee / cartIds.length * 100) / 100 : 0;
@@ -890,7 +916,8 @@ export function renderApply(data: ApplyData): string {
       var product = productMap.get(id), days = termDays(termFor(id));
       var price = rentalBreakdown(product, days);
       var discount = appliedDiscount ? Number(appliedDeviceDiscounts[id] || 0) : 0;
-      var monthly = selectedPaymentMethod === 'card' && days >= 30;
+      var plan = paymentPlanFor(id);
+      var monthly = plan.billingMode === 'MONTHLY';
       amounts.original += price.originalAmount;
       amounts.monthlyDiscount += price.monthlyDiscountAmount;
       amounts.weeklyDiscount += price.weeklyDiscountAmount;
@@ -898,13 +925,14 @@ export function renderApply(data: ApplyData): string {
       var firstRent = monthly ? (${firstRentalInstallment.toString()})(price.total, days, price.monthlyRate, discount) : Math.max(0, price.total - discount);
       var serviceFee = Math.round(price.total * serviceMultiplier * 100) / 100;
       var orderDeliveryFee = index === cartIds.length - 1 ? Math.round((deliveryFee - sharedDeliveryFee * (cartIds.length - 1)) * 100) / 100 : sharedDeliveryFee;
-      var orderPrincipal = firstRent + serviceFee + orderDeliveryFee + (monthly ? product.deposit : 0);
+      var orderPrincipal = firstRent + serviceFee + orderDeliveryFee + (monthly ? plan.deposit : 0);
       paymentFee += selectedPaymentMethod === 'balance' ? 0 : Math.round(orderPrincipal * (selectedPaymentMethod === 'card' ? stripeFeeRate : squareProcessingFeeRate) * 100) / 100;
       amounts.firstRent += firstRent;
-      amounts.deposit += product.deposit;
-      amounts.monthlyDeposit += monthly ? product.deposit : 0;
+      amounts.deposit += plan.deposit;
+      amounts.monthlyDeposit += monthly ? plan.deposit : 0;
       amounts.serviceFee += serviceFee;
       amounts.hasMonthly = amounts.hasMonthly || monthly;
+      amounts.hasPrepaid = amounts.hasPrepaid || plan.prepaid;
     });
     var paymentBase = Math.max(0, amounts.firstRent + amounts.serviceFee + deliveryFee + (selectedPaymentMethod === 'balance' ? amounts.deposit : amounts.monthlyDeposit));
     return Object.assign(amounts, { deliveryFee: deliveryFee, paymentFee: paymentFee, rentalPayable: Math.round((paymentBase + paymentFee) * 100) / 100 });
@@ -934,11 +962,12 @@ export function renderApply(data: ApplyData): string {
   }
   function refreshSummary() {
     refreshPickupTimeOptions();
+    refreshBillingOptions();
     updatePaymentMethodNote();
     var count = cartIds.length;
     var amounts = checkoutAmounts();
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
-    var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
+    var depositTotal = amounts.deposit;
     var rentTotal = amounts.rent;
     var serviceFee = amounts.serviceFee;
     var deliveryFee = amounts.deliveryFee;
@@ -968,6 +997,7 @@ export function renderApply(data: ApplyData): string {
       + (amounts.hasMonthly ? summaryRow(uiText('优惠后总租金', 'Total rent after discounts'), '$' + Math.max(0, rentTotal - appliedDiscount).toFixed(2)) + '<div class="summary-divider"></div>' + summaryRow(uiText('首期租金', 'First rental instalment'), '$' + amounts.firstRent.toFixed(2)) : '')
       + (amounts.monthlyDeposit > 0 || selectedPaymentMethod === 'balance' ? summaryRow(uiText('本期押金', 'Deposit in this payment'), '$' + (selectedPaymentMethod === 'balance' ? depositTotal : amounts.monthlyDeposit).toFixed(2)) : '')
       + (amounts.hasMonthly && cardAuthorizationDeposit() > 0 ? summaryRow(uiText('短租押金预授权', 'Short-term deposit authorisation'), '$' + cardAuthorizationDeposit().toFixed(2)) : '')
+      + (amounts.hasPrepaid ? summaryRow(uiText('长租设备押金', 'Long-term device deposit'), uiText('免押金', 'Waived')) : '')
       + (serviceFee ? summaryRow(uiText('时段服务费', 'Time-slot service fee'), '$' + serviceFee.toFixed(2)) : '')
       + (method.value === 'Delivery' ? summaryRow(uiText('来回配送费', 'Round-trip delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : deliveryQuoteState === 'loading' ? uiText('报价中…', 'Getting quote…') : uiText('填写地址后报价', 'Enter address to quote')) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
@@ -978,6 +1008,7 @@ export function renderApply(data: ApplyData): string {
       + '<div class="summary-rows">' + rows + '</div>'
       + '<div class="summary-divider"></div>'
       + summaryRow(amounts.hasMonthly ? uiText('首期应付', 'First payment due') : selectedPaymentMethod === 'card' && cardAuthorizationDeposit() > 0 ? uiText('预计预授权总额', 'Estimated authorisation total') : uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
+      + (amounts.hasPrepaid ? '<p class="hint">' + uiText('长租设备一次性付清全部租金，免押金。', 'Pay the full rental amount for long-term devices with no deposit.') + '</p>' : '')
       + (amounts.hasMonthly ? '<p class="hint">' + uiText('首期收取一个月租金和押金，后续每 30 天自动扣取租金。', 'The first payment includes one month of rent and the deposit. Rent is then charged automatically every 30 days.') + '</p>' : summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit'));
     if (squareGiftCardVerified && squareGiftCardBalance !== null) {
       var previewPayable = calculateRentalPayable();
@@ -999,7 +1030,7 @@ export function renderApply(data: ApplyData): string {
       var meta = document.createElement('span');
       var rawDaily = Number(product.day || 0);
       var priceText = (product.model ? product.model + ' · ' : '') + formatDate(term.startDate) + '–' + formatDate(term.endDate) + uiText(' · ' + rentalDays + ' 天 · ', ' · ' + rentalDays + ' day(s) · ');
-      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : uiText('询价', 'Enquire')) + uiText('/天', '/day') + uiText(' · 押金 $', ' · Deposit $') + product.deposit;
+      meta.textContent = priceText + (rawDaily > 0 ? '$' + rawDaily.toFixed(2) : uiText('询价', 'Enquire')) + uiText('/天', '/day') + uiText(' · 押金 $', ' · Deposit $') + paymentPlanFor(id).deposit;
       var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = uiText('移除', 'Remove');
       detail.append(name, meta); row.append(detail, remove); itemsBox.append(row);
     });
@@ -1184,7 +1215,8 @@ export function renderApply(data: ApplyData): string {
     window.clearTimeout(balanceLookupTimer);
     balanceLookupTimer = window.setTimeout(lookupBalance, 450);
   });
-  paymentMethodInputs.forEach(function (input) { input.addEventListener('change', function () { updatePaymentMethodVisibility(); refreshSummary(); }); });
+  paymentMethodInputs.forEach(function (input) { input.addEventListener('change', function () { updatePaymentMethodVisibility(); renderCart(); }); });
+  form.querySelectorAll('input[name="billingMode"]').forEach(function (input) { input.addEventListener('change', renderCart); });
   updatePaymentMethodVisibility();
   if (squareGiftCardSetup) loadSquareGiftCard().catch(function () {});
   fetch(SETUP_ENDPOINT, { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
@@ -1531,7 +1563,7 @@ export function renderApply(data: ApplyData): string {
     if (checkoutConfirming) return;
     checkoutConfirming = true;
     if (window.GeekSlopeUI && window.GeekSlopeUI.confirm) {
-      var depositTotal = cartIds.reduce(function (total, id) { return total + Number(productMap.get(id).deposit || 0); }, 0);
+      var depositTotal = checkoutAmounts().deposit;
       var firstTerm = termFor(cartIds[0]);
       var deviceNames = cartIds.map(function (id) { return productMap.get(id).name; }).join(uiText('、', ', '));
       var confirmed = true;
