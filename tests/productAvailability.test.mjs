@@ -154,3 +154,39 @@ test('detail calendar disables occupied dates and dates that cross another renta
   assert.equal(context.check('end', date(9)), true)
   assert.equal(context.check('end', date(3)), false)
 })
+
+
+test('backend rejects pickup or return endpoints within shared closure ranges', async t => {
+  const { db, request } = setup(t)
+  const ranges = [{ start: date(5) + 'T00:00', end: date(7) + 'T13:00' }]
+  db.prepare("INSERT INTO systemSettings VALUES ('rentalRules', ?)").run(JSON.stringify({ unavailablePickupRanges: ranges }))
+  for (const [start, end] of [[date(5), date(9)], [date(3), date(6)]]) {
+    const response = await request(start, end)
+    assert.equal(response.status, 409)
+    assert.match((await response.json()).message, /取货或归还时间不可用/)
+  }
+})
+
+test('detail and cart calendars block closed endpoints while allowing rentals across a closure', async t => {
+  const { env, db } = setup(t)
+  db.prepare("INSERT INTO systemSettings VALUES ('rentalRules', ?)").run(JSON.stringify({ unavailablePickupRanges: [{ start: date(5) + 'T00:00', end: date(7) + 'T00:00' }] }))
+  const config = await getRentalConfig(env), [product] = await listProducts(env)
+  const html = renderProductDetail({ product, config })
+  const script = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+  const prefix = script.slice(0, script.indexOf('  var renderPicker ='))
+  const elements = new Map()
+  function element(id) { if (!elements.has(id)) elements.set(id, { value: '', min: '', dataset: {}, addEventListener() {}, setCustomValidity() {} }); return elements.get(id) }
+  const context = { document: { getElementById: element }, window: {}, Intl, Date }
+  runInNewContext(prefix + `availabilityReady = true; globalThis.check = { isUnavailable, rangeUnavailable }; })();`, context)
+  assert.equal(context.check.isUnavailable(date(5)), true)
+  assert.equal(context.check.isUnavailable(date(7)), false)
+  assert.equal(context.check.rangeUnavailable(date(3), date(8)), false)
+  assert.equal(context.check.rangeUnavailable(date(3), date(6)), true)
+  const cart = renderCartPage([product], config)
+  const cartScript = [...cart.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+  const cartContext = { document: { getElementById: element }, window: {}, Intl, Date }
+  runInNewContext(cartScript.slice(0, cartScript.indexOf('  function loadAvailability')) + `globalThis.check = { dateUnavailable, termRangeUnavailable }; })();`, cartContext)
+  assert.equal(cartContext.check.dateUnavailable('pc', date(5)), true)
+  assert.equal(cartContext.check.termRangeUnavailable('pc', date(3), date(8)), false)
+  assert.equal(cartContext.check.termRangeUnavailable('pc', date(3), date(6)), true)
+})

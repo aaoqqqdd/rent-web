@@ -9,6 +9,7 @@ import { renderSiteHeader } from './components/site-header'
 import { ACCOUNT_STATUS_SCRIPT } from './components/account-status'
 import { renderSiteFooter } from './components/site-footer'
 import { renderFeedbackUi, FEEDBACK_SCRIPT } from './components/feedback'
+import { renderAnnouncementUi, ANNOUNCEMENT_SCRIPT } from './components/announcement'
 import { FAVICON_SVG } from './components/brand'
 import { SITE_URL } from './seo'
 
@@ -161,7 +162,9 @@ ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, op
 ${opts.body}
 </main>
 ${renderFeedbackUi()}
+${renderAnnouncementUi()}
 ${renderSiteFooter(opts.contact)}
+${ANNOUNCEMENT_SCRIPT}
 <script>${ACCOUNT_STATUS_SCRIPT}</script>
 <script>
 (() => {
@@ -310,12 +313,8 @@ ${renderSiteFooter(opts.contact)}
     document.querySelectorAll('[data-notice-title]').forEach(function (node) {
       node.textContent = node.getAttribute(english ? 'data-notice-title-en' : 'data-notice-title-zh') || '';
     });
-    document.querySelectorAll('[data-notice-message]').forEach(function (node) {
-      var text = node.getAttribute(english ? 'data-notice-message-en' : 'data-notice-message-zh') || '';
-      node.innerHTML = text
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/&lt;strong&gt;([^<]+)&lt;\\/strong&gt;/g, '<strong>$1</strong>')
-        .replace(/\\n/g, '<br>');
+    document.querySelectorAll('[data-notice-lang]').forEach(function (node) {
+      node.hidden = node.getAttribute('data-notice-lang') !== (english ? 'en' : 'zh');
     });
   }
   function setI18nText(element, value) {
@@ -357,22 +356,11 @@ ${renderSiteFooter(opts.contact)}
     announcement.hidden = !announcement.querySelector('[data-notice-banner]:not([hidden])');
   }
   function showAnnouncementNotice(notice) {
-    if (!notice || !window.GeekSlopeUI || document.querySelector('dialog[open]')) return;
+    if (!notice || !window.GeekSlopeAnnouncement || document.querySelector('dialog[open]')) return;
     var seenKey = 'geekslope-announcement-seen';
     var version = JSON.stringify(notice);
     try { if (sessionStorage.getItem(seenKey) === version) return; } catch (_) {}
-    var message = notice.message || '';
-    var messageEn = notice.messageEn || message;
-    // Public policy notices may contain <strong> markers; the feedback layer uses plain text.
-    var plainText = function (text) { return String(text).replace(/<\\/?strong>/gi, ''); };
-    window.GeekSlopeUI.confirm({
-      title: { zh: announcementTitle(notice, false), en: announcementTitle(notice, true) },
-      message: { zh: plainText(message), en: plainText(messageEn) },
-      confirmText: { zh: '查看详情', en: 'View details' },
-      cancelText: { zh: '关闭通知', en: 'Close notification' }
-    }).then(function (confirmed) {
-      if (confirmed) window.location.href = '/announcements/' + encodeURIComponent(notice.id);
-    });
+    if (!window.GeekSlopeAnnouncement.show(notice)) return;
     // Keep navigation within this visit quiet; updated notices can still appear.
     try { sessionStorage.setItem(seenKey, version); } catch (_) {}
   }

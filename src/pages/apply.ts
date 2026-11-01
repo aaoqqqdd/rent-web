@@ -3,6 +3,7 @@
 
 import { esc } from '../layout'
 import type { Product, RentalConfig } from '../db'
+import { createPickupAvailability } from '../pickup-availability'
 
 interface ApplyData {
   products: Product[]
@@ -57,6 +58,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   var minimumDays = ${config.minimumRentalDays};
   var unavailableDates = ${scriptJson(config.unavailableDates)};
   var unavailableTimeSlots = ${scriptJson(config.unavailableTimeSlots)};
+  var pickupAvailability = (${createPickupAvailability.toString()})(${scriptJson(config)});
   var availability = {};
   var availabilityReady = false;
   var availabilityFailed = false;
@@ -80,10 +82,10 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     var group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service'];
     return occupied.indexOf(period) >= 0 || group.every(function (slot) { return globalSlots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
   }
-  function dateUnavailable(id, date) {
+  function dateUnavailable(id, date, checkClosures) {
     if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
     var item = availability[id] || {};
-    return item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0
+    return (checkClosures !== false && pickupAvailability.dateUnavailable(date, (unavailableTimeSlots[date] || []).concat(item.unavailableTimeSlots ? item.unavailableTimeSlots[date] || [] : []))) || item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0
       || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'))
       || periodPassed(date, 'AM');
   }
@@ -94,7 +96,8 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     return date === today() && hour * 60 + minute >= (period === 'AM' ? 12 * 60 : 23 * 60);
   }
   function termRangeUnavailable(id, start, end) {
-    for (var day = start; day && day <= end; day = addDays(day, 1)) if (dateUnavailable(id, day) || periodPassed(day, 'AM')) return true;
+    if (dateUnavailable(id, start) || dateUnavailable(id, end)) return true;
+    for (var day = start; day && day <= end; day = addDays(day, 1)) if (dateUnavailable(id, day, false) || periodPassed(day, 'AM')) return true;
     return false;
   }
   function nextAvailableDate(id, date) {
@@ -474,7 +477,7 @@ export function renderApply(data: ApplyData): string {
   var MIN_DAYS = ${config.minimumRentalDays};
   var UNAVAILABLE_DATES = ${scriptJson(config.unavailableDates)};
   var UNAVAILABLE_TIME_SLOTS = ${scriptJson(config.unavailableTimeSlots)};
-  var UNAVAILABLE_PICKUP_HOURS = ${scriptJson(config.unavailablePickupHours)};
+  var pickupAvailability = (${createPickupAvailability.toString()})(${scriptJson(config)});
   var DEVICE_AVAILABILITY = {};
   var AVAILABILITY_READY = false;
   var AVAILABILITY_FAILED = false;
@@ -525,7 +528,7 @@ export function renderApply(data: ApplyData): string {
       });
     }
     picker.addEventListener('click', function (event) {
-      var button = event.target.closest('[data-time]'); if (!button) return;
+      var button = event.target.closest('[data-time]'); if (!button || button.disabled || button.hidden) return;
       select.value = button.dataset.time; select.dispatchEvent(new Event('change', { bubbles: true })); sync();
     });
     select.addEventListener('change', sync); sync();
@@ -812,19 +815,20 @@ export function renderApply(data: ApplyData): string {
     var info = typeof slot === 'string' ? slotInfo(slot) : slot; if (!info) return true;
     var item = DEVICE_AVAILABILITY[id] || {};
     var globalSlots = UNAVAILABLE_TIME_SLOTS[date] || []; var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
-    var weekday = new Date(date + 'T00:00:00Z').getUTCDay();
-    var weeklyUnavailable = UNAVAILABLE_PICKUP_HOURS.some(function (range) { return Number(range.weekday) === weekday && timeToMinutes(info.value) >= timeToMinutes(range.start) && timeToMinutes(info.value) < timeToMinutes(range.end); });
-    return item.unavailable || weeklyUnavailable || (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0) || globalSlots.indexOf(info.value) >= 0 || globalSlots.indexOf(info.category) >= 0 || deviceSlots.indexOf(info.value) >= 0 || deviceSlots.indexOf(info.category) >= 0;
+    return item.unavailable || pickupAvailability.timeUnavailable(date, info.value, globalSlots.concat(deviceSlots)) || (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0);
   }
-  function periodUnavailable(id, date, period) {
+  function periodUnavailable(id, date, period, checkClosures) {
     var item = DEVICE_AVAILABILITY[id] || {};
     var occupied = item.unavailablePeriods ? (item.unavailablePeriods[date] || []) : [];
-    return occupied.indexOf(period) >= 0 || pickupSlots.filter(function (slot) { return slot.period === period; }).every(function (slot) { return slotUnavailable(id, date, slot); });
+    var globalSlots = UNAVAILABLE_TIME_SLOTS[date] || [], deviceSlots = item.unavailableTimeSlots ? item.unavailableTimeSlots[date] || [] : [];
+    return occupied.indexOf(period) >= 0 || (checkClosures !== false
+      ? pickupAvailability.periodUnavailable(date, period, globalSlots.concat(deviceSlots))
+      : pickupSlots.filter(function (slot) { return slot.period === period; }).every(function (slot) { return globalSlots.indexOf(slot.value) >= 0 || deviceSlots.indexOf(slot.value) >= 0; }));
   }
-  function dateUnavailable(id, date) {
+  function dateUnavailable(id, date, checkClosures) {
     if (!date || UNAVAILABLE_DATES.indexOf(date) >= 0) return Boolean(date);
     var item = DEVICE_AVAILABILITY[id] || {};
-    return item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0 || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
+    return item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0 || (periodUnavailable(id, date, 'AM', checkClosures) && periodUnavailable(id, date, 'PM', checkClosures));
   }
   function periodPassed(date, period) {
     return date === today && melbourneMinutes() >= (period === 'AM' ? 12 * 60 : 23 * 60);
@@ -837,8 +841,8 @@ export function renderApply(data: ApplyData): string {
   }
   function termRangeUnavailable(id, term) {
     for (var day = term.startDate; day && day <= term.endDate; day = addDays(day, 1)) {
-      if (dateUnavailable(id, day)) return true;
-      for (var period of ['AM', 'PM']) if (termUsesPeriod(term, day, period) && (periodUnavailable(id, day, period) || periodPassed(day, period))) return true;
+      if (dateUnavailable(id, day, false)) return true;
+      for (var period of ['AM', 'PM']) if (termUsesPeriod(term, day, period) && (periodUnavailable(id, day, period, false) || periodPassed(day, period))) return true;
     }
     return false;
   }
@@ -875,7 +879,31 @@ export function renderApply(data: ApplyData): string {
         : 0;
     return paymentBase + paymentFee;
   }
+  function refreshPickupTimeOptions() {
+    [pickupTimeSlot, returnTimeSlot].forEach(function (select) {
+      if (!select) return;
+      Array.from(select.options).forEach(function (option) {
+        option.disabled = method.value === 'Pickup' && cartIds.some(function (id) {
+          var term = termFor(id);
+          return slotUnavailable(id, select === pickupTimeSlot ? term.startDate : term.endDate, option.value);
+        });
+        option.hidden = option.disabled;
+      });
+      if (!Array.from(select.options).some(function (option) { return option.value === select.value && !option.disabled; })) select.value = Array.from(select.options).find(function (option) { return !option.disabled; })?.value || '';
+      var picker = select.parentElement.querySelector('[data-time-picker]');
+      if (!picker) return;
+      picker.querySelectorAll('[data-time]').forEach(function (button) {
+        var option = Array.from(select.options).find(function (item) { return item.value === button.dataset.time; });
+        button.disabled = !option || option.disabled; button.hidden = button.disabled;
+        var selected = button.dataset.time === select.value;
+        button.classList.toggle('is-selected', selected); button.setAttribute('aria-pressed', String(selected));
+      });
+      picker.querySelectorAll('.time-picker-group').forEach(function (group) { group.hidden = Array.from(group.querySelectorAll('[data-time]')).every(function (button) { return button.hidden; }); });
+    });
+    deviceTermsInput.value = JSON.stringify(Object.fromEntries(cartIds.map(function (id) { return [id, termFor(id)]; })));
+  }
   function refreshSummary() {
+    refreshPickupTimeOptions();
     updatePaymentMethodNote();
     var count = cartIds.length;
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);

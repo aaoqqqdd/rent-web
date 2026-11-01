@@ -2,6 +2,7 @@
 
 import { esc } from '../layout'
 import { monthlyRentalRate, weeklyRentalRate, productAvailabilityLabel, type Product, type RentalConfig } from '../db'
+import { createPickupAvailability } from '../pickup-availability'
 
 interface ProductDetailData {
   product: Product
@@ -125,6 +126,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var minimumDays = ${config.minimumRentalDays};
   var globalUnavailableDates = ${scriptJson(config.unavailableDates)};
   var globalUnavailableTimeSlots = ${scriptJson(config.unavailableTimeSlots)};
+  var pickupAvailability = (${createPickupAvailability.toString()})(${scriptJson(config)});
   var availability = {};
   var availabilityReady = false;
   var openPickerState = null;
@@ -167,12 +169,12 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var showDateMessage = function (message, isError) { if (dateMessage) { dateMessage.textContent = message ? localize(message) : ''; dateMessage.dataset.state = isError ? 'error' : ''; } };
   var addDays = function (value, amount) { var date = new Date(value + 'T00:00:00'); date.setDate(date.getDate() + amount); return dateString(date); };
   var clearChildren = function (node) { while (node && node.firstChild) node.removeChild(node.firstChild); };
-  var isUnavailable = function (value) {
+  var isUnavailable = function (value, checkClosures) {
     if (!value || globalUnavailableDates.indexOf(value) >= 0) return Boolean(value);
     var item = availability[${JSON.stringify(product.id)}] || {};
     var globalSlots = globalUnavailableTimeSlots[value] || [];
     var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[value] || []) : [];
-    return item.unavailable || (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || periodPassed(value, 'AM');
+    return (checkClosures !== false && pickupAvailability.dateUnavailable(value, globalSlots.concat(deviceSlots))) || item.unavailable || (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || periodPassed(value, 'AM');
   };
   var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
   var periodUnavailable = function (date, period) {
@@ -184,7 +186,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     return occupied.indexOf(period) >= 0 || group.every(function (slot) { return slots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
   };
   var rangeUnavailable = function (from, until) {
-    for (var value = from; value && value <= until; value = addDays(value, 1)) if (isUnavailable(value) || periodUnavailable(value, 'AM') || (value < until && periodUnavailable(value, 'PM'))) return true;
+    if (isUnavailable(from) || isUnavailable(until)) return true;
+    for (var value = from; value && value <= until; value = addDays(value, 1)) if (isUnavailable(value, false) || periodUnavailable(value, 'AM') || (value < until && periodUnavailable(value, 'PM'))) return true;
     return false;
   };
   var pickerDateDisabled = function (role, value) {

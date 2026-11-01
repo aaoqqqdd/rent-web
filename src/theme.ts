@@ -419,7 +419,19 @@ p { margin: 0; }
 .notice-card .text-link { display: inline-block; margin-top: 22px; color: var(--primary); font-size: 13px; }
 .notice-detail-wrap { max-width: 820px; }
 .notice-detail { padding: clamp(24px, 5vw, 52px); border: 1px solid var(--border); background: var(--card); }
-.notice-detail-message { white-space: pre-wrap; color: var(--fg); line-height: 1.9; }
+.legal-document .notice-published { margin: 12px 0 28px; color: var(--muted-fg); font: 12px var(--mono); }
+.notice-detail + .text-link { display: inline-block; margin-top: 24px; }
+.notice-rich-content { margin-top: 0; color: var(--fg); font-size: 15px; line-height: 1.85; white-space: normal; overflow-wrap: anywhere; }
+.notice-rich-content h1, .notice-rich-content h2 { margin: 28px 0 14px; font-size: 24px; line-height: 1.4; }
+.notice-rich-content h3, .notice-rich-content h4 { margin: 24px 0 12px; font-size: 18px; line-height: 1.5; }
+.notice-rich-content p { margin: 0 0 16px; color: var(--muted-fg); font-size: inherit; line-height: 1.85; }
+.notice-rich-content ul, .notice-rich-content ol { margin: 16px 0 22px; padding-left: 24px; }
+.notice-rich-content li { margin: 10px 0; padding-left: 4px; color: var(--muted-fg); line-height: 1.85; }
+.notice-rich-content strong, .notice-rich-content b { color: var(--fg); font-weight: 600; }
+.notice-rich-content img { max-width: 100%; height: auto; }
+.notice-rich-content hr { margin: 24px 0; border: 0; border-top: 1px solid var(--border); }
+.notice-rich-content > :first-child { margin-top: 0; }
+.notice-rich-content > :last-child { margin-bottom: 0; }
 .coupon-callout { display: flex; align-items: center; gap: 18px; margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); }
 .coupon-callout span { color: var(--muted-fg); font-size: 13px; }
 .coupon-callout strong { color: var(--secondary); font: 700 20px var(--mono); letter-spacing: .08em; }
@@ -1163,7 +1175,29 @@ html.gs-dialog-open, html.gs-dialog-open body { overflow: hidden; }
 .gs-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 .gs-dialog-actions .btn { min-width: 100px; }
 
+/* Published announcements use a reading window with a scrollable document. */
+.notice-dialog { width: min(760px, calc(100vw - 32px)); max-width: none; margin: auto; padding: 0; border: 0; background: transparent; color: var(--fg); overflow: visible; }
+.notice-dialog::backdrop { background: rgba(4,5,10,.76); backdrop-filter: blur(6px); }
+.notice-dialog-shell { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: min(860px, calc(100dvh - 32px)); border: 1px solid var(--border-bright); border-radius: 16px; background: var(--card); box-shadow: 0 40px 100px -24px rgba(0,0,0,.9); overflow: hidden; animation: gs-dialog-in .22s ease both; }
+.notice-dialog-header { position: relative; padding: 24px 28px 22px; border-bottom: 1px solid var(--border); }
+.notice-dialog-kicker { min-height: 44px; display: flex; align-items: center; padding-right: 160px; color: var(--secondary); font: 600 11px var(--mono); letter-spacing: .08em; }
+.notice-dialog-heading h2 { margin-top: 8px; font-size: clamp(21px, 3vw, 28px); line-height: 1.45; overflow-wrap: anywhere; }
+.notice-dialog-controls { position: absolute; top: 24px; right: 24px; display: flex; align-items: center; gap: 10px; }
+.notice-dialog .language-switcher button { min-width: 44px; min-height: 44px; }
+.notice-dialog-close { width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted-fg); font-size: 28px; cursor: pointer; }
+.notice-dialog-close:hover { color: var(--fg); background: var(--muted); }
+.notice-dialog-body { min-height: 0; padding: 26px 28px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.notice-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 16px 28px; border-top: 1px solid var(--border); background: var(--card); }
+.notice-dialog-footer .btn { min-height: 44px; }
+
 @media (max-width: 620px) {
+  .notice-dialog { width: calc(100vw - 24px); }
+  .notice-dialog-shell { max-height: calc(100dvh - 24px); border-radius: 14px; }
+  .notice-dialog-header { padding: 14px 18px 18px; }
+  .notice-dialog-controls { top: 14px; right: 14px; gap: 4px; }
+  .notice-dialog-body { padding: 22px 18px; }
+  .notice-dialog-footer { padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); }
+  .notice-dialog-footer .btn { flex: 1; }
   .gs-toast-region { top: 84px; left: 16px; right: 16px; width: auto; }
   .gs-dialog { width: 100%; max-width: 100%; max-height: 88vh; margin: auto 0 0; }
   .gs-dialog-card { max-height: 88vh; padding: 22px 18px calc(20px + env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0; animation-name: gs-sheet-in; }

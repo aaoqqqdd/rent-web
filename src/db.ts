@@ -4,6 +4,8 @@
 // 所有查询都用 COALESCE / try-catch 兜底，任一字段缺失或表结构变动都不影响页面出图。
 
 import type { Env } from './index'
+import { prepareNoticeContent } from './notice-content'
+import { readPickupClosures } from './pickup-availability'
 
 export interface Product {
   id: string
@@ -111,6 +113,9 @@ export interface PublicNotice {
   message: string
   titleEn?: string
   messageEn?: string
+  /** Sanitized on the server, suitable for the rich announcement reader. */
+  messageHtml?: string
+  messageHtmlEn?: string
   createdAt: string
   couponCode?: string
   expiresAt?: string
@@ -396,9 +401,15 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     const queryLimit = Math.max(1, Math.min(100, limit))
     const seenNoticeKeys = new Set<string>()
     let result: { results?: Record<string, unknown>[] }
+    let englishColumns = 'NULL AS title_en, NULL AS message_en'
+    try {
+      const columns = await env.RENT.prepare('PRAGMA table_info(notifications)').all<{ name: string }>()
+      const names = new Set((columns.results || []).map(column => column.name))
+      if (names.has('title_en') && names.has('message_en')) englishColumns = 'title_en, message_en'
+    } catch { /* 兼容尚未应用双语通告迁移的数据库。 */ }
     try {
       result = await env.RENT.prepare(
-        `SELECT MIN(id) AS id, type, title, message, created_at,
+        `SELECT MIN(id) AS id, type, title, message, ${englishColumns}, created_at,
                 MIN(CASE
                       WHEN expires_at IS NULL OR expires_at > CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
                                                                     THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
@@ -415,14 +426,14 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
            AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
            AND ((type IN ('agreement_update', 'policy_update', 'legal_update') AND datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days') > CURRENT_TIMESTAMP)
                 OR (type = 'announcement' AND datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') > CURRENT_TIMESTAMP))
-         GROUP BY type, title, message, created_at
+         GROUP BY type, title, message, title_en, message_en, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
       ).bind(Math.min(500, queryLimit * 20)).all<Record<string, unknown>>()
     } catch {
       // 0125 尚未应用时，回退到没有 expires_at 的旧通知表结构。
       result = await env.RENT.prepare(
-        `SELECT MIN(id) AS id, type, title, message, created_at,
+        `SELECT MIN(id) AS id, type, title, message, ${englishColumns}, created_at,
                 CASE WHEN type IN ('agreement_update', 'policy_update', 'legal_update')
                      THEN datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days')
                      ELSE datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') END AS expires_at
@@ -431,7 +442,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
              AND deleted_at IS NULL
              AND ((type IN ('agreement_update', 'policy_update', 'legal_update') AND datetime(created_at, '+${PUBLIC_AGREEMENT_UPDATE_DAYS} days') > CURRENT_TIMESTAMP)
                   OR (type = 'announcement' AND datetime(created_at, '+${PUBLIC_ANNOUNCEMENT_DAYS} days') > CURRENT_TIMESTAMP))
-         GROUP BY type, title, message, created_at
+         GROUP BY type, title, message, title_en, message_en, created_at
          ORDER BY created_at DESC
          LIMIT ?`,
       ).bind(Math.min(500, queryLimit * 20)).all<Record<string, unknown>>()
@@ -442,22 +453,19 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
       const policyInfo = isPublicUpdate ? buildPolicyUpdateNotice(String(row.message ?? '')) : null
       const title = policyInfo ? policyInfo.title : String(row.title ?? '最新通告')
       const message = policyInfo ? policyInfo.message : String(row.message ?? '')
-      const titleEn = policyInfo?.titleEn
-      const messageEn = policyInfo?.messageEn
+      const titleEn = policyInfo?.titleEn || String(row.title_en || '') || undefined
+      const messageEn = policyInfo?.messageEn || String(row.message_en || '') || undefined
       // Notifications are stored once per recipient. Collapse the normalized
       // copies so the public site shows one update instead of one card per user.
       const timeKey = String(row.created_at ?? '').replace('T', ' ').slice(0, 16)
-      const key = `${type}|${title}|${message}|${isPublicUpdate ? timeKey : String(row.created_at ?? '')}`
+      const key = `${type}|${title}|${message}|${titleEn || ''}|${messageEn || ''}|${isPublicUpdate ? timeKey : String(row.created_at ?? '')}`
       if (seenNoticeKeys.has(key)) continue
       seenNoticeKeys.add(key)
       notices.push({
         id: `announcement:${String(row.id ?? '')}`,
         kind: 'announcement',
         isAdminAnnouncement: type === 'announcement',
-        title,
-        message,
-        titleEn,
-        messageEn,
+        ...prepareNoticeContent(title, message, titleEn, messageEn),
         createdAt: String(row.created_at ?? ''),
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
       })
@@ -652,6 +660,7 @@ export interface RentalConfig {
   unavailableTimeSlots: Record<string, string[]>
   serviceFeeHours: Array<{ start: string; end: string }>
   unavailablePickupHours: Array<{ weekday: number; start: string; end: string }>
+  unavailablePickupRanges: Array<{ start: string; end: string }>
   businessHours: { start: string; end: string }
   serviceFeeRate: number
   pickupLocations: string[]
@@ -668,6 +677,7 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     unavailableTimeSlots: {},
     serviceFeeHours: [{ start: '07:00', end: '08:00' }, { start: '21:00', end: '23:00' }],
     unavailablePickupHours: [],
+    unavailablePickupRanges: [],
     businessHours: { start: '09:00', end: '20:00' },
     serviceFeeRate: 0.1,
     pickupLocations: [],
@@ -681,6 +691,7 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     for (const row of rows.results ?? []) {
       const parsed = JSON.parse(row.value || '{}') as Record<string, unknown>
       if (row.key === 'rentalRules') {
+        cfg.unavailablePickupRanges = readPickupClosures(parsed.unavailablePickupRanges)
         if (Number(parsed.minimumRentalDays) > 0) {
           cfg.minimumRentalDays = Math.floor(Number(parsed.minimumRentalDays))
         }

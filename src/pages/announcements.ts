@@ -1,5 +1,6 @@
 import { esc } from '../layout'
 import type { PublicNotice } from '../db'
+import { prepareNoticeContent, noticeBodyHtml, NOTICE_ENGLISH_UNAVAILABLE } from '../notice-content'
 
 function noticeDate(value: string): string {
   const raw = String(value || '').trim()
@@ -16,24 +17,15 @@ function noticeDate(value: string): string {
   }).format(date)
 }
 
-function noticeMessage(value: string): string {
-    return esc(value)
-        .replace(/&lt;strong&gt;([^<]+)&lt;\/strong&gt;/g, '<strong>$1</strong>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n/g, '<br>')
-}
-
-function couponMessageAttrs(notice: PublicNotice): string {
-    if (notice.kind !== 'coupon') return ''
-    return ` data-coupon-message data-coupon-message-zh="${esc(notice.message)}" data-coupon-message-en="${esc(notice.couponMessageEn || notice.message)}"`
-}
-
 function noticeTitleAttrs(notice: PublicNotice): string {
-    return notice.titleEn ? ` data-notice-title data-notice-title-zh="${esc(notice.title)}" data-notice-title-en="${esc(notice.titleEn)}"` : ''
+    return ` data-notice-title data-notice-title-zh="${esc(notice.title)}" data-notice-title-en="${esc(notice.titleEn || (notice.kind === 'coupon' ? `Promo code ${notice.couponCode || ''}`.trim() : 'Site announcement'))}"`
 }
 
-function noticeMessageAttrs(notice: PublicNotice): string {
-    return notice.messageEn ? ` data-notice-message data-notice-message-zh="${esc(notice.message)}" data-notice-message-en="${esc(notice.messageEn)}"` : ''
+function noticeMessage(notice: PublicNotice, preview = false): string {
+    const content = prepareNoticeContent(notice.title, notice.messageHtml || notice.message, notice.titleEn, notice.messageHtmlEn || notice.messageEn || notice.couponMessageEn)
+    if (preview) return `<p data-notice-lang="zh" data-no-translate>${esc(content.message)}</p><p data-notice-lang="en" data-no-translate hidden>${esc(content.messageEn || 'An English version of this announcement is not available yet.')}</p>`
+    return `<div class="legal-document__content notice-rich-content" data-notice-lang="zh" lang="zh-CN" data-no-translate>${noticeBodyHtml(content.messageHtml, content.title)}</div>
+      <div class="legal-document__content notice-rich-content" data-notice-lang="en" lang="en" data-no-translate hidden>${noticeBodyHtml(content.messageHtmlEn, content.titleEn || '') || NOTICE_ENGLISH_UNAVAILABLE}</div>`
 }
 
 function noticeCard(notice: PublicNotice): string {
@@ -48,7 +40,7 @@ function noticeCard(notice: PublicNotice): string {
   <span class="notice-card-kind">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</span>
   ${couponTitle}
   <time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time>
-  <p${noTranslate}${couponMessageAttrs(notice)}${noticeMessageAttrs(notice)}>${noticeMessage(notice.message)}</p>
+  ${noticeMessage(notice, true)}
   <span class="text-link">${isCoupon ? '去挑选设备' : '查看详情'} <span aria-hidden="true">→</span></span>
 </a>`
 }
@@ -71,17 +63,13 @@ export function renderAnnouncements(notices: PublicNotice[]): string {
 export function renderAnnouncementDetail(notice: PublicNotice | null): string {
     if (!notice) return '<section class="section"><div class="wrap"> <div class="empty-state"><strong>通告不存在或已失效</strong><p>这条消息可能已经撤回，或优惠码已过期。</p><a class="btn btn-primary" href="/announcements">返回通告列表</a></div></div></section>'
     const noTranslate = notice.isAdminAnnouncement || notice.titleEn ? ' data-no-translate' : ''
-    return `<section class="page-hero compact">
-  <div class="wrap">
+    return `<section class="section">
+  <div class="wrap doc legal-document notice-detail-wrap">
     <div class="kicker">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</div>
     <h1${noTranslate}${noticeTitleAttrs(notice)}>${esc(notice.title)}</h1>
-    <p>${esc(noticeDate(notice.createdAt))}</p>
-  </div>
-</section>
-<section class="section">
-  <div class="wrap notice-detail-wrap">
+    <p class="notice-published"><time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time></p>
     <article class="notice-detail">
-      <div class="notice-detail-message"${noTranslate}${couponMessageAttrs(notice)}${noticeMessageAttrs(notice)}>${noticeMessage(notice.message)}</div>
+      ${noticeMessage(notice)}
       ${notice.kind === 'coupon' && notice.couponCode ? `<div class="coupon-callout" data-coupon-callout data-coupon-prefix-zh="🎉 新优惠上线！使用优惠码" data-coupon-prefix-en="🎉 New offer live! Enter promo code" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}" data-coupon-cta-zh="去挑选设备" data-coupon-cta-en="Browse devices"><span data-coupon-prefix>🎉 新优惠上线！使用优惠码</span><strong>${esc(notice.couponCode)}</strong><em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em><a class="coupon-callout-link" href="/products?coupon=${encodeURIComponent(notice.couponCode)}"><span data-coupon-cta>去挑选设备</span> <span aria-hidden="true">→</span></a></div>` : ''}
     </article>
     <a class="text-link" href="/announcements">← 返回通告列表</a>

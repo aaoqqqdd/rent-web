@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 import { getRentalConfig, isDeviceBookable } from './db'
+import { createPickupAvailability } from './pickup-availability'
 import { combinePersonName, currentUser, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
@@ -202,14 +203,8 @@ function serviceFeeTimeSlot(slot: string, config: Awaited<ReturnType<typeof getR
   return category === 'morning_service' || category === 'evening_service' || category === 'service_fee'
 }
 
-function timeSlotUnavailable(slots: string[] | undefined, slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>, date?: string): boolean {
-  const category = timeSlotCategory(slot, config)
-  const weeklyUnavailable = date && config.unavailablePickupHours.some((range) => {
-    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay()
-    const minute = timeToMinutes(slot)
-    return range.weekday === weekday && minute >= timeToMinutes(range.start) && minute < timeToMinutes(range.end)
-  })
-  return Boolean(weeklyUnavailable || slots?.includes(slot) || (category && slots?.includes(category)))
+function timeSlotUnavailable(slots: string[] | undefined, slot: string, config: Awaited<ReturnType<typeof getRentalConfig>>, date: string): boolean {
+  return createPickupAvailability(config).timeUnavailable(date, slot, slots)
 }
 
 function timeSlotPassed(date: string, slot: string, today: string, config: Awaited<ReturnType<typeof getRentalConfig>>): boolean {
