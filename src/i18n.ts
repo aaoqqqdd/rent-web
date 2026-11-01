@@ -637,6 +637,7 @@ export const ENGLISH_COPY: Record<string, string> = {
 // Dynamic values are handled after exact-copy lookup. Keep these rules specific so
 // product names and administrator-authored content are never rewritten accidentally.
 export const ENGLISH_PATTERNS: Array<[string, string]> = [
+  ['^(账号已注册，)?(\\d+) 台设备的申请已提交。月租订单首期收取一个月租金和押金，后续每 30 天自动扣取租金。$', '$2 device(s) submitted. Monthly rentals include one month of rent and the deposit in the first payment, with automatic rental payments every 30 days thereafter.'],
   ['^(\\d+) 台设备的申请已提交，(\\d+) 台设备因档期冲突已自动拒绝，请在账号中查看。$', 'Applications for $1 device(s) submitted; $2 device(s) automatically declined due to booking conflicts. Check your account for details.'],
   ['^墨尔本电脑租赁 — (.+)$', 'Melbourne computer rental — $1'],
   ['^(.+) 提供墨尔本电脑租赁与中文服务，涵盖游戏本、商务笔记本和工作站，适合留学生、办公与创作项目。查看日租、周租、月租及实时库存；CBD 及周边可配送，其他郊区预约自取，确认后签约付款。$', '$1 offers Melbourne computer rental and laptop hire with Chinese and English service for students, work and creative projects. Compare daily, weekly and monthly rates and live stock. CBD and nearby delivery or arranged pickup; sign and pay after confirmation.'],

@@ -4,6 +4,7 @@
 import { esc } from '../layout'
 import type { Product, RentalConfig } from '../db'
 import { createPickupAvailability } from '../pickup-availability'
+import { rentalPriceBreakdown, firstRentalInstallment } from '../rental-pricing'
 
 interface ApplyData {
   products: Product[]
@@ -175,13 +176,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   }
   function write(ids, terms) { persist(ids, terms); render(); }
   function rentalFee(product, days) {
-    var monthlyDays = Math.floor(days / 30) * 30;
-    var weeklyDays = Math.floor((days - monthlyDays) / 7) * 7;
-    var dailyDays = days - monthlyDays - weeklyDays;
-    var day = Number(product.day || 0);
-    var weeklyRate = day * (1 - Math.min(100, Math.max(0, Number(product.weeklyDiscountPercent || 0))) / 100);
-    var monthlyRate = day * (1 - Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0))) / 100);
-    return monthlyDays * monthlyRate + weeklyDays * weeklyRate + dailyDays * day;
+    return (${rentalPriceBreakdown.toString()})(product, days).total;
   }
   function pickerDateDisabled(id, role, term, date) {
     if (!availabilityReady || availabilityFailed || date < today() || dateUnavailable(id, date)) return true;
@@ -548,6 +543,7 @@ export function renderApply(data: ApplyData): string {
   var deliveryFields = document.getElementById('delivery-fields');
   var submitBtn = document.getElementById('submit-btn');
   var appliedDiscount = 0;
+  var appliedDeviceDiscounts = {};
   var deliveryQuoteId = '';
   var deliveryQuoteAmount = 0;
   var deliveryQuoteSpeed = 'Same day';
@@ -680,6 +676,7 @@ export function renderApply(data: ApplyData): string {
     var code = document.getElementById('couponCode').value.trim();
     couponState = code ? 'unchecked' : 'empty';
     appliedDiscount = 0;
+    appliedDeviceDiscounts = {};
   }
   function isVictoriaDeliveryAddress() {
     if (document.getElementById('deliveryState').value.toUpperCase() !== 'VIC') return false;
@@ -879,17 +876,38 @@ export function renderApply(data: ApplyData): string {
     return cartIds.reduce(function (total, id) { var days = termDays(termFor(id)); return total + (days > 0 && days < 30 ? productMap.get(id).deposit : 0); }, 0);
   }
   function calculateRentalPayable() {
-    var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
-    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(serviceFeeSlot).length * 100) / 100 : 0;
-    var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
+    return checkoutAmounts().rentalPayable;
+  }
+  function rentalBreakdown(product, days) { return (${rentalPriceBreakdown.toString()})(product, days); }
+  function checkoutAmounts() {
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentBase = Math.max(0, rentTotal + serviceFee + deliveryFee - appliedDiscount);
-    var paymentFee = selectedPaymentMethod === 'card'
-      ? Math.round(paymentBase * stripeFeeRate * 100) / 100
-      : selectedPaymentMethod === 'square'
-        ? Math.round(paymentBase * squareProcessingFeeRate * 100) / 100
-        : 0;
-    return paymentBase + paymentFee;
+    var amounts = { original: 0, monthlyDiscount: 0, weeklyDiscount: 0, rent: 0, firstRent: 0, monthlyDeposit: 0, deposit: 0, serviceFee: 0, hasMonthly: false };
+    var serviceMultiplier = method.value === 'Pickup' ? ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(serviceFeeSlot).length : 0;
+    var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
+    var sharedDeliveryFee = cartIds.length ? Math.round(deliveryFee / cartIds.length * 100) / 100 : 0;
+    var paymentFee = 0;
+    cartIds.forEach(function (id, index) {
+      var product = productMap.get(id), days = termDays(termFor(id));
+      var price = rentalBreakdown(product, days);
+      var discount = appliedDiscount ? Number(appliedDeviceDiscounts[id] || 0) : 0;
+      var monthly = selectedPaymentMethod === 'card' && days >= 30;
+      amounts.original += price.originalAmount;
+      amounts.monthlyDiscount += price.monthlyDiscountAmount;
+      amounts.weeklyDiscount += price.weeklyDiscountAmount;
+      amounts.rent += price.total;
+      var firstRent = monthly ? (${firstRentalInstallment.toString()})(price.total, days, price.monthlyRate, discount) : Math.max(0, price.total - discount);
+      var serviceFee = Math.round(price.total * serviceMultiplier * 100) / 100;
+      var orderDeliveryFee = index === cartIds.length - 1 ? Math.round((deliveryFee - sharedDeliveryFee * (cartIds.length - 1)) * 100) / 100 : sharedDeliveryFee;
+      var orderPrincipal = firstRent + serviceFee + orderDeliveryFee + (monthly ? product.deposit : 0);
+      paymentFee += selectedPaymentMethod === 'balance' ? 0 : Math.round(orderPrincipal * (selectedPaymentMethod === 'card' ? stripeFeeRate : squareProcessingFeeRate) * 100) / 100;
+      amounts.firstRent += firstRent;
+      amounts.deposit += product.deposit;
+      amounts.monthlyDeposit += monthly ? product.deposit : 0;
+      amounts.serviceFee += serviceFee;
+      amounts.hasMonthly = amounts.hasMonthly || monthly;
+    });
+    var paymentBase = Math.max(0, amounts.firstRent + amounts.serviceFee + deliveryFee + (selectedPaymentMethod === 'balance' ? amounts.deposit : amounts.monthlyDeposit));
+    return Object.assign(amounts, { deliveryFee: deliveryFee, paymentFee: paymentFee, rentalPayable: Math.round((paymentBase + paymentFee) * 100) / 100 });
   }
   function refreshPickupTimeOptions() {
     [pickupTimeSlot, returnTimeSlot].forEach(function (select) {
@@ -918,20 +936,16 @@ export function renderApply(data: ApplyData): string {
     refreshPickupTimeOptions();
     updatePaymentMethodNote();
     var count = cartIds.length;
+    var amounts = checkoutAmounts();
     var dailyTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).day; }, 0);
     var depositTotal = cartIds.reduce(function (total, id) { return total + productMap.get(id).deposit; }, 0);
-    var rentTotal = cartIds.reduce(function (total, id) { var term = termFor(id); var days = termDays(term); return total + (days > 0 ? rentalFee(productMap.get(id), days) : 0); }, 0);
-    var serviceFee = method.value === 'Pickup' ? Math.round(rentTotal * ${config.serviceFeeRate} * [pickupTimeSlot.value, returnTimeSlot.value].filter(serviceFeeSlot).length * 100) / 100 : 0;
-    var deliveryFee = method.value === 'Delivery' ? deliveryQuoteAmount : 0;
+    var rentTotal = amounts.rent;
+    var serviceFee = amounts.serviceFee;
+    var deliveryFee = amounts.deliveryFee;
     var total = Math.max(0, rentTotal + serviceFee + depositTotal + deliveryFee - appliedDiscount);
     var selectedPaymentMethod = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var paymentBase = Math.max(0, rentTotal + serviceFee + deliveryFee - appliedDiscount);
-    var paymentFee = selectedPaymentMethod === 'card'
-      ? Math.round(paymentBase * stripeFeeRate * 100) / 100
-      : selectedPaymentMethod === 'square'
-        ? Math.round(paymentBase * squareProcessingFeeRate * 100) / 100
-        : 0;
-    var rentalPayable = paymentBase + paymentFee;
+    var paymentFee = amounts.paymentFee;
+    var rentalPayable = amounts.rentalPayable;
     var giftCardDeduction = selectedPaymentMethod === 'square' && squareGiftCardBalance !== null
       ? Math.min(squareGiftCardBalance, rentalPayable)
       : 0;
@@ -947,19 +961,24 @@ export function renderApply(data: ApplyData): string {
       summary.textContent = uiText(count + ' 台设备 · 合计 $' + dailyTotal.toFixed(2) + '/day · 押金 $' + depositTotal.toFixed(2), count + ' device(s) · Total $' + dailyTotal.toFixed(2) + '/day · Deposit $' + depositTotal.toFixed(2));
       return;
     }
-    var rows = summaryRow(uiText('租金', 'Rental'), '$' + rentTotal.toFixed(2))
+    var rows = summaryRow(uiText('租金原价', 'Original rental price'), '$' + amounts.original.toFixed(2))
+      + (amounts.monthlyDiscount > 0 ? summaryRow(uiText('月租优惠', 'Monthly rental discount'), '−$' + amounts.monthlyDiscount.toFixed(2), 'summary-discount') : '')
+      + (amounts.weeklyDiscount > 0 ? summaryRow(uiText('周租优惠', 'Weekly rental discount'), '−$' + amounts.weeklyDiscount.toFixed(2), 'summary-discount') : '')
+      + (appliedDiscount ? summaryRow(uiText('优惠码优惠', 'Promo code discount'), '−$' + appliedDiscount.toFixed(2), 'summary-discount') : '')
+      + (amounts.hasMonthly ? summaryRow(uiText('优惠后总租金', 'Total rent after discounts'), '$' + Math.max(0, rentTotal - appliedDiscount).toFixed(2)) + '<div class="summary-divider"></div>' + summaryRow(uiText('首期租金', 'First rental instalment'), '$' + amounts.firstRent.toFixed(2)) : '')
+      + (amounts.monthlyDeposit > 0 || selectedPaymentMethod === 'balance' ? summaryRow(uiText('本期押金', 'Deposit in this payment'), '$' + (selectedPaymentMethod === 'balance' ? depositTotal : amounts.monthlyDeposit).toFixed(2)) : '')
+      + (amounts.hasMonthly && cardAuthorizationDeposit() > 0 ? summaryRow(uiText('短租押金预授权', 'Short-term deposit authorisation'), '$' + cardAuthorizationDeposit().toFixed(2)) : '')
       + (serviceFee ? summaryRow(uiText('时段服务费', 'Time-slot service fee'), '$' + serviceFee.toFixed(2)) : '')
       + (method.value === 'Delivery' ? summaryRow(uiText('来回配送费', 'Round-trip delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : deliveryQuoteState === 'loading' ? uiText('报价中…', 'Getting quote…') : uiText('填写地址后报价', 'Enter address to quote')) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
-      + (appliedDiscount ? summaryRow(uiText('优惠', 'Discount'), '-$' + appliedDiscount.toFixed(2), 'summary-discount') : '')
       + (selectedPaymentMethod === 'square' && squareGiftCardVerified ? summaryRow(uiText('礼品卡预计扣减', 'Estimated gift card deduction'), '-$' + giftCardDeduction.toFixed(2), 'summary-discount') : '')
       + (selectedPaymentMethod === 'square' && squareGiftCardVerified ? summaryRow(uiText('礼品卡扣减后待付', 'Remaining after gift card'), '$' + giftCardRemaining.toFixed(2)) : '');
     summary.innerHTML = '<div class="summary-title">' + uiText('订单金额', 'Order total') + '</div>'
       + '<div class="summary-count">' + count + uiText(' 台设备', ' device(s)') + '</div>'
       + '<div class="summary-rows">' + rows + '</div>'
       + '<div class="summary-divider"></div>'
-      + summaryRow(selectedPaymentMethod === 'card' && cardAuthorizationDeposit() > 0 ? uiText('预计预授权总额', 'Estimated authorisation total') : uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
-      + summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit');
+      + summaryRow(amounts.hasMonthly ? uiText('首期应付', 'First payment due') : selectedPaymentMethod === 'card' && cardAuthorizationDeposit() > 0 ? uiText('预计预授权总额', 'Estimated authorisation total') : uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
+      + (amounts.hasMonthly ? '<p class="hint">' + uiText('首期收取一个月租金和押金，后续每 30 天自动扣取租金。', 'The first payment includes one month of rent and the deposit. Rent is then charged automatically every 30 days.') + '</p>' : summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit'));
     if (squareGiftCardVerified && squareGiftCardBalance !== null) {
       var previewPayable = calculateRentalPayable();
       var previewDeduction = Math.min(squareGiftCardBalance, previewPayable);
@@ -987,15 +1006,6 @@ export function renderApply(data: ApplyData): string {
     submitBtn.textContent = cartIds.length ? uiText('提交 ' + cartIds.length + ' 台设备申请', 'Submit application for ' + cartIds.length + ' device(s)') : uiText('提交申请', 'Submit application');
     deviceTermsInput.value = JSON.stringify(Object.fromEntries(cartIds.map(function (id) { return [id, termFor(id)]; })));
     refreshSummary();
-  }
-  function rentalFee(product, days) {
-    var monthlyDays = Math.floor(days / 30) * 30;
-    var weeklyDays = Math.floor((days - monthlyDays) / 7) * 7;
-    var dailyDays = days - monthlyDays - weeklyDays;
-    var day = Number(product.day || 0);
-    var weeklyRate = day * (1 - Math.min(100, Math.max(0, Number(product.weeklyDiscountPercent || 0))) / 100);
-    var monthlyRate = day * (1 - Math.min(100, Math.max(0, Number(product.monthlyDiscountPercent || 0))) / 100);
-    return monthlyDays * monthlyRate + weeklyDays * weeklyRate + dailyDays * day;
   }
   if (cartIds.length) {
     fetch('/api/device-availability?deviceIds=' + encodeURIComponent(JSON.stringify(cartIds)), { headers: { Accept: 'application/json' } })
@@ -1413,6 +1423,7 @@ export function renderApply(data: ApplyData): string {
         if (!result.ok || !result.json || !result.json.ok) throw new Error(uiCopy((result.json && result.json.message) || '优惠码无效。'));
         hint.textContent = result.json.message ? uiCopy(result.json.message) : uiText('已优惠 AUD$' + Number(result.json.discount || 0).toFixed(2), 'Discount applied: AUD$' + Number(result.json.discount || 0).toFixed(2));
         appliedDiscount = Number(result.json.discount || 0);
+        appliedDeviceDiscounts = result.json.deviceDiscounts || {};
         couponState = 'valid';
         clearCheckoutError();
         refreshSummary();
@@ -1532,7 +1543,7 @@ export function renderApply(data: ApplyData): string {
             { label: { zh: '设备', en: 'Devices' }, value: cartIds.length + uiText(' 台 · ', ' device(s) · ') + deviceNames },
             { label: { zh: '租期', en: 'Rental term' }, value: formatDate(firstTerm.startDate) + ' – ' + formatDate(firstTerm.endDate) + (cartIds.length > 1 ? uiText('（每台设备可能不同）', ' (dates may differ per device)') : '') },
             { label: { zh: '取还方式', en: 'Handover' }, value: method.value === 'Delivery' ? uiText('送货上门', 'Delivery') : uiText('到店自取', 'Store pickup') },
-            { label: { zh: '租金及手续费', en: 'Rent and fees' }, value: 'AUD $' + calculateRentalPayable().toFixed(2) },
+            { label: checkoutAmounts().hasMonthly ? { zh: '首期应付', en: 'First payment due' } : { zh: '租金及手续费', en: 'Rent and fees' }, value: 'AUD $' + calculateRentalPayable().toFixed(2) },
             { label: { zh: '押金额度', en: 'Deposit amount' }, value: 'AUD $' + depositTotal.toFixed(2) },
             ...(selectedPaymentMethod === 'card' && cardAuthorizationDeposit() > 0 ? [{ label: { zh: '预计预授权总额', en: 'Estimated authorisation total' }, value: 'AUD $' + (calculateRentalPayable() + cardAuthorizationDeposit()).toFixed(2) }] : [])
           ],

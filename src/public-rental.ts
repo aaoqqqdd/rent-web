@@ -1,6 +1,7 @@
 import type { Context } from 'hono'
 import { getRentalConfig, isDeviceBookable } from './db'
 import { createPickupAvailability } from './pickup-availability'
+import { rentalPriceBreakdown, allocateRentalDiscount } from './rental-pricing'
 import { combinePersonName, currentUser, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
@@ -30,8 +31,9 @@ function depositAuthorizationWindowDays(cardBrand: unknown): 7 | 30 {
   return brand === 'visa' || brand === 'mastercard' ? 30 : 7
 }
 
-function depositPaymentModeForRental(rentalPeriod: number, depositCardProvided: boolean, cardBrand: unknown): 'PAID' | 'PREAUTH' | 'SETUP_INTENT' {
+function depositPaymentModeForRental(rentalPeriod: number, depositCardProvided: boolean, cardBrand: unknown, monthlyBilling = false): 'PAID' | 'PREAUTH' | 'SETUP_INTENT' {
   if (!depositCardProvided) return 'PAID'
+  if (monthlyBilling && rentalPeriod >= LONG_TERM_RENTAL_DAYS) return 'PAID'
   return rentalPeriod >= LONG_TERM_RENTAL_DAYS || rentalPeriod > depositAuthorizationWindowDays(cardBrand) ? 'SETUP_INTENT' : 'PREAUTH'
 }
 
@@ -114,13 +116,7 @@ function parseDeviceTerms(body: Record<string, unknown>, deviceIds: string[]): R
 }
 
 function calculateRentalFee(device: Record<string, unknown>, days: number): number {
-  const daily = Math.max(0, numberValue(device.pricePerDay, device.price_per_day))
-  const weeklyDiscount = Math.min(100, Math.max(0, numberValue(device.weeklyDiscountPercent, device.weekly_discount_percent)))
-  const monthlyDiscount = Math.min(100, Math.max(0, numberValue(device.monthlyDiscountPercent, device.monthly_discount_percent)))
-  const monthlyDays = Math.floor(days / 30) * 30
-  const weeklyDays = Math.floor((days - monthlyDays) / 7) * 7
-  const dailyDays = days - monthlyDays - weeklyDays
-  return Number((monthlyDays * daily * (1 - monthlyDiscount / 100) + weeklyDays * daily * (1 - weeklyDiscount / 100) + dailyDays * daily).toFixed(2))
+  return rentalPriceBreakdown(device, days).total
 }
 
 function couponMatchesDevice(coupon: Record<string, unknown>, device: Record<string, unknown>): boolean {
@@ -561,9 +557,11 @@ export async function previewRentalCoupon(c: RentalContext, deviceIds: string[],
   const base = eligible.reduce((sum, index) => sum + fees[index], 0)
   if (coupon.minimum_order_amount && base < numberValue(coupon.minimum_order_amount)) return { ok: false, message: `订单金额未达到该优惠码要求的最低消费 AUD$${numberValue(coupon.minimum_order_amount).toFixed(2)}。` }
   const discount = couponDiscount(coupon, base)
+  const discounts = allocateRentalDiscount(fees, eligible, discount)
+  const deviceDiscounts = Object.fromEntries(devices.map((device, index) => [String(device.id), discounts[index]]))
   const rent = fees.reduce((sum, fee) => sum + fee, 0)
   const deposit = devices.reduce((sum, device) => sum + numberValue(device.depositAmount, device.deposit_amount), 0)
-  return { ok: true, rent: Number(rent.toFixed(2)), discount, deposit: Number(deposit.toFixed(2)), total: Number((rent + deposit - discount).toFixed(2)), message: `已优惠 AUD$${discount.toFixed(2)}` }
+  return { ok: true, rent: Number(rent.toFixed(2)), discount, deviceDiscounts, deposit: Number(deposit.toFixed(2)), total: Number((rent + deposit - discount).toFixed(2)), message: `已优惠 AUD$${discount.toFixed(2)}` }
 }
 
 export async function handleRentalRequest(c: RentalContext, body: Record<string, unknown>): Promise<Response> {
@@ -732,11 +730,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     const base = eligible.reduce((sum, index) => sum + fees[index], 0)
     if (coupon.minimum_order_amount && base < numberValue(coupon.minimum_order_amount)) return json(c, 400, { ok: false, message: `订单金额未达到该优惠码要求的最低消费 AUD$${numberValue(coupon.minimum_order_amount).toFixed(2)}。` })
     const totalDiscount = couponDiscount(coupon, base)
-    let remaining = totalDiscount
-    eligible.forEach((index, position) => {
-      discounts[index] = position === eligible.length - 1 ? remaining : Number(Math.min(fees[index], totalDiscount * fees[index] / base).toFixed(2))
-      remaining = Number((remaining - discounts[index]).toFixed(2))
-    })
+    discounts.splice(0, discounts.length, ...allocateRentalDiscount(fees, eligible, totalDiscount))
   }
 
   let user = await c.env.RENT.prepare('SELECT * FROM users WHERE lower(email) = lower(?) LIMIT 1').bind(contactEmail).first<Record<string, unknown>>()
@@ -820,22 +814,30 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, orderDeliveryFee, note, discounts[index] > 0 ? couponCode : null, discounts[index], serviceFee, submittedAt).run()
       orderIds.push(orderId)
+      if (paymentProvider === 'stripe' && rentalPlan.period.days >= LONG_TERM_RENTAL_DAYS) {
+        const pricing = JSON.stringify({
+          pricePerDay: numberValue(device.pricePerDay, device.price_per_day),
+          weeklyDiscountPercent: numberValue(device.weeklyDiscountPercent, device.weekly_discount_percent),
+          monthlyDiscountPercent: numberValue(device.monthlyDiscountPercent, device.monthly_discount_percent),
+        })
+        await c.env.RENT.prepare("UPDATE orders SET billing_mode = 'MONTHLY', rental_pricing_json = ?, deposit_method = 'card_hold' WHERE id = ?").bind(pricing, orderId).run()
+      }
       // payment_provider 在共享主站中区分 Stripe 卡与礼品卡；旧数据库没有该列时，
       // 保留 card / balance 的历史兼容路径，但不能静默丢弃客户明确选择的 Square。
       try {
         await c.env.RENT.prepare('UPDATE orders SET payment_provider = ?, refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
-          .bind(paymentProvider, refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand), orderId).run()
+          .bind(paymentProvider, refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand, paymentProvider === 'stripe'), orderId).run()
       } catch (error) {
         if (paymentProvider === 'square') throw error
         await c.env.RENT.prepare('UPDATE orders SET refundMethod = ?, stripe_payment_method_id = ?, stripe_setup_intent_id = ?, deposit_payment_mode = ? WHERE id = ?')
-          .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand), orderId).run()
+          .bind(refundMethod, stripePaymentMethodId || null, setupIntentId || null, depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand, paymentProvider === 'stripe'), orderId).run()
       }
       if (paymentProvider === 'square') {
         await c.env.RENT.prepare('UPDATE orders SET square_gift_card_id = ? WHERE id = ?').bind(squareGiftCardId, orderId).run()
       }
-      const depositMode = depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand)
+      const depositMode = depositPaymentModeForRental(rentalPlan.period.days, depositCardPayment, stripeCardBrand, paymentProvider === 'stripe')
       // Stripe 短租只建立一笔合并预授权；审核后主站复用该授权。
-      // 长租（SetupIntent 模式）不在这里扣款，损坏或逾期时才按实际费用从保存的卡扣。
+      // 月付订单在审核后收取首月租金和押金；此处只保存支付方式，不扣整段租金。
       if (depositMode === 'PREAUTH' && deposit > 0) {
         try {
           await authorizeCardForOrder(c, orderId, String(user.id), deposit, stripePaymentMethodId, stripeCardBrand, rentalPlan.period.days, stripeCustomerId, paymentProvider === 'stripe' ? { amount: Math.max(0, total - deposit), feeRate: settings.processingFeeRate } : undefined)
@@ -880,7 +882,9 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   await createAdminNotifications(c, acceptedIds[0], `官网新申请：${contactName} 申请 ${acceptedIds.length} 台设备，各设备租期按申请内容分别记录。租金 AUD$${totalRent.toFixed(2)}${totalServiceFee ? `，时段服务费 AUD$${totalServiceFee.toFixed(2)}` : ''}${deliveryFee ? `，配送费 AUD$${deliveryFee.toFixed(2)}` : ''}${totalDiscount ? `，优惠 AUD$${totalDiscount.toFixed(2)}` : ''}。`)
   const firstOrder = await c.env.RENT.prepare('SELECT orderNo, deposit_payment_mode FROM orders WHERE id = ?').bind(acceptedIds[0]).first<{ orderNo?: string; deposit_payment_mode?: string }>()
   const paymentBreakdown = paymentProvider === 'stripe'
-    ? firstOrder?.deposit_payment_mode === 'PREAUTH'
+    ? acceptedIndexes.some((index) => rentalPlans.get(String(devices[index].id))!.period.days >= LONG_TERM_RENTAL_DAYS)
+      ? '月租订单首期收取一个月租金和押金，后续每 30 天自动扣取租金。'
+      : firstOrder?.deposit_payment_mode === 'PREAUTH'
       ? '信用卡预授权已完成。'
       : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金${deliveryFee ? `及配送费合计 AUD$${(totalRent + deliveryFee - totalDiscount).toFixed(2)}` : ` AUD$${(totalRent - totalDiscount).toFixed(2)}`} 将在审核通过后自动从同一张卡扣取。`
     : paymentProvider === 'square'

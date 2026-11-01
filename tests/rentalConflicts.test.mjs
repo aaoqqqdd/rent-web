@@ -173,7 +173,7 @@ function requestSetup(t) {
     'pickupTimeSlot TEXT', 'returnTimeSlot TEXT', 'pickupLocation TEXT', 'returnLocation TEXT', 'deliveryMethod TEXT',
     'deliveryFee REAL', 'coupon_code TEXT', 'discount_amount REAL', 'serviceFee REAL', 'payment_provider TEXT',
     'refundMethod TEXT', 'stripe_payment_method_id TEXT', 'stripe_setup_intent_id TEXT', 'deposit_payment_mode TEXT',
-    'deposit_status TEXT', 'deposit_held_amount REAL', 'settlement_status TEXT']) db.exec(`ALTER TABLE orders ADD COLUMN ${column}`)
+    'deposit_status TEXT', 'deposit_held_amount REAL', 'settlement_status TEXT', 'billing_mode TEXT', 'rental_pricing_json TEXT', 'deposit_method TEXT']) db.exec(`ALTER TABLE orders ADD COLUMN ${column}`)
   db.exec(`CREATE TABLE devices (id TEXT, name TEXT, status TEXT, lifecycle_status TEXT, pricePerDay REAL, depositAmount REAL, deleted_at TEXT);
     INSERT INTO devices VALUES ('pc', 'Computer', 'available', 'READY', 20, 300, NULL), ('other', 'Other computer', 'available', 'READY', 30, 400, NULL);
     CREATE TABLE users (id TEXT, email TEXT, name TEXT, phone TEXT, first_name TEXT, last_name TEXT, role TEXT, status TEXT, account_type TEXT);
@@ -198,6 +198,22 @@ function requestSetup(t) {
   })
   return { ...fixture, request }
 }
+
+test('monthly applications persist the discounted total and pricing snapshot without charging the whole term', async t => {
+  const { db, request } = requestSetup(t)
+  db.exec('ALTER TABLE devices ADD COLUMN weekly_discount_percent REAL; ALTER TABLE devices ADD COLUMN monthly_discount_percent REAL; UPDATE devices SET weekly_discount_percent = 10, monthly_discount_percent = 20')
+  const response = await request(110)
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.orderId)
+  assert.equal(order.totalAmount, 2100)
+  assert.equal(order.billing_mode, 'MONTHLY')
+  assert.equal(order.deposit_payment_mode, 'PAID')
+  assert.equal(order.deposit_method, 'card_hold')
+  assert.deepEqual(JSON.parse(order.rental_pricing_json), { pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM payments').get().count, 0)
+  assert.match(result.message, /后续每 30 天自动扣取租金/)
+})
 
 test('request handler arbitrates concurrent submissions, not ordinary later applications', async t => {
   const { db, request, afterRead } = requestSetup(t)
