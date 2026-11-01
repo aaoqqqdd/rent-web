@@ -174,7 +174,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var item = availability[${JSON.stringify(product.id)}] || {};
     var globalSlots = globalUnavailableTimeSlots[value] || [];
     var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[value] || []) : [];
-    return (checkClosures !== false && pickupAvailability.dateUnavailable(value, globalSlots.concat(deviceSlots))) || item.unavailable || (item.unavailableDates || []).indexOf(value) >= 0 || (item.unavailablePeriods && (item.unavailablePeriods[value] || []).length >= 2) || globalSlots.length >= 4 || deviceSlots.length >= 4 || periodPassed(value, 'AM');
+    return (checkClosures !== false && !preferredPeriod(value)) || item.unavailable || (item.unavailableDates || []).indexOf(value) >= 0 || (periodUnavailable(value, 'AM') && periodUnavailable(value, 'PM'));
   };
   var nextAvailable = function (value) { for (var index = 0; index < 730 && isUnavailable(value); index += 1) value = addDays(value, 1); return value; };
   var periodUnavailable = function (date, period) {
@@ -185,9 +185,18 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var group = period === 'AM' ? ['morning_service', 'morning'] : ['afternoon', 'evening_service'];
     return occupied.indexOf(period) >= 0 || group.every(function (slot) { return slots.indexOf(slot) >= 0 || deviceSlots.indexOf(slot) >= 0; });
   };
+  var preferredPeriod = function (date) {
+    var item = availability[${JSON.stringify(product.id)}] || {};
+    var blocked = (globalUnavailableTimeSlots[date] || []).concat(item.unavailableTimeSlots ? item.unavailableTimeSlots[date] || [] : []);
+    return ['AM', 'PM'].find(function (period) { return !periodPassed(date, period) && !periodUnavailable(date, period) && !pickupAvailability.periodUnavailable(date, period, blocked, date === today ? currentMelbourneMinutes() : -1); }) || '';
+  };
   var rangeUnavailable = function (from, until) {
     if (isUnavailable(from) || isUnavailable(until)) return true;
-    for (var value = from; value && value <= until; value = addDays(value, 1)) if (isUnavailable(value, false) || periodUnavailable(value, 'AM') || (value < until && periodUnavailable(value, 'PM'))) return true;
+    var startPeriod = preferredPeriod(from), endPeriod = preferredPeriod(until);
+    for (var value = from; value && value <= until; value = addDays(value, 1)) {
+      if (isUnavailable(value, false)) return true;
+      for (var period of ['AM', 'PM']) if ((value > from || period >= startPeriod) && (value < until || period < endPeriod) && periodUnavailable(value, period)) return true;
+    }
     return false;
   };
   var pickerDateDisabled = function (role, value) {
@@ -260,16 +269,16 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
       startValue = nextAvailable(startValue);
       setDateValue(start, startValue);
     }
-    var startError = startValue < start.min ? pastDateMessage : periodPassed(startValue, 'AM') ? cutoffMessage : isUnavailable(startValue) || periodUnavailable(startValue, 'AM') ? unavailableDateMessage : '';
+    var startError = startValue < start.min ? pastDateMessage : periodPassed(startValue, 'PM') ? cutoffMessage : isUnavailable(startValue) ? unavailableDateMessage : '';
     start.setCustomValidity(startError ? localize(startError) : '');
     end.min = nextAvailable(addDays(startValue, minimumDays));
     end.dataset.minIso = end.min;
     var endValue = readDateValue(end);
-    if (!endValue && initial) {
+    if (initial && (!endValue || endValue < end.min)) {
       endValue = end.min;
       setDateValue(end, endValue);
     }
-    var endError = !endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : periodPassed(endValue, 'AM') ? cutoffMessage : isUnavailable(endValue) || rangeUnavailable(startValue, endValue) ? unavailableDateMessage : '';
+    var endError = !endValue ? invalidDateMessage : endValue < end.min ? '归还日期不能早于最短租期或今天。' : periodPassed(endValue, 'PM') ? cutoffMessage : isUnavailable(endValue) || rangeUnavailable(startValue, endValue) ? unavailableDateMessage : '';
     end.setCustomValidity(endError ? localize(endError) : '');
     showDateMessage(startError || endError, Boolean(startError || endError));
   };
@@ -302,7 +311,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
     var startValue = readDateValue(start);
     var endValue = readDateValue(end);
     if (!productAvailable || !startValue || !endValue || endValue < end.min || !window.GeekSlopeCart || !start.checkValidity() || !end.checkValidity()) return;
-    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: startValue, endDate: endValue, startPeriod: 'AM', endPeriod: 'AM' });
+    window.GeekSlopeCart.add(${scriptJson(product.id)}, { startDate: startValue, endDate: endValue, startPeriod: preferredPeriod(startValue), endPeriod: preferredPeriod(endValue) });
     location.href = ${JSON.stringify(applyHref)};
   });
 })();

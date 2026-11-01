@@ -29,3 +29,19 @@ test('bundled availability is self-contained and enforces closures, weekly hours
   assert.equal(weekly.timeUnavailable('2090-01-03', '10:00'), true)
   assert.equal(weekly.timeUnavailable('2090-01-03', '11:00'), false)
 })
+
+
+test('checkout switches an unavailable default to open business hours instead of adding a service fee', async () => {
+  const result = buildSync({ entryPoints: ['src/pages/apply.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', minify: true })
+  const { renderApply } = await import('data:text/javascript;base64,' + Buffer.from(result.outputFiles[0].text).toString('base64'))
+  const product = { id: 'pc', name: 'PC', model: '', specs: [], pricePerDay: 20, depositAmount: 100, available: true }
+  const html = renderApply({ products: [product], config: { ...config, minimumRentalDays: 1, bufferDays: 0, unavailableDates: [], unavailableTimeSlots: {}, serviceFeeRate: 0.1, pickupLocations: [], deliveryAreas: [], deliveryNote: '' }, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })
+  const script = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+  const code = script.slice(script.indexOf('  function refreshPickupTimeOptions'), script.indexOf('  function refreshSummary'))
+  const pickup = { value: '09:00', options: ['07:00', '09:00', '10:00'].map(value => ({ value })), parentElement: { querySelector() { return null } } }
+  const returned = { value: '10:00', options: [{ value: '10:00' }], parentElement: { querySelector() { return null } } }
+  const context = { pickupTimeSlot: pickup, returnTimeSlot: returned, method: { value: 'Pickup' }, cartIds: ['pc'], termFor: () => ({ startDate: '2090-01-01', endDate: '2090-01-02' }), slotUnavailable: (_id, _date, slot) => slot === '09:00', serviceFeeSlot: slot => slot === '07:00', deviceTermsInput: {} }
+  runInNewContext(code + ';refreshPickupTimeOptions();', context)
+  assert.equal(pickup.value, '10:00')
+  assert.equal(pickup.options.find(option => option.value === '09:00').hidden, true)
+})

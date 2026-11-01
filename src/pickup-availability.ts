@@ -48,8 +48,8 @@ export function createPickupAvailability(config: PickupAvailabilityConfig) {
         || (config.unavailablePickupRanges || []).some(range => range.start <= `${date}T${slot}` && `${date}T${slot}` < range.end)
         || (config.unavailablePickupHours || []).some(range => Number(range.weekday) === weekday && range.start <= slot && slot < range.end)
     },
-    periodUnavailable(date: string, period: string, blockedSlots: string[] = []): boolean {
-      return times.filter(time => (time < '13:00' ? 'AM' : 'PM') === period).every(time => timeUnavailable(date, time, blockedSlots))
+    periodUnavailable(date: string, period: string, blockedSlots: string[] = [], afterMinutes = -1): boolean {
+      return times.filter(time => (time < '13:00' ? 'AM' : 'PM') === period).every(time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) <= afterMinutes || timeUnavailable(date, time, blockedSlots))
     },
     dateUnavailable(date: string, blockedSlots: string[] = []): boolean {
       return times.every(time => timeUnavailable(date, time, blockedSlots))

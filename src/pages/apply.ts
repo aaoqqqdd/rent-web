@@ -85,19 +85,30 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   function dateUnavailable(id, date, checkClosures) {
     if (!date || unavailableDates.indexOf(date) >= 0) return Boolean(date);
     var item = availability[id] || {};
-    return (checkClosures !== false && pickupAvailability.dateUnavailable(date, (unavailableTimeSlots[date] || []).concat(item.unavailableTimeSlots ? item.unavailableTimeSlots[date] || [] : []))) || item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0
-      || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'))
-      || periodPassed(date, 'AM');
+    return (checkClosures !== false && !preferredPeriod(id, date)) || item.unavailable || (item.unavailableDates || []).indexOf(date) >= 0
+      || (periodUnavailable(id, date, 'AM') && periodUnavailable(id, date, 'PM'));
   }
   function periodPassed(date, period) {
     var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
     var hour = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0);
     var minute = Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0);
-    return date === today() && hour * 60 + minute >= (period === 'AM' ? 12 * 60 : 23 * 60);
+    return date === today() && (hour === 24 ? 0 : hour) * 60 + minute >= (period === 'AM' ? 12 * 60 : 23 * 60);
   }
-  function termRangeUnavailable(id, start, end) {
+  function preferredPeriod(id, date) {
+    var item = availability[id] || {};
+    var blocked = (unavailableTimeSlots[date] || []).concat(item.unavailableTimeSlots ? item.unavailableTimeSlots[date] || [] : []);
+    var parts = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+    var minutes = Number(parts.find(function (part) { return part.type === 'hour'; })?.value || 0) * 60 + Number(parts.find(function (part) { return part.type === 'minute'; })?.value || 0);
+    return ['AM', 'PM'].find(function (period) { return !periodPassed(date, period) && !periodUnavailable(id, date, period) && !pickupAvailability.periodUnavailable(date, period, blocked, date === today() ? minutes : -1); }) || '';
+  }
+  function termRangeUnavailable(id, start, end, startPeriod, endPeriod) {
     if (dateUnavailable(id, start) || dateUnavailable(id, end)) return true;
-    for (var day = start; day && day <= end; day = addDays(day, 1)) if (dateUnavailable(id, day, false) || periodPassed(day, 'AM')) return true;
+    startPeriod = startPeriod || preferredPeriod(id, start); endPeriod = endPeriod || preferredPeriod(id, end);
+    if (periodPassed(start, startPeriod) || periodPassed(end, endPeriod)) return true;
+    for (var day = start; day && day <= end; day = addDays(day, 1)) {
+      if (dateUnavailable(id, day, false)) return true;
+      for (var period of ['AM', 'PM']) if ((day > start || period >= startPeriod) && (day < end || period < endPeriod) && periodUnavailable(id, day, period)) return true;
+    }
     return false;
   }
   function nextAvailableDate(id, date) {
@@ -139,11 +150,12 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
   function defaultTerm(id) {
     var start = nextAvailableDate(id, today()); var end = addDays(start, Math.max(1, minimumDays));
     while (termRangeUnavailable(id, start, end) && end < addDays(start, 730)) end = addDays(end, 1);
-    return { startDate: start, endDate: end, startPeriod: 'AM', endPeriod: 'AM' };
+    return { startDate: start, endDate: end, startPeriod: preferredPeriod(id, start) || 'AM', endPeriod: preferredPeriod(id, end) || 'AM' };
   }
   function normalizeTerm(id, value) {
     var fallback = defaultTerm(id); value = value && typeof value === 'object' ? value : {};
-    return { startDate: parseDate(value.startDate) || fallback.startDate, endDate: parseDate(value.endDate) || fallback.endDate, startPeriod: value.startPeriod === 'PM' ? 'PM' : fallback.startPeriod, endPeriod: value.endPeriod === 'PM' ? 'PM' : fallback.endPeriod };
+    var startDate = parseDate(value.startDate) || fallback.startDate, endDate = parseDate(value.endDate) || fallback.endDate;
+    return { startDate: startDate, endDate: endDate, startPeriod: ['AM', 'PM'].indexOf(value.startPeriod) >= 0 && !periodPassed(startDate, value.startPeriod) ? value.startPeriod : preferredPeriod(id, startDate) || 'AM', endPeriod: ['AM', 'PM'].indexOf(value.endPeriod) >= 0 && !periodPassed(endDate, value.endPeriod) ? value.endPeriod : preferredPeriod(id, endDate) || 'AM' };
   }
   function read() {
     try {
@@ -185,7 +197,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     for (var index = 0; index < 42; index += 1) {
       var date = new Date(year, monthIndex, index - offset + 1); var iso = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0'); var button = document.createElement('button'); button.type = 'button'; button.textContent = String(date.getDate()); button.dataset.date = iso;
       if (date.getMonth() !== monthIndex) button.className = 'is-outside'; button.disabled = pickerDateDisabled(id, role, term, iso); if (iso === term[role === 'start' ? 'startDate' : 'endDate']) button.classList.add('is-selected');
-      button.addEventListener('click', function (event) { var picked = event.currentTarget.dataset.date; term[role === 'start' ? 'startDate' : 'endDate'] = picked; if (role === 'start' && term.endDate < addDays(picked, Math.max(1, minimumDays))) term.endDate = addDays(picked, Math.max(1, minimumDays)); var state = read(); state.terms[id] = term; persist(state.ids, state.terms); render(); }); grid.appendChild(button);
+      button.addEventListener('click', function (event) { var picked = event.currentTarget.dataset.date; term[role === 'start' ? 'startDate' : 'endDate'] = picked; term[role === 'start' ? 'startPeriod' : 'endPeriod'] = preferredPeriod(id, picked) || 'AM'; if (role === 'start' && term.endDate < addDays(picked, Math.max(1, minimumDays))) term.endDate = addDays(picked, Math.max(1, minimumDays)); var state = read(); state.terms[id] = term; persist(state.ids, state.terms); render(); }); grid.appendChild(button);
     }
     picker.appendChild(grid);
   }
@@ -196,11 +208,11 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     var close = function () { picker.hidden = true; toggle.setAttribute('aria-expanded', 'false'); };
     toggle.setAttribute('aria-expanded', 'false'); toggle.addEventListener('click', function () { if (picker.hidden) open(); else close(); });
     input.addEventListener('focus', open); input.addEventListener('click', open); input.addEventListener('input', function () { input.value = maskDate(input.value); input.setCustomValidity(''); });
-    input.addEventListener('blur', function () { window.setTimeout(function () { if (!control.contains(document.activeElement)) close(); }, 100); var value = parseDate(input.value); if (!value) { input.setCustomValidity(cartText('请输入有效日期（格式：dd/mm/yyyy）。', 'Enter a valid date (format: dd/mm/yyyy).')); return; } var state = read(); var next = state.terms[id] || term; next[role === 'start' ? 'startDate' : 'endDate'] = value; state.terms[id] = next; persist(state.ids, state.terms); render(); });
+    input.addEventListener('blur', function () { window.setTimeout(function () { if (!control.contains(document.activeElement)) close(); }, 100); var value = parseDate(input.value); if (!value) { input.setCustomValidity(cartText('请输入有效日期（格式：dd/mm/yyyy）。', 'Enter a valid date (format: dd/mm/yyyy).')); return; } var state = read(); var next = state.terms[id] || term; next[role === 'start' ? 'startDate' : 'endDate'] = value; next[role === 'start' ? 'startPeriod' : 'endPeriod'] = preferredPeriod(id, value) || 'AM'; state.terms[id] = next; persist(state.ids, state.terms); render(); });
     control.append(input, toggle, picker); field.append(label, control); return field;
   }
   function termError(id, term) {
-    if (!map.get(id)?.available) return cartText('当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。', 'This device can only be reserved or enquired about; remove it and contact us instead.'); if (!parseDate(term.startDate) || !parseDate(term.endDate)) return cartText('请输入有效日期（格式：dd/mm/yyyy）。', 'Enter a valid date (format: dd/mm/yyyy).'); if (term.startDate < today()) return cartText('取货日期不能早于今天。', 'The pickup date cannot be earlier than today.'); if (termDays(term) < minimumDays) return cartText('租期不能少于 ' + minimumDays + ' 天。', 'The rental term must be at least ' + minimumDays + ' day(s).'); if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return cartText('该设备在所选租期或时段不可用，请选择其他日期。', 'This device is unavailable for the selected term or time slot. Choose different dates.'); return '';
+    if (!map.get(id)?.available) return cartText('当前仅可预约/需询价，暂不支持在线提交，请移除后联系设备顾问。', 'This device can only be reserved or enquired about; remove it and contact us instead.'); if (!parseDate(term.startDate) || !parseDate(term.endDate)) return cartText('请输入有效日期（格式：dd/mm/yyyy）。', 'Enter a valid date (format: dd/mm/yyyy).'); if (term.startDate < today()) return cartText('取货日期不能早于今天。', 'The pickup date cannot be earlier than today.'); if (termDays(term) < minimumDays) return cartText('租期不能少于 ' + minimumDays + ' 天。', 'The rental term must be at least ' + minimumDays + ' day(s).'); if (dateUnavailable(id, term.startDate) || termRangeUnavailable(id, term.startDate, term.endDate, term.startPeriod, term.endPeriod) || periodUnavailable(id, term.startDate, term.startPeriod) || periodUnavailable(id, term.endDate, term.endPeriod)) return cartText('该设备在所选租期或时段不可用，请选择其他日期。', 'This device is unavailable for the selected term or time slot. Choose different dates.'); return '';
   }
   function termEditor(id, term) {
     var wrap = document.createElement('div'); wrap.className = 'device-term-editor'; var head = document.createElement('div'); head.className = 'device-term-editor-head'; var title = document.createElement('strong'); title.textContent = isEnglishLanguage() ? 'Rental term for this device' : '本设备租期'; head.appendChild(title); wrap.appendChild(head);
@@ -815,7 +827,7 @@ export function renderApply(data: ApplyData): string {
     var info = typeof slot === 'string' ? slotInfo(slot) : slot; if (!info) return true;
     var item = DEVICE_AVAILABILITY[id] || {};
     var globalSlots = UNAVAILABLE_TIME_SLOTS[date] || []; var deviceSlots = item.unavailableTimeSlots ? (item.unavailableTimeSlots[date] || []) : [];
-    return item.unavailable || pickupAvailability.timeUnavailable(date, info.value, globalSlots.concat(deviceSlots)) || (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0);
+    return item.unavailable || (date === today && (periodPassed(date, info.period) || (timeToMinutes(info.value) >= 0 && melbourneMinutes() >= timeToMinutes(info.value)))) || pickupAvailability.timeUnavailable(date, info.value, globalSlots.concat(deviceSlots)) || (item.unavailablePeriods && (item.unavailablePeriods[date] || []).indexOf(info.period) >= 0);
   }
   function periodUnavailable(id, date, period, checkClosures) {
     var item = DEVICE_AVAILABILITY[id] || {};
@@ -889,7 +901,7 @@ export function renderApply(data: ApplyData): string {
         });
         option.hidden = option.disabled;
       });
-      if (!Array.from(select.options).some(function (option) { return option.value === select.value && !option.disabled; })) select.value = Array.from(select.options).find(function (option) { return !option.disabled; })?.value || '';
+      if (!Array.from(select.options).some(function (option) { return option.value === select.value && !option.disabled; })) select.value = Array.from(select.options).find(function (option) { return !option.disabled && !serviceFeeSlot(option.value); })?.value || '';
       var picker = select.parentElement.querySelector('[data-time-picker]');
       if (!picker) return;
       picker.querySelectorAll('[data-time]').forEach(function (button) {

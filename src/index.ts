@@ -498,7 +498,7 @@ app.get('/', (c) =>
     }
     const body = renderHome(homeData)
     return renderPage({
-      title: `墨尔本电脑租赁｜华人中文服务、笔记本短租 — ${contact.name}`,
+      title: `墨尔本电脑租赁 — ${contact.name}`,
       description: `${contact.name} 提供墨尔本电脑租赁与中文服务，涵盖游戏本、商务笔记本和工作站，适合留学生、办公与创作项目。查看日租、周租、月租及实时库存；CBD 及周边可配送，其他郊区预约自取，确认后签约付款。`,
       body,
       contact,
