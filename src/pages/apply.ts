@@ -42,7 +42,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       <p class="hint">请在下方每台设备卡片中选择取货和归还日期</p>
     </div>
     <div class="cart-page-list" id="cart-page-items"></div>
-    <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong><p>租金会根据实际日期计算，押金在归还验收后按规则处理。</p></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
+    <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong><p>不足 60 天需押金；满 60 天可选月付，或一次性付清免押金。</p></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
   </div>
 </div></section>
 <script>
@@ -221,9 +221,9 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     var state = read(); var ids = state.ids;
     if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) { ids.push(selectedId); state.terms[selectedId] = normalizeTerm(selectedId, null); persist(ids, state.terms); }
     setEmptyState(ids.length === 0);
-    if (!ids.length) { clearChildren(items); total.textContent = ''; return; } loadAvailability(ids); clearChildren(items); var deposit = 0; var rent = 0; var valid = true;
-    ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; deposit += Number(product.deposit || 0); rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || cartText('配置详情见设备页', 'See the device page for specifications'); detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); var dailyRate = Number(product.day || 0); daily.textContent = dailyRate > 0 ? '$' + dailyRate.toFixed(2) : cartText('询价', 'Enquire'); if (dailyRate > 0) { var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); } var depositText = document.createElement('span'); depositText.textContent = Number(product.deposit || 0) > 0 ? cartText('押金 $' + Number(product.deposit || 0).toFixed(2), 'Deposit $' + Number(product.deposit || 0).toFixed(2)) : cartText('押金待确认', 'Deposit to be confirmed'); var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = cartText('移除', 'Remove'); price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
-    total.textContent = ids.length + cartText(' 台设备｜租金 $', ' device(s) | Rental $') + rent.toFixed(2) + cartText('｜押金 $', ' | Deposit $') + deposit.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (valid ? '' : cartText('｜请先修正不可用租期', ' | Please correct an unavailable rental term'));
+    if (!ids.length) { clearChildren(items); total.textContent = ''; return; } loadAvailability(ids); clearChildren(items); var rent = 0; var valid = true;
+    ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || cartText('配置详情见设备页', 'See the device page for specifications'); detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); var dailyRate = Number(product.day || 0); daily.textContent = dailyRate > 0 ? '$' + dailyRate.toFixed(2) : cartText('询价', 'Enquire'); if (dailyRate > 0) { var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); } var depositText = document.createElement('span'); depositText.textContent = days >= 60 ? cartText('满 60 天一次性付清免押金', 'No deposit when paid in full for 60 days or more') : cartText('押金 $' + Number(product.deposit || 0).toFixed(2), 'Deposit $' + Number(product.deposit || 0).toFixed(2)); var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = cartText('移除', 'Remove'); price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
+    total.textContent = ids.length + cartText(' 台设备｜租金 $', ' device(s) | Rental $') + rent.toFixed(2) + (valid ? '' : cartText('｜请先修正不可用租期', ' | Please correct an unavailable rental term'));
     var checkout = content.querySelector('a[href="/checkout"], a[data-checkout-link]');
     if (checkout) { checkout.dataset.checkoutLink = 'true'; checkout.href = valid ? '/checkout' : '#cart-page-items'; checkout.setAttribute('aria-disabled', String(!valid)); checkout.classList.toggle('is-disabled', !valid); }
   }
@@ -425,14 +425,14 @@ export function renderApply(data: ApplyData): string {
               </div>
             </div>
             <fieldset id="rental-billing-options" class="rental-billing-options" hidden>
-              <legend>长租付款方式</legend>
-              <label class="payment-method-option choice-line">
-                <input type="radio" name="billingMode" value="MONTHLY" checked>
-                <span class="payment-method-copy"><strong>月付</strong><small>首期支付一个月租金和押金</small></span>
+              <legend>租金付款计划</legend>
+              <label class="payment-method-option choice-line" id="monthly-billing-option" hidden>
+                <input type="radio" name="billingMode" value="MONTHLY">
+                <span class="payment-method-copy"><strong>月付</strong><small>租期满 60 天可选，首期支付一个月租金和押金</small></span>
               </label>
               <label class="payment-method-option choice-line">
-                <input type="radio" name="billingMode" value="FULL">
-                <span class="payment-method-copy"><strong>一次性付清 · 免押金</strong><small>适用于租期 60 天及以上的设备</small></span>
+                <input type="radio" name="billingMode" value="FULL" checked>
+                <span class="payment-method-copy"><strong>一次性付清</strong></span>
               </label>
             </fieldset>
             <div class="stripe-payment-box">
@@ -882,7 +882,7 @@ export function renderApply(data: ApplyData): string {
   }
   function paymentPlanFor(id) {
     var payment = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
-    var billing = form.querySelector('input[name="billingMode"]:checked')?.value || 'MONTHLY';
+    var billing = form.querySelector('input[name="billingMode"]:checked')?.value || 'FULL';
     return (${rentalPaymentPlan.toString()})(termDays(termFor(id)), billing, payment === 'card' ? 'stripe' : payment === 'square' ? 'square' : 'internal', productMap.get(id).deposit);
   }
   function refreshBillingOptions() {
@@ -890,7 +890,8 @@ export function renderApply(data: ApplyData): string {
     var payment = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var eligible = cartIds.some(function (id) { return termDays(termFor(id)) >= 60; });
     box.hidden = payment !== 'card' || !eligible;
-    if (!eligible) form.querySelector('input[name="billingMode"][value="MONTHLY"]').checked = true;
+    document.getElementById('monthly-billing-option').hidden = payment !== 'card' || !eligible;
+    if (!eligible || payment !== 'card') form.querySelector('input[name="billingMode"][value="FULL"]').checked = true;
     var refund = form.querySelector('.refund-method-fixed');
     refund.hidden = cartIds.every(function (id) { return paymentPlanFor(id).deposit === 0; });
     document.getElementById('submission-payment-note').textContent = cardAuthorizationDeposit() > 0 ? uiText('信用卡预授权', 'Card pre-authorisation') : uiText('保存付款方式', 'Save payment method');
@@ -899,7 +900,7 @@ export function renderApply(data: ApplyData): string {
     return '<div class="summary-row' + (className ? ' ' + className : '') + '"><span>' + label + '</span><span>' + amount + '</span></div>';
   }
   function cardAuthorizationDeposit() {
-    return cartIds.reduce(function (total, id) { var days = termDays(termFor(id)); return total + (days > 0 && days < 30 ? productMap.get(id).deposit : 0); }, 0);
+    return cartIds.reduce(function (total, id) { var days = termDays(termFor(id)); return total + (days > 0 && days < 30 ? paymentPlanFor(id).deposit : 0); }, 0);
   }
   function calculateRentalPayable() {
     return checkoutAmounts().rentalPayable;
@@ -997,7 +998,7 @@ export function renderApply(data: ApplyData): string {
       + (amounts.hasMonthly ? summaryRow(uiText('优惠后总租金', 'Total rent after discounts'), '$' + Math.max(0, rentTotal - appliedDiscount).toFixed(2)) + '<div class="summary-divider"></div>' + summaryRow(uiText('首期租金', 'First rental instalment'), '$' + amounts.firstRent.toFixed(2)) : '')
       + (amounts.monthlyDeposit > 0 || selectedPaymentMethod === 'balance' ? summaryRow(uiText('本期押金', 'Deposit in this payment'), '$' + (selectedPaymentMethod === 'balance' ? depositTotal : amounts.monthlyDeposit).toFixed(2)) : '')
       + (amounts.hasMonthly && cardAuthorizationDeposit() > 0 ? summaryRow(uiText('短租押金预授权', 'Short-term deposit authorisation'), '$' + cardAuthorizationDeposit().toFixed(2)) : '')
-      + (amounts.hasPrepaid ? summaryRow(uiText('长租设备押金', 'Long-term device deposit'), uiText('免押金', 'Waived')) : '')
+      + (amounts.hasPrepaid ? summaryRow(uiText('一次性付清押金', 'Deposit for full payment'), uiText('免押金', 'Waived')) : '')
       + (serviceFee ? summaryRow(uiText('时段服务费', 'Time-slot service fee'), '$' + serviceFee.toFixed(2)) : '')
       + (method.value === 'Delivery' ? summaryRow(uiText('来回配送费', 'Round-trip delivery'), deliveryQuoteState === 'ready' ? '$' + deliveryFee.toFixed(2) : deliveryQuoteState === 'loading' ? uiText('报价中…', 'Getting quote…') : uiText('填写地址后报价', 'Enter address to quote')) : '')
       + summaryRow(uiText('支付手续费', 'Payment fee'), '$' + paymentFee.toFixed(2))
@@ -1008,7 +1009,7 @@ export function renderApply(data: ApplyData): string {
       + '<div class="summary-rows">' + rows + '</div>'
       + '<div class="summary-divider"></div>'
       + summaryRow(amounts.hasMonthly ? uiText('首期应付', 'First payment due') : selectedPaymentMethod === 'card' && cardAuthorizationDeposit() > 0 ? uiText('预计预授权总额', 'Estimated authorisation total') : uiText('本次应付', 'Due now'), '$' + payableTotal.toFixed(2), 'summary-total')
-      + (amounts.hasPrepaid ? '<p class="hint">' + uiText('长租设备一次性付清全部租金，免押金。', 'Pay the full rental amount for long-term devices with no deposit.') + '</p>' : '')
+      + (amounts.hasPrepaid ? '<p class="hint">' + uiText('满 60 天的设备一次性付清全部租金，免押金。', 'Pay the full rent for devices rented for 60 days or more with no deposit.') + '</p>' : '')
       + (amounts.hasMonthly ? '<p class="hint">' + uiText('首期收取一个月租金和押金，后续每 30 天自动扣取租金。', 'The first payment includes one month of rent and the deposit. Rent is then charged automatically every 30 days.') + '</p>' : summaryRow(uiText('押金', 'Deposit'), '$' + depositTotal.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'summary-deposit'));
     if (squareGiftCardVerified && squareGiftCardBalance !== null) {
       var previewPayable = calculateRentalPayable();

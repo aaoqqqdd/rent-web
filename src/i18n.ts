@@ -1,9 +1,21 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
+  '一次性付清': 'Pay in full',
+  '不足 60 天需押金；满 60 天可选月付，或一次性付清免押金。': 'A deposit applies below 60 days. For 60 days or more, pay monthly with a deposit or pay in full with no deposit.',
+  '满 60 天一次性付清免押金': 'No deposit when paid in full for 60 days or more',
+  '满 60 天的设备一次性付清全部租金，免押金。': 'Pay the full rent for devices rented for 60 days or more with no deposit.',
+  '满 60 天的设备一次性付清免押金，其他设备仍需押金。审核通过并签约后付款。': 'Pay in full for devices rented for 60 days or more with no deposit; deposits still apply to other devices. Payment follows approval and signing.',
+  '一次性付清免押金，租期满 60 天可选月付。': 'No deposit when paid in full. Monthly payments are available for rentals of 60 days or more.',
+  '一次性付清免押金': 'No deposit when paid in full',
   '申请退款': 'Request a refund',
   '保存付款方式': 'Save payment method',
-  '长租付款方式': 'Long-term payment schedule',
+  '租金付款计划': 'Rental payment plan',
+  '租期满 60 天可选，首期支付一个月租金和押金': 'Available for rentals of 60 days or more; first payment includes one month of rent and the deposit',
+  '支付全部租金，无需押金': 'Pay all rent with no deposit',
+  '一次性付清押金': 'Deposit for full payment',
+  '一次性付清全部租金，免押金。': 'Pay the full rental amount with no deposit.',
+  '一次性付清全部租金，免押金。审核通过并签约后付款。': 'Pay the full rental amount with no deposit after approval and signing.',
   '月付': 'Pay monthly',
   '首期支付一个月租金和押金': 'First payment: one month of rent and the deposit',
   '一次性付清 · 免押金': 'Pay in full · No deposit',

@@ -194,7 +194,7 @@ function requestSetup(t) {
   const request = (days, ids = ['pc'], extra = {}) => handleRentalRequest({ env, req: { header() {} }, json: (body, status) => Response.json(body, { status }) }, {
     deviceIds: ids, startDate: date(10), endDate: date(10 + days), startPeriod: 'AM', endPeriod: 'AM',
     firstName: 'Test', lastName: 'User', contactEmail: 'test@example.test', contactPhone: '0412345678',
-    agree: '1', paymentMethod: 'card', stripeSetupIntentId: 'seti_test', pickupTimeSlot: 'morning', returnTimeSlot: 'morning', ...extra,
+    agree: '1', paymentMethod: 'card', billingMode: 'MONTHLY', stripeSetupIntentId: 'seti_test', pickupTimeSlot: 'morning', returnTimeSlot: 'morning', ...extra,
   })
   return { ...fixture, request }
 }
@@ -277,29 +277,30 @@ test('full-payment applications persist zero deposit and full rent without preau
   assert.equal(JSON.parse(order.rental_pricing_json).depositAmountBeforeWaiver, 300)
   assert.equal(JSON.parse(order.rental_pricing_json).billingMode, 'FULL')
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM payments').get().count, 0)
-  assert.match(result.message, /一次性付清全部租金，免押金/)
+  assert.match(result.message, /满 60 天的设备一次性付清免押金/)
   assert.doesNotMatch(result.message, /每 30 天/)
 })
 
-test('shorter subscriptions cannot waive the deposit by requesting full payment', async t => {
+test('short rentals use full payment and retain the server deposit even if monthly is requested', async t => {
   const { db, request } = requestSetup(t)
-  const response = await request(59, ['pc'], { billingMode: 'FULL', depositAmount: 0 })
+  const response = await request(59, ['pc'], { billingMode: 'MONTHLY', depositAmount: 9999 })
   const result = await response.json()
   assert.equal(response.status, 200)
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.orderId)
   assert.equal(order.depositAmount, 300)
-  assert.equal(order.billing_mode, 'MONTHLY')
+  assert.equal(order.billing_mode, 'FULL')
+  assert.equal(order.totalAmount, 1480)
 })
 
-test('full-payment mixed carts keep deposits and monthly billing for shorter subscriptions', async t => {
+test('mixed carts offer monthly only for the eligible devices and full payment for shorter terms', async t => {
   const { db, request } = requestSetup(t)
-  const response = await request(120, ['pc', 'other'], { billingMode: 'FULL', deviceTerms: {
+  const response = await request(120, ['pc', 'other'], { billingMode: 'MONTHLY', deviceTerms: {
     pc: { startDate: '2030-01-01', endDate: '2030-05-01', startPeriod: 'AM', endPeriod: 'AM' },
     other: { startDate: '2030-01-01', endDate: '2030-02-15', startPeriod: 'AM', endPeriod: 'AM' },
   } })
   assert.equal(response.status, 200)
   assert.deepEqual(db.prepare('SELECT deviceId, depositAmount, billing_mode FROM orders ORDER BY deviceId').all().map(row => ({ ...row })), [
-    { deviceId: 'other', depositAmount: 400, billing_mode: 'MONTHLY' },
-    { deviceId: 'pc', depositAmount: 0, billing_mode: 'FULL' },
+    { deviceId: 'other', depositAmount: 400, billing_mode: 'FULL' },
+    { deviceId: 'pc', depositAmount: 300, billing_mode: 'MONTHLY' },
   ])
 })

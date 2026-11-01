@@ -44,7 +44,7 @@ test('coupons are allocated only to eligible devices and first-month rent is cha
   assert.equal(firstRentalInstallment(2400,120,600,120),570)
 })
 
-function checkout(days, { payment = 'card', discount = 0, feeRate = 0, timeFee = false, language = 'zh', billing = 'MONTHLY', extraDays = null } = {}) {
+function checkout(days, { payment = 'card', discount = 0, feeRate = 0, timeFee = false, language = 'zh', billing = 'FULL', extraDays = null } = {}) {
   const selected = { ...product, day: product.pricePerDay, deposit: product.depositAmount }
   const context = {
     cartIds: ['pc'], productMap: new Map([['pc',selected]]), termFor: () => ({ days }), termDays: term => term.days,
@@ -66,22 +66,22 @@ function checkout(days, { payment = 'card', discount = 0, feeRate = 0, timeFee =
 }
 
 test('checkout shows original rent and exact savings, then only first-month rent plus deposit', () => {
-  const result = checkout(120)
+  const result = checkout(120, { billing: 'MONTHLY' })
   assert.match(result.summary.innerHTML, /租金原价<\/span><span>\$3000\.00/)
   assert.match(result.summary.innerHTML, /月租优惠<\/span><span>−\$600\.00/)
   assert.match(result.summary.innerHTML, /首期租金<\/span><span>\$600\.00/)
   assert.match(result.summary.innerHTML, /首期应付<\/span><span>\$900\.00/)
   assert.match(result.summary.innerHTML, /每 30 天/)
   assert.equal(result.calculateRentalPayable(),900)
-  const mixed = checkout(110)
+  const mixed = checkout(110, { billing: 'MONTHLY' })
   assert.match(mixed.summary.innerHTML, /月租优惠<\/span><span>−\$450\.00/)
   assert.match(mixed.summary.innerHTML, /周租优惠<\/span><span>−\$50\.00/)
   assert.equal(mixed.calculateRentalPayable(),900)
 })
 
 test('first payment includes coupon allocation, extras and its own payment fee', () => {
-  assert.equal(checkout(120, { discount: 120, feeRate: 0.025 }).calculateRentalPayable(),891.75)
-  assert.equal(checkout(120, { feeRate: 0.025, timeFee: true }).calculateRentalPayable(),1168.5)
+  assert.equal(checkout(120, { billing: 'MONTHLY', discount: 120, feeRate: 0.025 }).calculateRentalPayable(),891.75)
+  assert.equal(checkout(120, { billing: 'MONTHLY', feeRate: 0.025, timeFee: true }).calculateRentalPayable(),1168.5)
   assert.equal(checkout(7).calculateRentalPayable(),157.5)
   assert.equal(checkout(120, { payment: 'balance' }).calculateRentalPayable(),2400)
   assert.equal(checkout(120, { payment: 'square' }).calculateRentalPayable(),2452.8)
@@ -89,28 +89,56 @@ test('first payment includes coupon allocation, extras and its own payment fee',
 })
 
 
-test('full payment waives only eligible deposits and charges all discounted rent plus fees', () => {
-  assert.equal(checkout(60, { billing: 'FULL' }).calculateRentalPayable(), 1200)
-  assert.equal(checkout(120, { billing: 'FULL', discount: 120, feeRate: 0.025, timeFee: true }).calculateRentalPayable(), 2583)
-  const paid = checkout(120, { billing: 'FULL', language: 'en' })
-  assert.equal(paid.checkoutAmounts().deposit, 0)
+test('full payment keeps deposits below 60 days and waives them from 60 days', () => {
+  for (const days of [1, 7, 30, 59, 60, 120]) {
+    const full = checkout(days)
+    assert.equal(full.checkoutAmounts().deposit, days < 60 ? 300 : 0)
+    assert.equal(full.checkoutAmounts().hasMonthly, false)
+    assert.equal(full.cardAuthorizationDeposit(), days < 30 ? 300 : 0)
+    assert.equal(full.calculateRentalPayable(), rentalPriceBreakdown(product, days).total)
+  }
+  assert.equal(checkout(120, { discount: 120, feeRate: 0.025, timeFee: true }).calculateRentalPayable(), 2583)
+  const paid = checkout(60, { language: 'en' })
   assert.match(paid.summary.innerHTML, /Waived/)
   assert.doesNotMatch(paid.summary.innerHTML, /every 30 days|[\u3400-\u9fff]/)
-  assert.equal(checkout(59, { billing: 'FULL' }).calculateRentalPayable(), 900)
-  assert.equal(checkout(59, { billing: 'FULL' }).checkoutAmounts().deposit, 300)
-  const mixed = checkout(120, { billing: 'FULL', extraDays: 7 })
-  assert.equal(mixed.checkoutAmounts().deposit, 300)
+  assert.equal(checkout(59, { billing: 'MONTHLY' }).checkoutAmounts().hasMonthly, false)
+  assert.equal(checkout(59).checkoutAmounts().deposit, 300)
+  assert.equal(checkout(60).checkoutAmounts().deposit, 0)
+  assert.equal(checkout(60, { billing: 'MONTHLY' }).checkoutAmounts().deposit, 300)
+  const mixed = checkout(120, { billing: 'MONTHLY', extraDays: 7 })
+  assert.equal(mixed.checkoutAmounts().deposit, 600)
   assert.equal(mixed.cardAuthorizationDeposit(), 300)
-  assert.equal(mixed.calculateRentalPayable(), 2557.5)
-  const monthlyMixed = checkout(120, { billing: 'FULL', extraDays: 45 })
-  assert.equal(monthlyMixed.checkoutAmounts().hasMonthly, true)
-  assert.equal(monthlyMixed.checkoutAmounts().deposit, 300)
+  assert.equal(mixed.calculateRentalPayable(), 1057.5)
+  const fullMixed = checkout(120, { extraDays: 45 })
+  assert.equal(fullMixed.checkoutAmounts().hasMonthly, false)
+  assert.equal(fullMixed.checkoutAmounts().deposit, 300)
 })
 
-test('server payment plans ignore tampered deposit and invalid billing choices', () => {
-  for (const days of [0, 7, 29, 30, 59]) assert.equal(rentalPaymentPlan(days, 'FULL', 'stripe', 300).deposit, 300)
-  assert.deepEqual(rentalPaymentPlan(60, 'FULL', 'stripe', 300), { billingMode: 'FULL', deposit: 0, prepaid: true })
-  assert.deepEqual(rentalPaymentPlan(120, 'MONTHLY', 'stripe', 300), { billingMode: 'MONTHLY', deposit: 300, prepaid: false })
-  assert.equal(rentalPaymentPlan(120, 'invalid', 'stripe', 300).billingMode, 'MONTHLY')
+test('server plans enforce the monthly boundary and never trust a client deposit amount', () => {
+  for (const days of [1, 7, 29, 30, 59]) {
+    assert.deepEqual(rentalPaymentPlan(days, 'MONTHLY', 'stripe', 300), { billingMode: 'FULL', deposit: 300, prepaid: false })
+  }
+  for (const days of [1, 7, 59, 60, 120]) {
+    assert.deepEqual(rentalPaymentPlan(days, 'FULL', 'stripe', 300), { billingMode: 'FULL', deposit: days < 60 ? 300 : 0, prepaid: days >= 60 })
+  }
+  assert.deepEqual(rentalPaymentPlan(60, 'MONTHLY', 'stripe', 300), { billingMode: 'MONTHLY', deposit: 300, prepaid: false })
+  assert.equal(rentalPaymentPlan(120, 'invalid', 'stripe', 300).billingMode, 'FULL')
   for (const provider of ['square', 'internal']) assert.equal(rentalPaymentPlan(60, 'MONTHLY', provider, 300).deposit, 0)
+})
+
+
+test('billing choices are hidden when only full payment is available', () => {
+  const code = script.slice(script.indexOf('  function refreshBillingOptions'), script.indexOf('  function summaryRow'))
+  for (const [days, payment, expectedHidden] of [[59, 'card', true], [60, 'card', false], [90, 'balance', true]]) {
+    const box = {}, monthly = {}, full = { checked: false }, refund = {}, note = {}
+    const context = { cartIds: ['pc'], termFor: () => ({ days }), termDays: term => term.days,
+      form: { querySelector: selector => selector.includes('paymentMethod') ? { value: payment } : selector.includes('billingMode') ? full : refund },
+      document: { getElementById: id => ({ 'rental-billing-options': box, 'monthly-billing-option': monthly, 'submission-payment-note': note })[id] },
+      paymentPlanFor: () => rentalPaymentPlan(days, 'FULL', payment === 'card' ? 'stripe' : 'internal', 300), cardAuthorizationDeposit: () => 0, uiText: zh => zh,
+    }
+    runInNewContext(code + ';refreshBillingOptions();', context)
+    assert.equal(box.hidden, expectedHidden)
+    if (expectedHidden) assert.equal(full.checked, true)
+  }
+  assert.doesNotMatch(script, /不足 60 天需押金，满 60 天免押金/)
 })

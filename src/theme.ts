@@ -823,6 +823,7 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .legal-agreement { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }
 .legal-agreement input { width: 18px; height: 18px; min-height: 18px; padding: 0; margin: 2px 0 0; accent-color: var(--primary); }
 .legal-agreement label { min-width: 0; line-height: 1.6; }
+.legal-agreement .inline-form-error { grid-column: 1 / -1; }
 .temporary-credentials { display: grid; gap: 8px; margin-top: 18px; padding: 18px; border: 1px solid rgba(89,229,193,.3); border-radius: 10px; background: rgba(89,229,193,.06); }
 .temporary-credentials > span { color: var(--secondary); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .temporary-credentials strong { font-size: 14px; }.temporary-credentials b { color: var(--secondary); font-family: var(--mono); letter-spacing: .04em; }

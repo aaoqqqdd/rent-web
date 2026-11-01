@@ -817,7 +817,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, '', ?, ?, ?, '到店归还', ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(orderId, orderNo, user.id, device.id, rentalPlan.term.startDate, rentalPlan.term.endDate, rentalPlan.term.startPeriod, rentalPlan.term.endPeriod, rentalPlan.period.days, paymentMethod === 'balance' ? 'balance' : 'card', total, deposit, deliveryMethod === 'Pickup' ? pickupTimeSlot : null, deliveryMethod === 'Pickup' ? returnTimeSlot : null, location, deliveryMethod, orderDeliveryFee, note, discounts[index] > 0 ? couponCode : null, discounts[index], serviceFee, submittedAt).run()
       orderIds.push(orderId)
-      if (paymentPlan.billingMode === 'MONTHLY' || paymentPlan.prepaid) {
+      {
         const pricing = JSON.stringify({
           billingMode: paymentPlan.billingMode,
           depositAmountBeforeWaiver: numberValue(device.depositAmount, device.deposit_amount),
@@ -890,13 +890,13 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
     ? acceptedIndexes.some((index) => paymentPlans[index].billingMode === 'MONTHLY')
       ? '月租订单首期收取一个月租金和押金，后续每 30 天自动扣取租金。'
       : acceptedIndexes.some((index) => paymentPlans[index].prepaid)
-      ? '长租设备一次性付清全部租金，免押金；其他设备按各自租期计费。审核通过并签约后付款。'
+      ? '满 60 天的设备一次性付清免押金，其他设备仍需押金。审核通过并签约后付款。'
       : firstOrder?.deposit_payment_mode === 'PREAUTH'
       ? '信用卡预授权已完成。'
       : `本次共两笔：押金 AUD$${totalDeposit.toFixed(2)} 已通过 SetupIntent 保存卡片；租金${deliveryFee ? `及配送费合计 AUD$${(totalRent + deliveryFee - totalDiscount).toFixed(2)}` : ` AUD$${(totalRent - totalDiscount).toFixed(2)}`} 将在审核通过后自动从同一张卡扣取。`
     : paymentProvider === 'square'
       ? totalDeposit === 0 && acceptedIndexes.some((index) => paymentPlans[index].prepaid)
-        ? '长租设备一次性付清全部租金，免押金；其他设备按各自租期计费。审核通过并签约后付款。'
+        ? '满 60 天的设备一次性付清免押金，其他设备仍需押金。审核通过并签约后付款。'
         : firstOrder?.deposit_payment_mode === 'PREAUTH'
         ? `礼品卡将在审核通过并签约后用于支付租金及服务费；押金 AUD$${totalDeposit.toFixed(2)} 已在另一张信用卡上预授权。`
         : `礼品卡将在审核通过并签约后用于支付租金及服务费；押金 AUD$${totalDeposit.toFixed(2)} 已通过信用卡验证并保存，归还验收后按规则结算。`
