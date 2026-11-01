@@ -1203,6 +1203,7 @@ export function renderApply(data: ApplyData): string {
       } catch (_) {}
       var walletElements = stripe.elements({ clientSecret: result.json.clientSecret, appearance: appearance, locale: stripeLocale });
       var walletElement = walletElements.create('expressCheckout', {
+        layout: { maxColumns: 2, maxRows: 0, overflow: 'never' },
         paymentMethods: {
           applePay: 'always',
           googlePay: 'always',
