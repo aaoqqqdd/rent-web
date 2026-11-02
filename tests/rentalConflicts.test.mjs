@@ -215,6 +215,21 @@ test('monthly applications persist the discounted total and pricing snapshot wit
   assert.match(result.message, /后续每 30 天自动扣取租金/)
 })
 
+test('applications use global discounts for NULL overrides and snapshot the resolved rates', async t => {
+  const { db, request } = requestSetup(t)
+  db.exec(`ALTER TABLE devices ADD COLUMN weekly_discount_percent REAL DEFAULT 0;
+    ALTER TABLE devices ADD COLUMN monthly_discount_percent REAL DEFAULT 0;
+    ALTER TABLE devices ADD COLUMN weekly_discount_override REAL;
+    ALTER TABLE devices ADD COLUMN monthly_discount_override REAL;
+    INSERT INTO systemSettings VALUES ('rentalRules', '{"weeklyDiscountPercent":10,"monthlyDiscountPercent":20}');`)
+  const response = await request(110)
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.orderId)
+  assert.equal(order.totalAmount, 2100)
+  assert.deepEqual(JSON.parse(order.rental_pricing_json), { billingMode: 'MONTHLY', depositAmountBeforeWaiver: 300, pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
+})
+
 test('request handler arbitrates concurrent submissions, not ordinary later applications', async t => {
   const { db, request, afterRead } = requestSetup(t)
   let readers = 0

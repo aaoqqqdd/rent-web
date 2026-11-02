@@ -6,6 +6,24 @@ export interface RentalPricingDevice {
   weekly_discount_percent?: unknown
   monthlyDiscountPercent?: unknown
   monthly_discount_percent?: unknown
+  weeklyDiscountOverride?: unknown
+  weekly_discount_override?: unknown
+  monthlyDiscountOverride?: unknown
+  monthly_discount_override?: unknown
+}
+
+/** Match rent: a NULL override inherits global rules; an explicit 0 disables discounts. */
+export function resolveRentalDiscounts(device: RentalPricingDevice, defaults: { weeklyDiscountPercent: number; monthlyDiscountPercent: number }) {
+  const weekly = device.weeklyDiscountOverride !== undefined ? device.weeklyDiscountOverride
+    : device.weekly_discount_override !== undefined ? device.weekly_discount_override
+      : device.weeklyDiscountPercent ?? device.weekly_discount_percent
+  const monthly = device.monthlyDiscountOverride !== undefined ? device.monthlyDiscountOverride
+    : device.monthly_discount_override !== undefined ? device.monthly_discount_override
+      : device.monthlyDiscountPercent ?? device.monthly_discount_percent
+  return {
+    weeklyDiscountPercent: Number(weekly ?? defaults.weeklyDiscountPercent),
+    monthlyDiscountPercent: Number(monthly ?? defaults.monthlyDiscountPercent),
+  }
 }
 
 /** Full payment always stays available; only full payments for 60+ days waive the deposit. */

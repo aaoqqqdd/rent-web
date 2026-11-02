@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
 import { runInNewContext } from 'node:vm'
+import { DatabaseSync } from 'node:sqlite'
 
 async function bundle(path) {
   const result = buildSync({ entryPoints: [path], bundle: true, write: false, format: 'esm', platform: 'browser', minify: true, keepNames: true })
@@ -9,10 +10,92 @@ async function bundle(path) {
 }
 const { rentalPriceBreakdown, firstRentalInstallment, allocateRentalDiscount, rentalPaymentPlan } = await bundle('src/rental-pricing.ts')
 const { renderApply, renderCartPage } = await bundle('src/pages/apply.ts')
+const { listProducts, getRentalConfig } = await bundle('src/db.ts')
+const { renderProducts } = await bundle('src/pages/products.ts')
+const { renderProductDetail } = await bundle('src/pages/product-detail.ts')
+const { previewRentalCoupon } = await bundle('src/public-rental.ts')
 const product = { id: 'pc', name: 'PC', model: '', specs: [], pricePerDay: 25, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20, depositAmount: 300, available: true }
 const config = { minimumRentalDays: 1, bufferDays: 0, unavailableDates: [], unavailableTimeSlots: {}, serviceFeeHours: [], unavailablePickupHours: [], businessHours: { start: '09:00', end: '20:00' }, serviceFeeRate: 0.1, pickupLocations: [], deliveryAreas: [], deliveryNote: '' }
 const scriptOf = html => [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1]).find(script => script.includes('function rentalFee') || script.includes('function checkoutAmounts'))
 const script = scriptOf(renderApply({ products: [product], config, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false }))
+
+function pricingSetup(t, { overrides = true } = {}) {
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  db.exec(`CREATE TABLE systemSettings (key TEXT, value TEXT);
+    INSERT INTO systemSettings VALUES ('rentalRules', '{"weeklyDiscountPercent":10,"monthlyDiscountPercent":20}');
+    CREATE TABLE devices (id TEXT, name TEXT, status TEXT, pricePerDay REAL, depositAmount REAL, weekly_discount_percent REAL, monthly_discount_percent REAL);
+    INSERT INTO devices VALUES ('pc', 'PC', 'available', 25, 300, 0, 0);
+    CREATE TABLE coupons (code TEXT, active INTEGER, starts_at TEXT, expires_at TEXT, max_uses INTEGER, used_count INTEGER, discount_type TEXT, discount_value REAL);
+    INSERT INTO coupons VALUES ('TEST10', 1, NULL, NULL, NULL, 0, 'percent', 10);`)
+  if (overrides) db.exec('ALTER TABLE devices ADD COLUMN weekly_discount_override REAL; ALTER TABLE devices ADD COLUMN monthly_discount_override REAL')
+  const env = { RENT: { prepare(sql) {
+    let values = []
+    return { bind(...args) { values = args; return this }, async all() { return { results: db.prepare(sql).all(...values) } }, async first() { return db.prepare(sql).get(...values) || null }, async run() { return db.prepare(sql).run(...values) } }
+  } } }
+  return { db, env }
+}
+
+test('NULL device overrides inherit global discounts across product pages, checkout and coupon previews', async t => {
+  const { db, env } = pricingSetup(t)
+  // Stale legacy columns must not override the newer NULL inheritance setting.
+  db.exec('UPDATE devices SET weekly_discount_percent = 5, monthly_discount_percent = 5')
+  const [selected] = await listProducts(env)
+  assert.equal(selected.weeklyDiscountPercent, 10)
+  assert.equal(selected.monthlyDiscountPercent, 20)
+  const rules = await getRentalConfig(env)
+  assert.equal(rules.weeklyDiscountPercent, 10)
+  assert.equal(rules.monthlyDiscountPercent, 20)
+  const catalog = renderProducts({ products: [selected] })
+  assert.match(catalog, /\$157\.5\/week/)
+  assert.match(catalog, /\$600\/month/)
+  const detail = renderProductDetail({ product: selected, config: rules })
+  assert.match(detail, /<strong>\$157\.5<\/strong>/)
+  assert.match(detail, /<strong>\$600<\/strong>/)
+  for (const html of [renderCartPage([selected], rules), renderApply({ products: [selected], config: rules, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })]) {
+    assert.match(html, /"weeklyDiscountPercent":10/)
+    assert.match(html, /"monthlyDiscountPercent":20/)
+    for (const [, code] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new Function(code)
+  }
+  const context = { env, req: { header() {} } }
+  for (const [days, rent, discount] of [[7, 157.5, 15.75], [30, 600, 60]]) {
+    const preview = await previewRentalCoupon(context, ['pc'], days, 'TEST10')
+    assert.equal(preview.ok, true)
+    assert.equal(preview.rent, rent)
+    assert.equal(preview.discount, discount)
+  }
+  db.exec(`UPDATE systemSettings SET value = '{"weeklyDiscountPercent":15,"monthlyDiscountPercent":30}'`)
+  assert.equal((await listProducts(env))[0].monthlyDiscountPercent, 30)
+})
+
+test('explicit device discounts, including zero, take precedence over global rules', async t => {
+  const { db, env } = pricingSetup(t)
+  db.exec('UPDATE devices SET weekly_discount_override = 0, monthly_discount_override = 25')
+  let [selected] = await listProducts(env)
+  assert.equal(rentalPriceBreakdown(selected, 7).total, 175)
+  assert.equal(rentalPriceBreakdown(selected, 30).total, 562.5)
+  db.exec('UPDATE devices SET weekly_discount_override = 15, monthly_discount_override = 0')
+  ;[selected] = await listProducts(env)
+  assert.equal(rentalPriceBreakdown(selected, 7).total, 148.75)
+  assert.equal(rentalPriceBreakdown(selected, 30).total, 750)
+})
+
+test('legacy discount columns and missing or malformed settings remain supported', async t => {
+  const { db, env } = pricingSetup(t, { overrides: false })
+  db.exec('UPDATE devices SET weekly_discount_percent = 5, monthly_discount_percent = 0')
+  let [selected] = await listProducts(env)
+  assert.equal(selected.weeklyDiscountPercent, 5)
+  assert.equal(selected.monthlyDiscountPercent, 0)
+  db.exec('ALTER TABLE devices ADD COLUMN weekly_discount_override REAL; ALTER TABLE devices ADD COLUMN monthly_discount_override REAL')
+  for (const value of ['{}', '{invalid']) {
+    db.prepare('UPDATE systemSettings SET value = ?').run(value)
+    ;[selected] = await listProducts(env)
+    assert.equal(selected.weeklyDiscountPercent, 0)
+    assert.equal(selected.monthlyDiscountPercent, 0)
+  }
+  db.exec('DROP TABLE systemSettings')
+  assert.equal((await listProducts(env))[0].monthlyDiscountPercent, 0)
+})
 
 test('115 days uses monthly proration while 110 days uses a weekly remainder', () => {
   assert.deepEqual(rentalPriceBreakdown(product, 115), { monthlyDays: 115, weeklyDays: 0, dailyDays: 0, monthlyRate: 600, originalAmount: 2875, monthlyDiscountAmount: 575, weeklyDiscountAmount: 0, total: 2300 })

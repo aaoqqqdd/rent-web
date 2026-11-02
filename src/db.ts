@@ -6,6 +6,7 @@
 import type { Env } from './index'
 import { prepareNoticeContent } from './notice-content'
 import { readPickupClosures } from './pickup-availability'
+import { resolveRentalDiscounts } from './rental-pricing'
 
 export interface Product {
   id: string
@@ -47,6 +48,12 @@ export interface SiteContact {
   contact: string
   website: string
   logo: string
+  wechatUrl?: string
+  wechatQrUrl?: string
+  xiaohongshuUrl?: string
+  xiaohongshuQrUrl?: string
+  douyinUrl?: string
+  douyinQrUrl?: string
 }
 
 export interface ReferralConfig {
@@ -152,11 +159,6 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-function deviceDiscount(row: Record<string, unknown>, snakeName: string, camelName: string): number {
-  // rent 的 0124 migration 使用 snake_case；camelCase 仅作为旧部署兼容。
-  return num(row[snakeName] ?? row[camelName])
-}
-
 /** 租期占用由订单校验；设备维护、损坏和退役仍禁止下单。 */
 export function isDeviceBookable(row: Record<string, unknown>): boolean {
   if (row.deleted_at || row.demo_available_from) return false
@@ -174,7 +176,7 @@ export function productAvailabilityLabel(product: Product): string {
   return product.available ? '现货可租' : product.availableFrom ? `${product.availableFrom} 后可租` : '可预约'
 }
 
-function toProduct(row: Record<string, unknown>): Product {
+function toProduct(row: Record<string, unknown>, config: RentalConfig): Product {
   const category = categorize(row)
   const specs = [row.gpu, row.cpu, row.ram && `${row.ram} RAM`, row.storage]
     .map((s) => String(s ?? '').trim())
@@ -196,8 +198,7 @@ function toProduct(row: Record<string, unknown>): Product {
     gpu: String(row.gpu ?? ''),
     os: String(row.os ?? ''),
     pricePerDay: num(row.pricePerDay ?? row.price_per_day),
-    weeklyDiscountPercent: deviceDiscount(row, 'weekly_discount_percent', 'weeklyDiscountPercent'),
-    monthlyDiscountPercent: deviceDiscount(row, 'monthly_discount_percent', 'monthlyDiscountPercent'),
+    ...resolveRentalDiscounts(row, config),
     depositAmount: num(row.depositAmount ?? row.deposit_amount),
     description: String(row.description ?? ''),
     available: inStock && isDeviceBookable(row),
@@ -212,20 +213,20 @@ function toProduct(row: Record<string, unknown>): Product {
 /** 全部在售（非退役）设备，按日租价升序。 */
 export async function listProducts(env: Env): Promise<Product[]> {
   try {
-    const { results } = await env.RENT.prepare('SELECT * FROM devices').all<Record<string, unknown>>()
+    const [{ results }, config] = await Promise.all([
+      env.RENT.prepare('SELECT * FROM devices').all<Record<string, unknown>>(),
+      getRentalConfig(env),
+    ])
     const products = (results ?? [])
       .filter((row) => {
         const lifecycle = String(row.lifecycle_status ?? row.lifecycleStatus ?? '').toUpperCase()
         const status = String(row.status ?? '').toLowerCase()
         return !row.deleted_at && lifecycle !== 'RETIRED' && status !== 'retired'
       })
-      .map(toProduct)
+      .map((row) => toProduct(row, config))
       .sort((a, b) => a.pricePerDay - b.pricePerDay)
     try {
-      const [orders, config] = await Promise.all([
-        env.RENT.prepare("SELECT deviceId, startDate, endDate, endPeriod FROM orders WHERE deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') ORDER BY startDate").all<{ deviceId: string; startDate: string | null; endDate: string | null; endPeriod: string | null }>(),
-        getRentalConfig(env),
-      ])
+      const orders = await env.RENT.prepare("SELECT deviceId, startDate, endDate, endPeriod FROM orders WHERE deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') ORDER BY startDate").all<{ deviceId: string; startDate: string | null; endDate: string | null; endPeriod: string | null }>()
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
       for (const product of products) {
         if (!product.bookable) continue
@@ -628,6 +629,9 @@ export async function getSiteContact(env: Env): Promise<SiteContact> {
       if (parsed.contact) fallback.contact = parsed.contact
       if (parsed.website) fallback.website = parsed.website
       if (parsed.logo) fallback.logo = parsed.logo
+      for (const key of ['wechatUrl', 'wechatQrUrl', 'xiaohongshuUrl', 'xiaohongshuQrUrl', 'douyinUrl', 'douyinQrUrl'] as const) {
+        if (typeof parsed[key] === 'string') fallback[key] = parsed[key]
+      }
     }
   } catch {
     /* 表缺失或 JSON 损坏时用 fallback */
@@ -654,6 +658,8 @@ export function monthlyRentalRate(pricePerDay: number, discountPercent: number):
 }
 
 export interface RentalConfig {
+  weeklyDiscountPercent: number
+  monthlyDiscountPercent: number
   minimumRentalDays: number
   bufferDays: number
   unavailableDates: string[]
@@ -671,6 +677,8 @@ export interface RentalConfig {
 /** 下单与说明页需要的租赁规则。均来自 systemSettings，缺失时给安全默认值。 */
 export async function getRentalConfig(env: Env): Promise<RentalConfig> {
   const cfg: RentalConfig = {
+    weeklyDiscountPercent: 0,
+    monthlyDiscountPercent: 0,
     minimumRentalDays: 1,
     bufferDays: 0,
     unavailableDates: [],
@@ -691,6 +699,8 @@ export async function getRentalConfig(env: Env): Promise<RentalConfig> {
     for (const row of rows.results ?? []) {
       const parsed = JSON.parse(row.value || '{}') as Record<string, unknown>
       if (row.key === 'rentalRules') {
+        cfg.weeklyDiscountPercent = Math.min(100, Math.max(0, num(parsed.weeklyDiscountPercent)))
+        cfg.monthlyDiscountPercent = Math.min(100, Math.max(0, num(parsed.monthlyDiscountPercent)))
         cfg.unavailablePickupRanges = readPickupClosures(parsed.unavailablePickupRanges)
         if (Number(parsed.minimumRentalDays) > 0) {
           cfg.minimumRentalDays = Math.floor(Number(parsed.minimumRentalDays))

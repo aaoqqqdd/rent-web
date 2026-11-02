@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 import { getRentalConfig, isDeviceBookable } from './db'
 import { createPickupAvailability } from './pickup-availability'
-import { rentalPriceBreakdown, allocateRentalDiscount, rentalPaymentPlan } from './rental-pricing'
+import { rentalPriceBreakdown, allocateRentalDiscount, rentalPaymentPlan, resolveRentalDiscounts } from './rental-pricing'
 import { combinePersonName, currentUser, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import type { Env } from './index'
 import { linkSquareGiftCardToCustomer } from './squareGiftCard'
@@ -518,11 +518,12 @@ export async function previewRentalCoupon(c: RentalContext, deviceIds: string[],
   if (!(await enforceRateLimit(c.env, 'web-coupon-preview', ip, 20, 60))) return { ok: false, message: '优惠码校验请求过于频繁，请稍后重试。' }
   const couponCode = normalizeCouponCode(code)
   if (!deviceIds.length || !couponCode) return { ok: false, message: '请先选择设备、有效租期并输入优惠码。' }
+  const config = await getRentalConfig(c.env)
   const devices: Record<string, unknown>[] = []
   for (const deviceId of deviceIds.slice(0, MAX_CART_ITEMS)) {
     const device = await c.env.RENT.prepare('SELECT * FROM devices WHERE id = ?').bind(deviceId).first<Record<string, unknown>>()
     if (!device) return { ok: false, message: '购物车中有设备不存在或已下架。' }
-    devices.push(device)
+    devices.push({ ...device, ...resolveRentalDiscounts(device, config) })
   }
   const coupon = await c.env.RENT.prepare("SELECT * FROM coupons WHERE code = ? COLLATE NOCASE AND active = 1 AND (starts_at IS NULL OR starts_at <= CURRENT_TIMESTAMP) AND (expires_at IS NULL OR expires_at >= CURRENT_TIMESTAMP) AND (max_uses IS NULL OR used_count < max_uses)").bind(couponCode).first<Record<string, unknown>>()
   if (!coupon) return { ok: false, message: '优惠码无效、已过期或已达到使用次数上限。' }
@@ -705,7 +706,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       const conflict = await c.env.RENT.prepare("SELECT id FROM orders WHERE deviceId = ? AND deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') AND (startDate IS NULL OR endDate IS NULL OR (startDate < ? AND endDate > ?)) LIMIT 1").bind(deviceId, conflictEnd, conflictStart).first()
       if (conflict) return json(c, 409, { ok: false, message: `${String(device?.name || '设备')} 在所选日期已有订单。` })
     }
-    devices.push(device as Record<string, unknown>)
+    devices.push({ ...device, ...resolveRentalDiscounts(device, config) })
     rentalPlans.set(deviceId, { term, period })
   }
 

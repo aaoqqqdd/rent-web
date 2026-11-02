@@ -1,6 +1,17 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
+  '支持的支付方式': 'Accepted payment methods',
+  '社交平台': 'Social media',
+  '微信': 'WeChat',
+  '小红书': 'Xiaohongshu',
+  '抖音': 'Douyin',
+  '微信二维码': 'WeChat QR code',
+  '小红书二维码': 'Xiaohongshu QR code',
+  '抖音二维码': 'Douyin QR code',
+  '访问主页 ↗': 'Visit profile ↗',
+  '账户余额': 'Account balance',
+  '余额': 'Balance',
   '一次性付清': 'Pay in full',
   '不足 60 天需押金；满 60 天可选月付，或一次性付清免押金。': 'A deposit applies below 60 days. For 60 days or more, pay monthly with a deposit or pay in full with no deposit.',
   '满 60 天一次性付清免押金': 'No deposit when paid in full for 60 days or more',
