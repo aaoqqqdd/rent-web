@@ -29,7 +29,7 @@ function paymentIcons(): string {
     ['Apple Pay', icons.applepay, 'apple-pay'],
     ['Google Pay', icons.googlepay, 'google-pay'],
   ].map(([label, icon, modifier]) => `<div class="foot-payment-badge foot-payment-${modifier}" role="img" aria-label="${label}" title="${label}">${icon}</div>`).join('')
-  return `<div class="foot-payments" role="group" aria-label="支持的支付方式"><p class="foot-payment-label">支持的支付方式</p><div class="foot-payment-icons">${badges}<div class="foot-payment-badge foot-payment-local" role="img" aria-label="礼品卡" title="礼品卡">${gift}<small>礼品卡</small></div><div class="foot-payment-badge foot-payment-local" role="img" aria-label="账户余额" title="账户余额">${wallet}<small>余额</small></div></div></div>`
+  return `<div class="foot-payments" role="group" aria-label="支持的支付方式"><div class="foot-payment-icons">${badges}<div class="foot-payment-badge foot-payment-local" role="img" aria-label="礼品卡" title="礼品卡">${gift}<small>礼品卡</small></div><div class="foot-payment-badge foot-payment-local" role="img" aria-label="账户余额" title="账户余额">${wallet}<small>余额</small></div></div></div>`
 }
 
 export function renderSiteFooter(contact: SiteContact): string {
