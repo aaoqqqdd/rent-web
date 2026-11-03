@@ -1,6 +1,7 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
+  "客户反馈": "Customer feedback",
 "个人设备 · 平台托管": "Owner device \u00b7 Platform managed",
 "个人设备 · 自行交付": "Owner device \u00b7 Owner handover",
 "平台自营": "Platform inventory",
