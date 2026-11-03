@@ -68,7 +68,7 @@ function setup(t) {
   t.after(() => db.close())
   db.exec(`
     CREATE TABLE devices (id TEXT PRIMARY KEY, name TEXT, pricePerDay REAL, status TEXT, lifecycle_status TEXT, deleted_at TEXT);
-    CREATE TABLE systemSettings (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE systemSettings (key TEXT PRIMARY KEY, value TEXT, deleted_at TEXT);
     CREATE TABLE notifications (id TEXT PRIMARY KEY, type TEXT, title TEXT, message TEXT, created_at TEXT, expires_at TEXT, sender_id TEXT, deleted_at TEXT);
     CREATE TABLE coupons (id TEXT PRIMARY KEY, code TEXT, discount_type TEXT, discount_value REAL, starts_at TEXT, expires_at TEXT, minimum_order_amount REAL, device_id TEXT, brand TEXT, config_keyword TEXT, created_at TEXT, max_uses INTEGER, used_count INTEGER, active INTEGER);
   `)
@@ -119,8 +119,8 @@ test('sitemap XML follows current publication state and escapes encoded device U
     INSERT INTO notifications VALUES ('expired', 'announcement', 'Expired', 'Expired public message', datetime('now'), datetime('now', '-1 day'), 'admin', NULL);
     INSERT INTO notifications VALUES ('private', 'order_update', 'Private order', 'Private customer message', datetime('now'), NULL, 'admin', NULL);
     INSERT INTO coupons (id, code, discount_type, discount_value, created_at, active) VALUES ('offer', 'TEST10', 'percent', 10, datetime('now'), 1);
-    INSERT INTO systemSettings VALUES ('serviceTerms', '<h2>Published service terms</h2>');
-    INSERT INTO systemSettings VALUES ('privacyPolicy', '  ');
+    INSERT INTO systemSettings (key,value) VALUES ('serviceTerms', '<h2>Published service terms</h2>');
+    INSERT INTO systemSettings (key,value) VALUES ('privacyPolicy', '  ');
   `)
   const first = await sitemap(env)
   const productUrl = canonical + '/products/' + encodeURIComponent(specialId)
@@ -146,11 +146,12 @@ test('sitemap XML follows current publication state and escapes encoded device U
   assert.ok(updated.urls.includes(canonical + '/privacy'))
 })
 
-test('empty or unavailable D1 still returns a valid sitemap of the public main pages', async (t) => {
+test('empty D1 returns a valid sitemap; unavailable access policy returns maintenance', async (t) => {
   const { env } = setup(t)
-  for (const source of [env, { RENT: { prepare() { throw new Error('D1 unavailable') } } }]) {
-    const { urls } = await sitemap(source)
-    assert.equal(urls.length, 7)
-    for (const path of ['/', '/products', '/gift-cards', '/referral', '/rental-guide', '/about', '/announcements']) assert.ok(urls.includes(canonical + path))
-  }
+  const { urls } = await sitemap(env)
+  assert.equal(urls.length, 7)
+  for (const path of ['/', '/products', '/gift-cards', '/referral', '/rental-guide', '/about', '/announcements']) assert.ok(urls.includes(canonical + path))
+  const unavailable = await worker.fetch(new Request(canonical+'/sitemap.xml'),{RENT:{prepare(){throw new Error('D1 unavailable')}}})
+  assert.equal(unavailable.status,503)
+  assert.match(unavailable.headers.get('cache-control'),/no-store/)
 })

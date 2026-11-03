@@ -3,7 +3,9 @@
 // 只读复用 rent 的 D1 库（binding: RENT）来实时展示产品价格 / 配置 / 联系方式。
 
 import { Hono, type Context } from 'hono'
-import { STYLES, STYLE_VERSION } from './theme'
+import { ownerRentals,ownerRentalRevision,ownerRentalBookingUrl } from './ownerRentals'
+import { clientAccessMiddleware } from './clientAccessMiddleware'
+import { STYLES, STYLE_VERSION, OWNER_RENTAL_STYLES } from './theme'
 import { SITE_URL, ROBOTS_TXT, LLMS_TXT, CONTENT_SIGNAL } from './seo'
 import { acceptsMarkdown, htmlToMarkdown } from './markdown'
 import { API_CATALOG, API_DOCS, AUTH_MD, DISCOVERY_LINK_HEADER, OPENAPI_DOCUMENT } from './discovery'
@@ -83,7 +85,7 @@ export interface Env {
 
 const HTML_TTL = 60 // 秒。产品价格改动后最多 60s 生效。
 const CSS_TTL = 86400
-const HTML_CACHE_VERSION = '20261031-crawler-policy-apex-domain'
+const HTML_CACHE_VERSION = '20261103-owner-rentals-client-controls'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -165,6 +167,8 @@ app.use('*', async (c, next) => {
   }
 })
 
+app.use('*',clientAccessMiddleware)
+
 app.onError((error, c) => {
   console.error('web unhandled error:', error instanceof Error ? error.message : String(error))
   const res = c.text('Internal Server Error', 500)
@@ -203,6 +207,7 @@ async function cachedHtml(
   build: (user: SessionUser | null) => Promise<string | { html: string; status: number }>,
 ): Promise<Response> {
   const authed = hasSessionCookie(c.req.header('cookie') ?? null)
+  const liveCatalogue = c.req.path === '/' || c.req.path === '/products' || c.req.path.startsWith('/products/')
   const markdown = acceptsMarkdown(c.req.path, c.req.header('Accept'))
   const cache = caches.default
   // 样式指纹同时作为 HTML 缓存命名空间。改版部署后立即使用新缓存，
@@ -210,6 +215,7 @@ async function cachedHtml(
   const cacheUrl = new URL(c.req.url)
   cacheUrl.searchParams.set('__site_v', `${HTML_CACHE_VERSION}-${STYLE_VERSION}`)
   cacheUrl.searchParams.set('__site_format', markdown ? 'markdown' : 'html')
+  if (liveCatalogue) cacheUrl.searchParams.set('__owners_v',await ownerRentalRevision(c.env))
   const key = new Request(cacheUrl.toString(), { method: 'GET' })
   if (!authed) {
     const hit = await cache.match(key)
@@ -254,7 +260,7 @@ async function cachedHtml(
 }
 
 app.get('/styles.css', (c) => {
-  return c.body(STYLES, 200, {
+  return c.body(STYLES+OWNER_RENTAL_STYLES, 200, {
     'content-type': 'text/css; charset=utf-8',
     'cache-control': `public, max-age=${CSS_TTL}`,
   })
@@ -636,7 +642,7 @@ app.get('/products/:id', (c) =>
     return renderPage({
       title: `${product.name} 墨尔本电脑租赁价格与配置 — ${contact.name}`,
       description: `在墨尔本租赁 ${product.name}${product.model ? ` ${product.model}` : ''}。查看 CPU、显卡、内存、存储、日租价、押金、库存和取还说明。`,
-      body: renderProductDetail({ product, config }),
+      body: renderProductDetail({ product, config, appUrl:appUrl(c.env) }),
       contact,
       appUrl: appUrl(c.env),
       path: `/products/${encodeURIComponent(product.id)}`,
@@ -647,6 +653,7 @@ app.get('/products/:id', (c) =>
           '@id': `${SITE_URL}/products/${encodeURIComponent(product.id)}#product`,
           name: product.name,
           description: product.description || `${product.name} 电脑租赁`,
+          ...(product.ownerRental ? {image:product.ownerRental.photos.map(photo=>photo.url)} : {}),
           category: product.categoryLabel,
           ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
           ...(product.model ? { model: product.model } : {}),
@@ -691,6 +698,12 @@ app.get('/gift-cards', (c) =>
   }),
 )
 
+app.use('/apply',async (c,next)=>{
+  const selected=c.req.query('device') || ''
+  if (selected && (await ownerRentals(c.env)).get(selected)?.eligible) return c.redirect(ownerRentalBookingUrl(appUrl(c.env),selected))
+  await next()
+})
+
 app.get('/apply', (c) =>
   cachedHtml(c, HTML_TTL, async (user) => {
     const [products, contact, config] = await Promise.all([
@@ -698,7 +711,7 @@ app.get('/apply', (c) =>
       getSiteContact(c.env),
       getRentalConfig(c.env),
     ])
-    const body = renderCartPage(products, config, c.req.query('device') || '')
+    const body = renderCartPage(products.filter(product=>!product.ownerRental), config, c.req.query('device') || '')
     return renderPage({
       title: `购物车 — ${contact.name}`,
       description: '确认要租赁的设备，再进入结账页面填写租期与联系信息。',
@@ -722,7 +735,7 @@ app.get('/checkout', (c) =>
       getPublicSquareGiftCardConfig(c),
     ])
     const body = renderApply({
-      products,
+      products:products.filter(product=>!product.ownerRental),
       selectedId: c.req.query('device') || '',
       config,
       appUrl: appUrl(c.env),

@@ -48,7 +48,7 @@ test('RFC 9727 catalog provides resolvable API anchors, specs, docs and status w
   assert.equal(response.status, 200)
   assert.match(response.headers.get('content-type'), /^application\/linkset\+json; profile="https:\/\/www.rfc-editor.org\/info\/rfc9727"$/)
   const { linkset } = await response.json()
-  assert.equal(operations.length, 0, 'Static discovery must not touch customer or order data')
+  assert.ok(operations.every(sql=>sql.startsWith('SELECT value FROM systemSettings')), 'Discovery only reads the shared access policy')
   assert.equal(linkset.length, 3)
   for (const entry of linkset) {
     assert.equal(new URL(entry.anchor).origin, canonical)
@@ -157,7 +157,7 @@ test('auth.md is self-contained and accurately describes existing human-controll
     assert.doesNotMatch(text, /session=private-test|Bearer ey|sk_live_|SETTINGS_ENCRYPTION_KEY/)
     assert.ok(response.headers.get('content-security-policy'))
   }
-  assert.equal(operations.length, 0)
+  assert.ok(operations.every(sql=>sql.startsWith('SELECT value FROM systemSettings')))
 })
 
 test('unimplemented OAuth, agent registration and payment protocols are not advertised as working', async (t) => {

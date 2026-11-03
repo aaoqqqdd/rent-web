@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import { ownerRentals,ownerRentalBookingUrl } from './ownerRentals'
 import { getRentalConfig, isDeviceBookable } from './db'
 import { createPickupAvailability } from './pickup-availability'
 import { rentalPriceBreakdown, allocateRentalDiscount, rentalPaymentPlan, resolveRentalDiscounts } from './rental-pricing'
@@ -574,6 +575,9 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const deviceIds = parseDeviceIds(body)
   if (!deviceIds.length) return json(c, 400, { ok: false, message: '购物车中没有可提交的设备。' })
   if (deviceIds.length > MAX_CART_ITEMS) return json(c, 400, { ok: false, message: `单次最多提交 ${MAX_CART_ITEMS} 台设备。` })
+  const ownerListings = await ownerRentals(c.env)
+  const ownerDevice = deviceIds.find(deviceId=>ownerListings.has(deviceId) || deviceId.startsWith('d-c2c-'))
+  if (ownerDevice) return json(c,409,{ok:false,message:'请在控制台预约个人设备。',redirectUrl:ownerRentalBookingUrl(c.env.APP_URL || 'https://dashboard.geekslope.de5.net',ownerDevice)})
   const deviceTerms = parseDeviceTerms(body, deviceIds)
   const deliveryMethod = body.deliveryMethod === 'Delivery' ? 'Delivery' : 'Pickup'
   const pickupTimeSlot = String(body.pickupTimeSlot || '')

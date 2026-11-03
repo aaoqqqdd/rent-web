@@ -1303,10 +1303,13 @@ input:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
 .legal-document__content, .card, .lookup-data-list, .order-record-section, .gs-dialog-copy, .address-suggestion { overflow-wrap: anywhere; }
 `
 
+export const OWNER_RENTAL_STYLES = `.product-visual{position:relative}.owner-rental-image{width:100%;height:100%;min-height:180px;object-fit:contain;display:block;border-radius:12px}.owner-rental-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%;position:relative;z-index:1;padding:20px;box-sizing:border-box}.owner-rental-gallery figure{margin:0;background:#fff;border:1px solid #dfe5ea;border-radius:12px;overflow:hidden}.owner-rental-gallery img{width:100%;height:150px;object-fit:contain;display:block}.owner-rental-gallery figcaption{padding:8px 12px;font-size:12px;color:#526171}.owner-rental-pickup{padding:16px;border:1px solid #dfe5ea;border-radius:12px;margin:18px 0}.owner-rental-pickup address{white-space:pre-line;font-style:normal;margin:8px 0;overflow-wrap:anywhere}.owner-rental-pickup>span{font-size:13px;color:#526171}@media(max-width:600px){.owner-rental-gallery{padding:12px;gap:8px}.owner-rental-gallery img{height:110px}}`
+
 // 内容指纹：STYLES 一变就变。页面用 /styles.css?v=${STYLE_VERSION} 引样式，
 // 使改版后回访用户不被 1 天的长缓存卡在旧样式（例如旧的 logo 尺寸）。
 export const STYLE_VERSION = ((): string => {
   let h = 5381
-  for (let i = 0; i < STYLES.length; i++) h = (((h << 5) + h) ^ STYLES.charCodeAt(i)) >>> 0
+  const css = STYLES + OWNER_RENTAL_STYLES
+  for (let i = 0; i < css.length; i++) h = (((h << 5) + h) ^ css.charCodeAt(i)) >>> 0
   return h.toString(36)
 })()

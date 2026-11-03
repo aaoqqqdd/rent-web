@@ -153,7 +153,7 @@ export function renderLogin(data: LoginData): string {
     errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  form.addEventListener('submit', function (e) {
+  if (form) form.addEventListener('submit', function (e) {
     e.preventDefault();
     errBox.hidden = true;
 

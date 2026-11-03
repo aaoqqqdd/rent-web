@@ -4,6 +4,7 @@
 // src/lib/userId.ts、src/db/repositories.ts insertUser），注册后即可用同一套
 // 邮箱 + 密码在 rent 登录。登录态仍由 rent 持有，本站只负责建号。
 
+import { readClientAccess } from './clientAccess'
 import type { Context } from 'hono'
 import type { Env } from './index'
 import { verifyTurnstile } from './turnstile'
@@ -219,6 +220,7 @@ export async function registerCustomer(
   options: { turnstileVerified?: boolean } = {},
 ): Promise<RegisterResult> {
   const env = c.env
+  if (!(await readClientAccess(env.RENT)).features.registration) return {ok:false,code:'invalid',message:'新用户注册暂未开放。'}
   const firstName = sanitizePlainText(input.firstName, 100)
   const lastName = sanitizePlainText(input.lastName, 100)
   const name = sanitizePlainText(input.name, 100) || combinePersonName(firstName, lastName)

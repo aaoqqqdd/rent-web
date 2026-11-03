@@ -1,5 +1,6 @@
 // 产品目录。实时读库，按类别分组展示全部在售设备。
 
+import { ownerRentalLabel,ownerRentalImage } from '../ownerRentals'
 import { esc } from '../layout'
 import { monthlyRentalRate, weeklyRentalRate, productAvailabilityLabel, type Product } from '../db'
 
@@ -15,12 +16,12 @@ function card(p: Product): string {
   const searchText = [p.name, p.brand, p.model, p.categoryLabel, p.cpu, p.gpu, p.ram, p.storage, p.os, p.description].join(' ').toLowerCase()
   return /* html */ `
   <article class="card product-card" data-product data-category="${esc(p.category)}" data-available="${p.available ? 'true' : 'false'}" data-price="${p.pricePerDay}" data-name="${esc(p.name.toLowerCase())}" data-search="${esc(searchText)}">
-    <div class="product-visual" aria-hidden="true">
-      <span class="device-screen"><i></i></span>
+    <div class="product-visual"${p.ownerRental ? '' : ' aria-hidden="true"'}>
+      ${ownerRentalImage(p.ownerRental,p.name) || `<span class="device-screen"><i></i></span>
       <span class="device-base"></span>
-      <span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span>
+      <span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span>`}
     </div>
-    <div class="card-top"><span class="tag ${p.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(p))}</span><span class="card-code">${esc(p.brand || p.categoryLabel)}</span></div>
+    <div class="card-top"><span class="tag ${p.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(p))}</span><span class="card-code">${esc(p.ownerRental ? ownerRentalLabel(p.ownerRental) : p.brand || p.categoryLabel)}</span></div>
     <h3><a href="${detailHref}">${esc(p.name)}</a></h3>
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>

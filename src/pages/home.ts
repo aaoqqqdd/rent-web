@@ -1,5 +1,6 @@
 // 首页。结构还原参考稿：Hero → 四大保障 → 为你精选（实时读库）→ 三步流程 → 收尾 CTA。
 
+import { ownerRentalLabel,ownerRentalImage } from '../ownerRentals'
 import { esc } from '../layout'
 import { monthlyRentalRate, weeklyRentalRate, productAvailabilityLabel, type Product, type RentalConfig } from '../db'
 
@@ -28,8 +29,8 @@ function productCard(p: Product, index: number): string {
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
   return /* html */ `
   <article class="card product-card featured-card">
-    <div class="product-visual compact-visual" aria-hidden="true"><span class="device-screen"><i></i></span><span class="device-base"></span><span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span></div>
-    <div class="card-top"><span class="tag ${p.demoAvailableFrom ? 'tag-muted' : ''}"><i></i>${esc(p.demoAvailableFrom ? productAvailabilityLabel(p) : CARD_TAGS[index] ?? '精选')}</span><span class="card-code">${esc(p.categoryLabel)}</span></div>
+    <div class="product-visual compact-visual"${p.ownerRental ? '' : ' aria-hidden="true"'}>${ownerRentalImage(p.ownerRental,p.name) || `<span class="device-screen"><i></i></span><span class="device-base"></span><span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span>`}</div>
+    <div class="card-top"><span class="tag ${p.demoAvailableFrom ? 'tag-muted' : ''}"><i></i>${esc(p.ownerRental ? ownerRentalLabel(p.ownerRental) : p.demoAvailableFrom ? productAvailabilityLabel(p) : CARD_TAGS[index] ?? '精选')}</span><span class="card-code">${esc(p.categoryLabel)}</span></div>
     <h3><a href="${detailHref}">${esc(p.name)}</a></h3>
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>

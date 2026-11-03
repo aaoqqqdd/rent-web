@@ -3,12 +3,14 @@
 //   - systemSettings  —— companyDetails、租赁规则与公开法务文档
 // 所有查询都用 COALESCE / try-catch 兜底，任一字段缺失或表结构变动都不影响页面出图。
 
+import { ownerRentals, type OwnerRental } from './ownerRentals'
 import type { Env } from './index'
 import { prepareNoticeContent } from './notice-content'
 import { readPickupClosures } from './pickup-availability'
 import { resolveRentalDiscounts } from './rental-pricing'
 
 export interface Product {
+  ownerRental?: OwnerRental
   id: string
   name: string
   brand: string
@@ -213,17 +215,19 @@ function toProduct(row: Record<string, unknown>, config: RentalConfig): Product 
 /** 全部在售（非退役）设备，按日租价升序。 */
 export async function listProducts(env: Env): Promise<Product[]> {
   try {
-    const [{ results }, config] = await Promise.all([
+    const [{ results }, config, owners] = await Promise.all([
       env.RENT.prepare('SELECT * FROM devices').all<Record<string, unknown>>(),
       getRentalConfig(env),
+      ownerRentals(env),
     ])
     const products = (results ?? [])
       .filter((row) => {
         const lifecycle = String(row.lifecycle_status ?? row.lifecycleStatus ?? '').toUpperCase()
         const status = String(row.status ?? '').toLowerCase()
         return !row.deleted_at && lifecycle !== 'RETIRED' && status !== 'retired'
+          && (owners.has(String(row.id)) ? owners.get(String(row.id))!.eligible : !String(row.id).startsWith('d-c2c-'))
       })
-      .map((row) => toProduct(row, config))
+      .map((row) => ({...toProduct(row, config),ownerRental:owners.get(String(row.id))}))
       .sort((a, b) => a.pricePerDay - b.pricePerDay)
     try {
       const orders = await env.RENT.prepare("SELECT deviceId, startDate, endDate, endPeriod FROM orders WHERE deleted_at IS NULL AND status NOT IN ('completed', 'cancelled') ORDER BY startDate").all<{ deviceId: string; startDate: string | null; endDate: string | null; endPeriod: string | null }>()

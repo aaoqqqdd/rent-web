@@ -1,11 +1,13 @@
 // 单台设备详情页。数据直接来自设备表，提供完整配置、费用口径与下单入口。
 
+import { ownerRentalGallery,ownerRentalLabel,ownerRentalBookingUrl } from '../ownerRentals'
 import { esc } from '../layout'
 import { monthlyRentalRate, weeklyRentalRate, productAvailabilityLabel, type Product, type RentalConfig } from '../db'
 import { createPickupAvailability } from '../pickup-availability'
 
 interface ProductDetailData {
   product: Product
+  appUrl?: string
   config: RentalConfig
 }
 
@@ -17,7 +19,7 @@ function specRow(label: string, value: string): string {
   return value ? `<div class="spec-row"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>` : ''
 }
 
-export function renderProductDetail({ product, config }: ProductDetailData): string {
+export function renderProductDetail({ product, config, appUrl = 'https://dashboard.geekslope.de5.net' }: ProductDetailData): string {
   const weekly = weeklyRentalRate(product.pricePerDay, product.weeklyDiscountPercent)
   const monthly = monthlyRentalRate(product.pricePerDay, product.monthlyDiscountPercent)
   const applyHref = `/apply?device=${encodeURIComponent(product.id)}`
@@ -35,13 +37,13 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
 </nav>
 <section class="product-detail">
   <div class="wrap detail-grid">
-    <div class="detail-visual" aria-hidden="true">
-      <div class="detail-orbit orbit-one"></div><div class="detail-orbit orbit-two"></div>
+    <div class="detail-visual"${product.ownerRental ? '' : ' aria-hidden="true"'}>
+      ${product.ownerRental ? ownerRentalGallery(product.ownerRental) : `<div class="detail-orbit orbit-one"></div><div class="detail-orbit orbit-two"></div>
       <div class="detail-device"><div class="detail-screen"><span>GEEK<br>SLOPE</span></div><div class="detail-base"></div></div>
-      <span class="detail-category">${esc(product.categoryLabel)}</span>
+      <span class="detail-category">${esc(product.categoryLabel)}</span>`}
     </div>
     <div class="detail-copy">
-      <div class="status-line"><span class="tag ${product.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(product))}</span><span>库存实时同步</span></div>
+      <div class="status-line"><span class="tag ${product.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(product))}</span><span>${product.ownerRental ? esc(ownerRentalLabel(product.ownerRental)) : '库存实时同步'}</span></div>
       <p class="detail-brand">${esc(product.brand || product.categoryLabel)}</p>
       <h1>${esc(product.name)}</h1>
       ${product.model ? `<p class="detail-model">型号 ${esc(product.model)}</p>` : ''}
@@ -52,7 +54,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <div><span>月租</span>${product.pricePerDay > 0 && product.monthlyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 30).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(monthly)}` : '—'}</strong><small>${product.pricePerDay > 0 ? '/ month' : ''}</small></div>
         <div><span>可退押金</span><strong>${product.depositAmount > 0 ? `$${esc(product.depositAmount)}` : '待确认'}</strong><small>验收后退还</small></div>
       </div>
-      <div class="detail-rental-term">
+      <div class="detail-rental-term"${product.ownerRental ? ' hidden' : ''}>
         <div class="kicker">先选租期</div>
         <p>选择后加入购物车，之后仍可在购物车中修改。</p>
         <div class="row2"><div>
@@ -63,8 +65,8 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
         <p class="hint detail-date-message" id="detail-date-message" aria-live="polite"></p>
       </div>
-      <div class="detail-actions">
-        <button class="btn btn-primary btn-lg" id="detail-add-cart" type="button" ${(product.bookable ?? product.available) ? '' : 'disabled'}>加入购物车并查看</button>
+      ${product.ownerRental ? `<div class="owner-rental-pickup"><strong>取件地址</strong><address>${esc(product.ownerRental.pickupAddress)}</address><span>${product.ownerRental.mode==='self'?'仅限自取':'墨尔本平台托管'}</span></div>` : ''}<div class="detail-actions">
+        ${product.ownerRental ? `<a class="btn btn-primary btn-lg" href="${esc(ownerRentalBookingUrl(appUrl,product.id))}">预约这台设备</a>` : `<button class="btn btn-primary btn-lg" id="detail-add-cart" type="button" ${(product.bookable ?? product.available) ? '' : 'disabled'}>加入购物车并查看</button>`}
         <a class="btn btn-ghost btn-lg" href="/about?subject=${encodeURIComponent(`咨询 ${product.name}`)}#contact">咨询这台设备</a>
       </div>
       <p class="microcopy">先提交申请，不会立即扣款。我们确认档期后再安排签约与付款。</p>
@@ -121,6 +123,7 @@ export function renderProductDetail({ product, config }: ProductDetailData): str
   var startPicker = document.getElementById('detail-start-date-picker');
   var endPicker = document.getElementById('detail-end-date-picker');
   var button = document.getElementById('detail-add-cart');
+  if (!button) return;
   var dateMessage = document.getElementById('detail-date-message');
   var productAvailable = ${(product.bookable ?? product.available) ? 'true' : 'false'};
   var minimumDays = ${config.minimumRentalDays};
