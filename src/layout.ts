@@ -537,6 +537,18 @@ ${ANNOUNCEMENT_SCRIPT}
       else if (wideViewport.addListener) wideViewport.addListener(onViewportChange);
     }
   }
+  document.addEventListener('click', function (event) {
+    document.querySelectorAll('.foot-social-qr[open]').forEach(function (panel) {
+      if (!panel.contains(event.target)) panel.open = false;
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('.foot-social-qr[open]').forEach(function (panel) {
+      panel.open = false;
+      if (panel.contains(document.activeElement)) panel.querySelector('summary').focus();
+    });
+  });
   // Toast 区域要贴在「sticky header + 通告条」正下方，否则手机上会盖住通告。
   function syncOverlayOffset() {
     var offset = (siteHeader ? siteHeader.offsetHeight : 0) + (announcement && !announcement.hidden ? announcement.offsetHeight : 0) + 14;

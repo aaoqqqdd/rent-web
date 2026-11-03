@@ -14,7 +14,7 @@ function socialIcon(label: string, qrLabel: string, icon: string, urlValue?: str
   const url = publicHttpsUrl(urlValue)
   const qr = publicHttpsUrl(qrValue) || fallbackQr
   const badge = `class="foot-social-icon" aria-label="${esc(label)}" title="${esc(label)}"`
-  if (qr) return `<details class="foot-social-qr" name="footer-social"><summary ${badge}>${icon}</summary><div class="foot-social-panel"><img src="${esc(qr)}" alt="${esc(qrLabel)}" width="200" height="200" loading="lazy"><p>${esc(label)}</p>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">访问主页 ↗</a>` : ''}</div></details>`
+  if (qr) return `<details class="foot-social-qr" name="footer-social"><summary ${badge}>${icon}</summary><div class="foot-social-panel"><img src="${esc(qr)}" alt="${esc(qrLabel)}" width="160" height="160" loading="lazy"><p>${esc(label)}</p>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">访问主页 ↗</a>` : ''}</div></details>`
   if (url) return `<a ${badge} href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon}</a>`
   return `<div ${badge} role="img">${icon}</div>`
 }

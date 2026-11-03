@@ -887,8 +887,8 @@ a.contact-option:hover { border-color: var(--border-bright); }
 .foot-socials a:focus-visible, .foot-socials summary:focus-visible { outline: 2px solid var(--secondary); outline-offset: 4px; }
 .foot-social-qr { position: relative; }
 .foot-social-qr summary { cursor: pointer; }
-.foot-social-panel { position: absolute; z-index: 5; bottom: calc(100% + 12px); right: 0; width: 224px; padding: 12px; border: 1px solid var(--border-bright); border-radius: 12px; background: var(--card); box-shadow: 0 12px 32px #0006; }
-.foot-social-panel img { display: block; width: 200px; height: 200px; object-fit: contain; background: #fff; border-radius: 6px; }
+.foot-social-panel { position: absolute; z-index: 5; bottom: calc(100% + 12px); right: 0; width: 184px; padding: 11px; border: 1px solid var(--border-bright); border-radius: 12px; background: var(--card); box-shadow: 0 12px 32px #0006; }
+.foot-social-panel img { display: block; width: 160px; height: 160px; object-fit: contain; background: #fff; border-radius: 6px; }
 .foot-social-panel p { margin-top: 8px; text-align: center; font-size: 12px; }
 .foot-social-panel a { justify-content: center; text-align: center; margin: 0; min-height: 44px; font-size: 12px; }
 @media (max-width: 900px) {
