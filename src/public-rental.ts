@@ -2,6 +2,8 @@ import type { Context } from 'hono'
 import { ownerRentals,ownerRentalBookingUrl } from './ownerRentals'
 import { getRentalConfig, isDeviceBookable } from './db'
 import { createPickupAvailability } from './pickup-availability'
+import { getCustomerRiskAssessment } from './risk'
+import { riskDepositSnapshot } from './risk-rules'
 import { rentalPriceBreakdown, allocateRentalDiscount, rentalPaymentPlan, resolveRentalDiscounts } from './rental-pricing'
 import { combinePersonName, currentUser, enforceRateLimit, ensurePersonNameColumns, generateTemporaryPassword, registerCustomer, sanitizePlainText } from './auth'
 import type { Env } from './index'
@@ -723,7 +725,6 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   const serviceFeeMultiplier = deliveryMethod === 'Pickup'
     ? [pickupTimeSlot, returnTimeSlot].filter((slot) => serviceFeeTimeSlot(slot, config)).length * config.serviceFeeRate
     : 0
-  const paymentPlans = devices.map((device) => rentalPaymentPlan(rentalPlans.get(String(device.id))!.period.days, requestedBillingMode, paymentProvider, numberValue(device.depositAmount, device.deposit_amount)))
   const serviceFees = fees.map((fee) => Number((fee * serviceFeeMultiplier).toFixed(2)))
   const discounts = devices.map(() => 0)
   let coupon: Record<string, unknown> | null = null
@@ -756,6 +757,11 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
   // 以他人身份改资料、下单、消耗余额（account takeover 的写入侧）。
   const sessionUser = await currentUser(c)
   const ownsAccount = Boolean(sessionUser && sessionUser.id === String(user.id))
+  if (!accountCreated && !ownsAccount) return json(c, 401, { ok: false, message: '该邮箱已注册，请先登录后再提交申请。' })
+  const customerRisk = await getCustomerRiskAssessment(c, String(user.id))
+  if (customerRisk.blocked) return json(c, 403, { ok: false, message: '该账号当前无法下单，请联系客服。' })
+  const depositSnapshots = devices.map((device) => riskDepositSnapshot(numberValue(device.depositAmount, device.deposit_amount), customerRisk))
+  const paymentPlans = devices.map((device, index) => rentalPaymentPlan(rentalPlans.get(String(device.id))!.period.days, requestedBillingMode, paymentProvider, depositSnapshots[index].depositAmountBeforeWaiver, depositSnapshots[index].depositMultiplier <= 1))
   const personNameColumns = await ensurePersonNameColumns(c.env)
   if ((accountCreated || ownsAccount) && personNameColumns.firstName && personNameColumns.lastName) {
     await c.env.RENT.prepare('UPDATE users SET first_name = ?, last_name = ?, name = ? WHERE id = ?')
@@ -823,7 +829,7 @@ export async function handleRentalRequest(c: RentalContext, body: Record<string,
       {
         const pricing = JSON.stringify({
           billingMode: paymentPlan.billingMode,
-          depositAmountBeforeWaiver: numberValue(device.depositAmount, device.deposit_amount),
+          ...depositSnapshots[index],
           pricePerDay: numberValue(device.pricePerDay, device.price_per_day),
           weeklyDiscountPercent: numberValue(device.weeklyDiscountPercent, device.weekly_discount_percent),
           monthlyDiscountPercent: numberValue(device.monthlyDiscountPercent, device.monthly_discount_percent),

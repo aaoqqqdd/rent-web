@@ -27,9 +27,9 @@ export function resolveRentalDiscounts(device: RentalPricingDevice, defaults: { 
 }
 
 /** Full payment always stays available; only full payments for 60+ days waive the deposit. */
-export function rentalPaymentPlan(days: number, requestedMode: unknown, provider: string, deposit: number) {
+export function rentalPaymentPlan(days: number, requestedMode: unknown, provider: string, deposit: number, allowDepositWaiver = true) {
   const monthly = provider === 'stripe' && days >= 60 && requestedMode === 'MONTHLY'
-  const prepaid = days >= 60 && !monthly
+  const prepaid = days >= 60 && !monthly && allowDepositWaiver
   return {
     billingMode: monthly ? 'MONTHLY' as const : 'FULL' as const,
     deposit: prepaid ? 0 : deposit,

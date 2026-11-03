@@ -2,6 +2,9 @@
 // 与 rent 主应用完全分开部署（wrangler name: geekslope-web）。
 // 只读复用 rent 的 D1 库（binding: RENT）来实时展示产品价格 / 配置 / 联系方式。
 
+import { getCustomerRiskAssessment } from './risk'
+import { handleTranslation } from './translation'
+import { TRANSLATION_CLIENT_SCRIPT } from './translationClient'
 import { Hono, type Context } from 'hono'
 import { ownerRentals,ownerRentalRevision,ownerRentalBookingUrl } from './ownerRentals'
 import { clientAccessMiddleware } from './clientAccessMiddleware'
@@ -417,6 +420,17 @@ app.post('/api/rental-setup-intent', async (c) => {
 // 账户余额查询：必须携带官网登录态，且只返回「本次会话用户自己」的余额。
 // 这里曾按 ?email= 任意查询，等于把「某邮箱是否为正式客户 + 余额」暴露给任何访客
 // （账户枚举 / 财务信息泄露）。结账页对未登录访客不再显示余额支付选项。
+app.get('/translation.js', c => c.body(TRANSLATION_CLIENT_SCRIPT, 200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }))
+const translateRoute = async (c: Context<{ Bindings: Env }>) => {
+  const ip = (c.req.header('CF-Connecting-IP') || 'unknown').trim()
+  if (!(await enforceRateLimit(c.env, 'translation', ip, 20, 60))) return c.json({ ok: false, message: '请求过于频繁，请稍后再试' }, 429, { 'Cache-Control': 'no-store' })
+  const body = await parseRequestBody(c)
+  if (!body) return c.json({ ok: false, message: '翻译请求格式无效' }, 400, { 'Cache-Control': 'no-store' })
+  return handleTranslation(c, body)
+}
+app.post('/api/translate', translateRoute)
+app.post('/api/translate/:provider', translateRoute)
+
 app.get('/api/account-balance', async (c) => {
   const user = await currentUser(c)
   const requestedEmail = String(c.req.query('email') || '').trim().toLowerCase()
@@ -709,7 +723,8 @@ app.get('/apply', (c) =>
       getSiteContact(c.env),
       getRentalConfig(c.env),
     ])
-    const body = renderCartPage(products.filter(product=>!product.ownerRental), config, c.req.query('device') || '')
+    const riskLevel = user?.role === 'CUSTOMER' ? (await getCustomerRiskAssessment(c, user.id)).level : 'NORMAL'
+    const body = renderCartPage(products.filter(product=>!product.ownerRental), config, c.req.query('device') || '', riskLevel)
     return renderPage({
       title: `购物车 — ${contact.name}`,
       description: '确认要租赁的设备，再进入结账页面填写租期与联系信息。',
@@ -732,7 +747,9 @@ app.get('/checkout', (c) =>
       getRentalConfig(c.env),
       getPublicSquareGiftCardConfig(c),
     ])
+    const riskLevel = user?.role === 'CUSTOMER' ? (await getCustomerRiskAssessment(c, user.id)).level : 'NORMAL'
     const body = renderApply({
+      riskLevel,
       products:products.filter(product=>!product.ownerRental),
       selectedId: c.req.query('device') || '',
       config,

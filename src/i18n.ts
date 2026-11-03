@@ -55,6 +55,8 @@ export const ENGLISH_COPY: Record<string, string> = {
   "提示文案最多 500 字": "Message must be 500 characters or fewer",
   "新用户注册暂未开放。": "New customer registration is currently unavailable.",
 
+  '翻译请求格式无效': 'Invalid translation request',
+  '该邮箱已注册，请先登录后再提交申请。': 'This email is already registered. Please log in before submitting your application.',
   '支持的支付方式': 'Accepted payment methods',
   '社交平台': 'Social media',
   '微信': 'WeChat',

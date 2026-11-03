@@ -22,7 +22,7 @@ function card(p: Product): string {
       <span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span>`}
     </div>
     <div class="card-top"><span class="tag ${p.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(p))}</span><span class="card-code">${esc(p.ownerRental ? ownerRentalLabel(p.ownerRental) : p.brand || p.categoryLabel)}</span></div>
-    ${p.ownerRental?`<p class="sub"><span>所在城市</span> · <span>${esc(p.ownerRental.city)}</span></p>`:''}<h3><a href="${detailHref}">${esc(p.name)}</a></h3>
+    ${p.ownerRental?`<p class="sub"><span>所在城市</span> · <span>${esc(p.ownerRental.city)}</span></p>`:''}<h3><a href="${detailHref}" data-api-translate data-no-translate>${esc(p.name)}</a></h3>
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">

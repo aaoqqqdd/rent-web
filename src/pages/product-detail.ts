@@ -45,9 +45,9 @@ export function renderProductDetail({ product, config, appUrl = 'https://dashboa
     <div class="detail-copy">
       <div class="status-line"><span class="tag ${product.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(product))}</span><span>${product.ownerRental ? esc(ownerRentalLabel(product.ownerRental)) : '库存实时同步'}</span></div>
       <p class="detail-brand">${esc(product.brand || product.categoryLabel)}</p>
-      <h1>${esc(product.name)}</h1>
+      <h1 data-api-translate data-no-translate>${esc(product.name)}</h1>
       ${product.model ? `<p class="detail-model">型号 ${esc(product.model)}</p>` : ''}
-      <p class="detail-description">${esc(description)}</p>
+      <p class="detail-description"${product.description.trim() ? ' data-api-translate data-no-translate' : ''}>${esc(description)}</p>
       <div class="detail-price">
         <div><span>按日</span><strong>${product.pricePerDay > 0 ? `$${esc(product.pricePerDay)}` : '询价'}</strong><small>${product.pricePerDay > 0 ? '/ day' : '联系客服'}</small></div>
         <div><span>周租</span>${product.pricePerDay > 0 && product.weeklyDiscountPercent > 0 ? `<del class="price-original">$${(product.pricePerDay * 7).toFixed(2)}</del>` : ''}<strong>${product.pricePerDay > 0 ? `$${esc(weekly)}` : '—'}</strong><small>${product.pricePerDay > 0 ? '/ week' : ''}</small></div>
