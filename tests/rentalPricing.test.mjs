@@ -225,3 +225,16 @@ test('billing choices are hidden when only full payment is available', () => {
   }
   assert.doesNotMatch(script, /不足 60 天需押金，满 60 天免押金/)
 })
+
+
+test('risk-adjusted checkout and cart quotes agree and render valid scripts', () => {
+  for (const [riskLevel, expected] of [['NORMAL',300], ['LOW',150], ['VERY_LOW',0], ['MEDIUM',375], ['HIGH',450], ['CRITICAL',600]]) {
+    const pages = [renderCartPage([product], config, '', riskLevel), renderApply({ products: [product], config, riskLevel, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })]
+    for (const html of pages) {
+      assert.match(html, new RegExp('"deposit":' + expected + '[,}]'))
+      for (const [, code] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new Function(code)
+    }
+  }
+  assert.equal(rentalPaymentPlan(61, 'FULL', 'stripe', 450, false).deposit, 450)
+  assert.equal(rentalPaymentPlan(61, 'FULL', 'stripe', 300, true).deposit, 0)
+})

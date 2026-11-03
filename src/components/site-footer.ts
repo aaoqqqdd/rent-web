@@ -10,9 +10,9 @@ function publicHttpsUrl(value: string | undefined): string {
   } catch { return '' }
 }
 
-function socialIcon(label: string, qrLabel: string, icon: string, urlValue?: string, qrValue?: string): string {
+function socialIcon(label: string, qrLabel: string, icon: string, urlValue?: string, qrValue?: string, fallbackQr = ''): string {
   const url = publicHttpsUrl(urlValue)
-  const qr = publicHttpsUrl(qrValue)
+  const qr = publicHttpsUrl(qrValue) || fallbackQr
   const badge = `class="foot-social-icon" aria-label="${esc(label)}" title="${esc(label)}"`
   if (qr) return `<details class="foot-social-qr" name="footer-social"><summary ${badge}>${icon}</summary><div class="foot-social-panel"><img src="${esc(qr)}" alt="${esc(qrLabel)}" width="200" height="200" loading="lazy"><p>${esc(label)}</p>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">访问主页 ↗</a>` : ''}</div></details>`
   if (url) return `<a ${badge} href="${esc(url)}" target="_blank" rel="noopener noreferrer">${icon}</a>`
@@ -74,7 +74,7 @@ export function renderSiteFooter(contact: SiteContact): string {
         <a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a>
         <span>${esc(contact.address)}</span>
         <div class="foot-socials" role="group" aria-label="社交平台">
-          ${socialIcon('微信', '微信二维码', icons.wechat, contact.wechatUrl, contact.wechatQrUrl)}
+          ${socialIcon('微信', '微信二维码', icons.wechat, contact.wechatUrl, contact.wechatQrUrl, '/images/wechat-qr.jpg')}
           ${socialIcon('小红书', '小红书二维码', icons.xiaohongshu, contact.xiaohongshuUrl, contact.xiaohongshuQrUrl)}
           ${socialIcon('抖音', '抖音二维码', icons.tiktok, contact.douyinUrl, contact.douyinQrUrl)}
         </div>

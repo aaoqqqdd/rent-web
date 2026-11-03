@@ -1,6 +1,8 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
+  '翻译请求格式无效': 'Invalid translation request',
+  '该邮箱已注册，请先登录后再提交申请。': 'This email is already registered. Please log in before submitting your application.',
   '支持的支付方式': 'Accepted payment methods',
   '社交平台': 'Social media',
   '微信': 'WeChat',

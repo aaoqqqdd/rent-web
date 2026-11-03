@@ -24,18 +24,20 @@ test('company social configuration reaches footer profile links and QR panels', 
   assert.equal((html.match(/<details class="foot-social-qr"/g) || []).length, 2)
 })
 
-test('unconfigured social platforms show icons without fake links or empty QR panels', async () => {
+test('WeChat uses the bundled QR while other unconfigured platforms show icons', async () => {
   const html = renderSiteFooter(await getSiteContact(envFor({})))
-  assert.match(html, /aria-label="微信" title="微信" role="img"/)
+  assert.match(html, /<summary class="foot-social-icon" aria-label="微信" title="微信"/)
+  assert.match(html, /src="\/images\/wechat-qr.jpg" alt="微信二维码"/)
   assert.match(html, /aria-label="小红书" title="小红书" role="img"/)
   assert.match(html, /aria-label="抖音" title="抖音" role="img"/)
-  assert.doesNotMatch(html, /<details|href="#"/)
+  assert.equal((html.match(/<details class="foot-social-qr"/g) || []).length, 1)
+  assert.doesNotMatch(html, /href="#"/)
 })
 
 test('unsafe stored social URLs never become footer links or images', async () => {
   for (const url of ['javascript:alert(1)', 'data:text/html,bad', 'https://user:pass@example.test/qr.png', 'http://example.test/qr.png']) {
     const html = renderSiteFooter(await getSiteContact(envFor({ wechatUrl: url, wechatQrUrl: url })))
-    assert.doesNotMatch(html, /<details class="foot-social-qr"/)
-    assert.match(html, /aria-label="微信" title="微信" role="img"/)
+    assert.match(html, /src="\/images\/wechat-qr.jpg" alt="微信二维码"/)
+    assert.ok(!html.includes(url))
   }
 })

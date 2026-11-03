@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { buildSync } from 'esbuild'
 
@@ -188,10 +189,22 @@ function requestSetup(t) {
     if (String(url).includes('/payment_methods/')) return Response.json({ id: 'pm_test', customer: 'cus_test', card: { brand: 'visa' } })
     throw new Error('Unexpected payment request: ' + url)
   })
+  db.exec(`ALTER TABLE orders ADD COLUMN handover_overdue INTEGER DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN deposit_deduction_amount REAL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN identity_status TEXT;
+    ALTER TABLE payments ADD COLUMN customer_id TEXT;
+    ALTER TABLE payments ADD COLUMN amount REAL DEFAULT 0;
+    CREATE TABLE payment_refunds (order_id TEXT, status TEXT, refund_amount REAL, type TEXT);
+    CREATE TABLE damage_cases (order_id TEXT, liability_status TEXT);
+    CREATE TABLE risk_flags (customer_id TEXT, flag_type TEXT, severity TEXT, status TEXT, expires_at TEXT, created_at TEXT);
+    CREATE TABLE auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT, expires_at TEXT, created_at TEXT, last_seen_at TEXT);`)
+  const token = 'test_session_token_'.padEnd(40, 'x')
+  db.prepare("INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, 'customer', '2099-01-01')").run(createHash('sha256').update(token).digest('hex'))
   const today = new Date().toISOString().slice(0, 10)
   const date = days => new Date(Date.parse(today + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10)
   const env = { RENT: rent, STRIPE_SECRET_KEY: 'sk_test_fake', STRIPE_PUBLISHABLE_KEY: 'pk_test_fake' }
-  const request = (days, ids = ['pc'], extra = {}) => handleRentalRequest({ env, req: { header() {} }, json: (body, status) => Response.json(body, { status }) }, {
+  const request = (days, ids = ['pc'], extra = {}) => handleRentalRequest({ env, req: { header(name) { return name === 'cookie' && extra.auth !== false ? 'session=' + token : undefined } }, json: (body, status) => Response.json(body, { status }) }, {
     deviceIds: ids, startDate: date(10), endDate: date(10 + days), startPeriod: 'AM', endPeriod: 'AM',
     firstName: 'Test', lastName: 'User', contactEmail: 'test@example.test', contactPhone: '0412345678',
     agree: '1', paymentMethod: 'card', billingMode: 'MONTHLY', stripeSetupIntentId: 'seti_test', pickupTimeSlot: 'morning', returnTimeSlot: 'morning', ...extra,
@@ -210,7 +223,7 @@ test('monthly applications persist the discounted total and pricing snapshot wit
   assert.equal(order.billing_mode, 'MONTHLY')
   assert.equal(order.deposit_payment_mode, 'PAID')
   assert.equal(order.deposit_method, 'card_hold')
-  assert.deepEqual(JSON.parse(order.rental_pricing_json), { billingMode: 'MONTHLY', depositAmountBeforeWaiver: 300, pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
+  assert.deepEqual(JSON.parse(order.rental_pricing_json), { billingMode: 'MONTHLY', baseDepositAmount: 300, depositRiskLevel: 'NORMAL', depositRiskScore: 0, depositMultiplier: 1, depositAmountBeforeWaiver: 300, pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM payments').get().count, 0)
   assert.match(result.message, /后续每 30 天自动扣取租金/)
 })
@@ -227,7 +240,7 @@ test('applications use global discounts for NULL overrides and snapshot the reso
   const result = await response.json()
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.orderId)
   assert.equal(order.totalAmount, 2100)
-  assert.deepEqual(JSON.parse(order.rental_pricing_json), { billingMode: 'MONTHLY', depositAmountBeforeWaiver: 300, pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
+  assert.deepEqual(JSON.parse(order.rental_pricing_json), { billingMode: 'MONTHLY', baseDepositAmount: 300, depositRiskLevel: 'NORMAL', depositRiskScore: 0, depositMultiplier: 1, depositAmountBeforeWaiver: 300, pricePerDay: 20, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20 })
 })
 
 test('request handler arbitrates concurrent submissions, not ordinary later applications', async t => {
@@ -318,4 +331,58 @@ test('mixed carts offer monthly only for the eligible devices and full payment f
     { deviceId: 'other', depositAmount: 400, billing_mode: 'FULL' },
     { deviceId: 'pc', depositAmount: 300, billing_mode: 'MONTHLY' },
   ])
+})
+
+
+for (const [level, completed, balance, failures, damage, deposit] of [
+  ['NORMAL', 0, 0, 0, false, 300], ['LOW', 2, 0, 0, false, 150], ['VERY_LOW', 5, 0, 0, false, 0],
+  ['MEDIUM', 0, -1, 0, false, 375], ['HIGH', 0, -1, 3, false, 450], ['CRITICAL', 0, -1, 3, true, 600],
+]) test(`website persists the ${level} risk-adjusted deposit from server data`, async t => {
+  const { db, order, request } = requestSetup(t)
+  db.prepare("UPDATE users SET identity_status = 'VERIFIED', balance = ? WHERE id = 'customer'").run(balance)
+  for (let i = 0; i < completed; i++) {
+    order('history-' + i, { status: 'completed' })
+    db.prepare("UPDATE orders SET userId = 'customer', payment_status = 'PAID' WHERE id = ?").run('history-' + i)
+  }
+  for (let i = 0; i < failures; i++) db.exec("INSERT INTO payments (customer_id, status) VALUES ('customer', 'failed')")
+  if (damage) {
+    order('damaged', { status: 'completed' })
+    db.exec("UPDATE orders SET userId = 'customer' WHERE id = 'damaged'; INSERT INTO damage_cases VALUES ('damaged', 'CUSTOMER')")
+  }
+  const response = await request(61, ['pc'], { depositAmount: 0, riskLevel: 'VERY_LOW', depositMultiplier: 0 })
+  const body = await response.json()
+  assert.equal(response.status, 200, body.message)
+  const saved = db.prepare('SELECT * FROM orders WHERE id = ?').get(body.orderId)
+  assert.equal(saved.depositAmount, deposit)
+  assert.equal(saved.totalAmount, 1220 + deposit)
+  const snapshot = JSON.parse(saved.rental_pricing_json)
+  assert.equal(snapshot.baseDepositAmount, 300)
+  assert.equal(snapshot.depositRiskLevel, level)
+  assert.equal(snapshot.depositAmountBeforeWaiver, deposit)
+})
+
+test('full payment cannot remove an elevated-risk deposit', async t => {
+  const { db, request } = requestSetup(t)
+  db.exec("UPDATE users SET balance = -1 WHERE id = 'customer'")
+  const response = await request(61, ['pc'], { billingMode: 'FULL' })
+  const body = await response.json()
+  assert.equal(response.status, 200, body.message)
+  const saved = db.prepare('SELECT * FROM orders WHERE id = ?').get(body.orderId)
+  assert.equal(saved.depositAmount, 375)
+  assert.equal(saved.totalAmount, 1595)
+})
+
+test('personal deposit pricing requires the account session', async t => {
+  const { db, request } = requestSetup(t)
+  const response = await request(61, ['pc'], { auth: false })
+  assert.equal(response.status, 401)
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM orders').get().count, 0)
+})
+
+test('explicit blocking flags stop website applications before any order is created', async t => {
+  const { db, request } = requestSetup(t)
+  db.exec("INSERT INTO risk_flags VALUES ('customer', 'CHARGEBACK', 'LOW', 'ACTIVE', NULL, CURRENT_TIMESTAMP)")
+  const response = await request(61)
+  assert.equal(response.status, 403)
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM orders').get().count, 0)
 })

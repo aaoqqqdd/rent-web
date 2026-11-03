@@ -1,12 +1,14 @@
 // 购物车 / 下单页。购物车保存在浏览器 localStorage；提交时由官网 Worker
 // 直接校验并写入共享 D1 的 pending_approval 订单。
 
+import { riskAdjustedDeposit, CUSTOMER_DEPOSIT_MULTIPLIERS, type CustomerRiskLevel } from '../risk-rules'
 import { esc } from '../layout'
 import type { Product, RentalConfig } from '../db'
 import { createPickupAvailability } from '../pickup-availability'
 import { rentalPriceBreakdown, firstRentalInstallment, rentalPaymentPlan } from '../rental-pricing'
 
 interface ApplyData {
+  riskLevel?: CustomerRiskLevel
   products: Product[]
   selectedId: string
   config: RentalConfig
@@ -20,7 +22,7 @@ function scriptJson(value: unknown): string {
   return JSON.stringify(value ?? null).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
 }
 
-export function renderCartPage(products: Product[], config: RentalConfig, selectedId = ''): string {
+export function renderCartPage(products: Product[], config: RentalConfig, selectedId = '', riskLevel: CustomerRiskLevel = 'NORMAL'): string {
   const cartProducts = products.filter((product) => product.id).map((product) => ({
     id: product.id,
     name: product.name,
@@ -30,7 +32,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     day: product.pricePerDay,
     weeklyDiscountPercent: product.weeklyDiscountPercent,
     monthlyDiscountPercent: product.monthlyDiscountPercent,
-    deposit: product.depositAmount,
+    deposit: riskAdjustedDeposit(product.depositAmount, riskLevel),
   }))
   return /* html */ `
 <section class="page-hero compact"><div class="wrap"><div class="kicker">购物车</div><h1>先选设备，再确认租期</h1><p>设备详情页先选租期；加入购物车后，只需在这里修改租期。</p></div></section>
@@ -42,7 +44,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
       <p class="hint">请在下方每台设备卡片中选择取货和归还日期</p>
     </div>
     <div class="cart-page-list" id="cart-page-items"></div>
-    <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong><p>不足 60 天需押金；满 60 天可选月付，或一次性付清免押金。</p></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
+    <div class="form-card cart-page-summary"><div><span class="kicker">预计费用</span><strong id="cart-page-total"></strong></div><div class="hero-actions"><a class="btn btn-ghost" href="/products">继续选设备</a><a class="btn btn-primary btn-lg" href="/checkout">前往结账 <span>→</span></a></div></div>
   </div>
 </div></section>
 <script>
@@ -222,7 +224,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
     if (selectedId && map.has(selectedId) && ids.indexOf(selectedId) < 0 && ids.length < 10) { ids.push(selectedId); state.terms[selectedId] = normalizeTerm(selectedId, null); persist(ids, state.terms); }
     setEmptyState(ids.length === 0);
     if (!ids.length) { clearChildren(items); total.textContent = ''; return; } loadAvailability(ids); clearChildren(items); var rent = 0; var valid = true;
-    ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || cartText('配置详情见设备页', 'See the device page for specifications'); detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); var dailyRate = Number(product.day || 0); daily.textContent = dailyRate > 0 ? '$' + dailyRate.toFixed(2) : cartText('询价', 'Enquire'); if (dailyRate > 0) { var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); } var depositText = document.createElement('span'); depositText.textContent = days >= 60 ? cartText('满 60 天一次性付清免押金', 'No deposit when paid in full for 60 days or more') : cartText('押金 $' + Number(product.deposit || 0).toFixed(2), 'Deposit $' + Number(product.deposit || 0).toFixed(2)); var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = cartText('移除', 'Remove'); price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
+    ids.forEach(function (id) { var product = map.get(id); var term = state.terms[id] || normalizeTerm(id, null); var days = termDays(term); var error = availabilityReady && !availabilityFailed ? termError(id, term) : availabilityFailed ? '设备档期检查失败，请刷新后重试。' : ''; if (error) valid = false; rent += days > 0 ? rentalFee(product, days) : 0; var row = document.createElement('article'); row.className = 'cart-page-item cart-page-item--term'; var detail = document.createElement('div'); var category = document.createElement('span'); category.textContent = product.categoryLabel; var name = document.createElement('h3'); name.textContent = product.name; var model = document.createElement('p'); model.textContent = product.model || cartText('配置详情见设备页', 'See the device page for specifications'); detail.append(category, name, model, termEditor(id, term)); var price = document.createElement('div'); price.className = 'cart-page-price'; var daily = document.createElement('strong'); var dailyRate = Number(product.day || 0); daily.textContent = dailyRate > 0 ? '$' + dailyRate.toFixed(2) : cartText('询价', 'Enquire'); if (dailyRate > 0) { var unit = document.createElement('small'); unit.textContent = '/day'; daily.appendChild(unit); } var depositText = document.createElement('span'); depositText.textContent = days >= 60 && ${CUSTOMER_DEPOSIT_MULTIPLIERS[riskLevel] <= 1} ? cartText('满 60 天一次性付清免押金', 'No deposit when paid in full for 60 days or more') : cartText('押金 $' + Number(product.deposit || 0).toFixed(2), 'Deposit $' + Number(product.deposit || 0).toFixed(2)); var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cart-remove'; remove.dataset.cartRemove = id; remove.textContent = cartText('移除', 'Remove'); price.append(daily, depositText, remove); row.append(detail, price); items.appendChild(row); });
     total.textContent = ids.length + cartText(' 台设备｜租金 $', ' device(s) | Rental $') + rent.toFixed(2) + (valid ? '' : cartText('｜请先修正不可用租期', ' | Please correct an unavailable rental term'));
     var checkout = content.querySelector('a[href="/checkout"], a[data-checkout-link]');
     if (checkout) { checkout.dataset.checkoutLink = 'true'; checkout.href = valid ? '/checkout' : '#cart-page-items'; checkout.setAttribute('aria-disabled', String(!valid)); checkout.classList.toggle('is-disabled', !valid); }
@@ -235,7 +237,7 @@ export function renderCartPage(products: Product[], config: RentalConfig, select
 }
 
 export function renderApply(data: ApplyData): string {
-  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardConfig, deliveryQuoteEnabled } = data
+  const { products, selectedId, config, appUrl, turnstileSiteKey, squareGiftCardConfig, deliveryQuoteEnabled, riskLevel = 'NORMAL' } = data
   const rentable = products.filter((product) => product.id && product.pricePerDay > 0)
   const hasPickupLocations = config.pickupLocations.length > 0
   const timeToMinutes = (time: string) => {
@@ -302,7 +304,7 @@ export function renderApply(data: ApplyData): string {
     day: product.pricePerDay,
     weeklyDiscountPercent: product.weeklyDiscountPercent,
     monthlyDiscountPercent: product.monthlyDiscountPercent,
-    deposit: product.depositAmount,
+    deposit: riskAdjustedDeposit(product.depositAmount, riskLevel),
   }))
   const turnstile = turnstileSiteKey
     ? `<div class="field"><div class="cf-turnstile" data-sitekey="${esc(turnstileSiteKey)}"></div></div>
@@ -883,7 +885,7 @@ export function renderApply(data: ApplyData): string {
   function paymentPlanFor(id) {
     var payment = form.querySelector('input[name="paymentMethod"]:checked')?.value || 'card';
     var billing = form.querySelector('input[name="billingMode"]:checked')?.value || 'FULL';
-    return (${rentalPaymentPlan.toString()})(termDays(termFor(id)), billing, payment === 'card' ? 'stripe' : payment === 'square' ? 'square' : 'internal', productMap.get(id).deposit);
+    return (${rentalPaymentPlan.toString()})(termDays(termFor(id)), billing, payment === 'card' ? 'stripe' : payment === 'square' ? 'square' : 'internal', productMap.get(id).deposit, ${CUSTOMER_DEPOSIT_MULTIPLIERS[riskLevel] <= 1});
   }
   function refreshBillingOptions() {
     var box = document.getElementById('rental-billing-options');
