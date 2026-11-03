@@ -13,7 +13,7 @@ function card(p: Product): string {
   const chips = p.specs.slice(0, 5).map((s) => `<span class="chip">${esc(s)}</span>`).join('')
   const detailHref = p.id ? `/products/${encodeURIComponent(p.id)}` : '/products'
   const actionHref = (p.bookable ?? p.available) ? detailHref : `/about?subject=${encodeURIComponent(`咨询 ${p.name}`)}#contact`
-  const searchText = [p.name, p.brand, p.model, p.categoryLabel, p.cpu, p.gpu, p.ram, p.storage, p.os, p.description].join(' ').toLowerCase()
+  const searchText = [p.name, p.brand, p.model, p.categoryLabel, p.cpu, p.gpu, p.ram, p.storage, p.os, p.description, p.ownerRental?.city].join(' ').toLowerCase()
   return /* html */ `
   <article class="card product-card" data-product data-category="${esc(p.category)}" data-available="${p.available ? 'true' : 'false'}" data-price="${p.pricePerDay}" data-name="${esc(p.name.toLowerCase())}" data-search="${esc(searchText)}">
     <div class="product-visual"${p.ownerRental ? '' : ' aria-hidden="true"'}>
@@ -22,7 +22,7 @@ function card(p: Product): string {
       <span class="visual-code">${esc(p.category === 'workstation' ? 'WS' : p.category === 'gaming' ? 'RTX' : 'MOB')}</span>`}
     </div>
     <div class="card-top"><span class="tag ${p.available ? '' : 'tag-muted'}"><i></i>${esc(productAvailabilityLabel(p))}</span><span class="card-code">${esc(p.ownerRental ? ownerRentalLabel(p.ownerRental) : p.brand || p.categoryLabel)}</span></div>
-    <h3><a href="${detailHref}">${esc(p.name)}</a></h3>
+    ${p.ownerRental?`<p class="sub"><span>所在城市</span> · <span>${esc(p.ownerRental.city)}</span></p>`:''}<h3><a href="${detailHref}">${esc(p.name)}</a></h3>
     <p class="sub">${esc(p.categoryLabel)}${p.model ? ` · ${esc(p.model)}` : ''}</p>
     <div class="chips">${chips || '<span class="chip">配置待更新</span>'}</div>
     <div class="price-row">

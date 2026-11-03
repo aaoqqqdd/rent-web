@@ -36,12 +36,12 @@
 		"TURNSTILE_SITE_KEY": "",
 		// Square Dashboard 中发布的 eGift Card order site；官网入口会复用该页面的购买、查余额和 Reload card 功能。
 		"SQUARE_GIFT_CARD_URL": "https://app.squareup.com/gift/MLP6ZYA585ZQT/order",
-		// Stripe 可直接使用环境变量；若留空，官网会读取 rent 中加密保存的 Stripe 配置。
+		// Stripe 收款统一读取 rent 后台加密保存的平台账户配置。
 	}
 	// 可选覆盖项（用 `wrangler secret put` 或在此加 vars）：
 	//   CONTACT_PHONE / CONTACT_EMAIL —— 覆盖 systemSettings.companyDetails 里的联系方式
 	//   SETTINGS_ENCRYPTION_KEY —— 读取共享 D1 中加密的 Stripe 配置（与 rent 使用同一个 secret）
-	//   STRIPE_PUBLISHABLE_KEY / STRIPE_SECRET_KEY —— 也可直接配置 Stripe（secret 请使用 wrangler secret）
+	//   官网不使用独立的 Stripe 环境变量账户，租赁收款与控制台共用平台配置。
 	//   TURNSTILE_SECRET_KEY（secret）—— 人机校验密钥的回退值。正常情况不需要配置：
 	//     官网会读取 rent 后台保存并加密的 systemSettings.turnstileConfig（同一个
 	//     SETTINGS_ENCRYPTION_KEY 解密）。两处都没有 secret 时才跳过校验。

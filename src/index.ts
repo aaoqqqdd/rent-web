@@ -62,8 +62,6 @@ export interface Env {
   CONTACT_EMAIL?: string
   TURNSTILE_SITE_KEY?: string
   SETTINGS_ENCRYPTION_KEY?: string
-  STRIPE_PUBLISHABLE_KEY?: string
-  STRIPE_SECRET_KEY?: string
   // Turnstile 服务端密钥。优先从共享 D1 `systemSettings.turnstileConfig`
   // （rent 后台 /admin/api-settings 配置）读取；这里的变量仅作为回退。
   TURNSTILE_SECRET_KEY?: string

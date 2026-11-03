@@ -1,3 +1,5 @@
+import {platformStripeFixture} from './fixtures/platformStripe.mjs'
+const platform=await platformStripeFixture()
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
@@ -190,7 +192,8 @@ function requestSetup(t) {
   })
   const today = new Date().toISOString().slice(0, 10)
   const date = days => new Date(Date.parse(today + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10)
-  const env = { RENT: rent, STRIPE_SECRET_KEY: 'sk_test_fake', STRIPE_PUBLISHABLE_KEY: 'pk_test_fake' }
+  db.prepare('INSERT INTO systemSettings (key,value) VALUES (?,?)').run('stripeConfig',JSON.stringify(platform.config))
+  const env = { RENT: rent, SETTINGS_ENCRYPTION_KEY:platform.encryptionKey }
   const request = (days, ids = ['pc'], extra = {}) => handleRentalRequest({ env, req: { header() {} }, json: (body, status) => Response.json(body, { status }) }, {
     deviceIds: ids, startDate: date(10), endDate: date(10 + days), startPeriod: 'AM', endPeriod: 'AM',
     firstName: 'Test', lastName: 'User', contactEmail: 'test@example.test', contactPhone: '0412345678',

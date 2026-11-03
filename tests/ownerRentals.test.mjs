@@ -20,14 +20,14 @@ function setup(t){
   db.exec(`CREATE TABLE systemSettings (key TEXT,value TEXT,deleted_at TEXT);
     CREATE TABLE users (id TEXT,status TEXT,deleted_at TEXT);
     CREATE TABLE devices (id TEXT,name TEXT,model TEXT,pricePerDay REAL,depositAmount REAL,status TEXT,lifecycle_status TEXT,deleted_at TEXT);
-    CREATE TABLE c2c_listings (device_id TEXT,owner_id TEXT,status TEXT,listing_mode TEXT,pickup_address TEXT,photos_json TEXT,custody_received_at TEXT);
+    CREATE TABLE c2c_listings (device_id TEXT,owner_id TEXT,status TEXT,listing_mode TEXT,pickup_address TEXT,pickup_address_json TEXT,public_city TEXT,photos_json TEXT,custody_received_at TEXT);
     CREATE TABLE c2c_memberships (user_id TEXT,mode TEXT);
     CREATE TABLE c2c_settings (managed_commission_bps INTEGER);
     CREATE TABLE c2c_photos (id TEXT,owner_id TEXT,slot TEXT,url TEXT);
     INSERT INTO users VALUES ('owner','active',NULL);
     INSERT INTO c2c_memberships VALUES ('owner','self');INSERT INTO c2c_settings VALUES (1500);
     INSERT INTO devices VALUES ('platform','Platform PC','M3',20,100,'available','READY',NULL),('d-c2c-owned','Owner PC','M4',25,200,'available','READY',NULL);
-    INSERT INTO c2c_listings VALUES ('d-c2c-owned','owner','approved','self','Level 1\n123 Test Street\nCarlton VIC 3053','{}',NULL);`)
+    INSERT INTO c2c_listings VALUES ('d-c2c-owned','owner','approved','self','Level 1\n123 Test Street\nCarlton VIC 3053','{}','墨尔本','{}',NULL);`)
   const photos={}
   for(const [i,slot] of ['a','b','c','d','power'].entries()){
     const id='c2cp-'+String(i).padStart(16,'0'),url=`https://res.cloudinary.com/demo/image/upload/test-${slot}.jpg`
@@ -71,13 +71,14 @@ test('catalogue shows reviewed owner devices with verified Cloudinary photos and
   assert.equal((await listProducts(env)).length,1,'unsafe photos cannot become public')
 })
 
-test('owner detail shows photo gallery and pickup address with a console reservation link',async t=>{
+test('owner preview shows gallery and city only; full pickup address stays in console checkout',async t=>{
   const {env}=setup(t);const product=(await listProducts(env)).find(product=>product.ownerRental)
-  product.ownerRental.pickupAddress='Line 1 <script>alert(1)</script>\nCarlton VIC 3053'
+  assert.equal('pickupAddress' in product.ownerRental,false)
+  assert.equal(product.ownerRental.city,'墨尔本')
   const config={pickupLocations:[],deliveryAreas:[],deliveryNote:'',minimumRentalDays:1,unavailableDates:[],unavailableTimeSlots:{}}
   const html=renderProductDetail({product,config,appUrl:'https://console.example.test'})
   assert.match(html,/href="https:\/\/console.example.test\/customer\/rent\/d-c2c-owned"/)
-  assert.match(html,/屏幕开机画面/);assert.match(html,/&lt;script&gt;alert\(1\)&lt;\/script&gt;/)
+  assert.match(html,/屏幕开机画面/);assert.match(html,/墨尔本/);assert.doesNotMatch(html,/123 Test Street|Carlton VIC 3053/)
   assert.doesNotMatch(html,/id="detail-add-cart"/)
   for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(()=>new Function(script[1]))
   const response=await handleRentalRequest({env,req:{header(){return ''}},json(body,status){return Response.json(body,{status})}},{deviceIds:['d-c2c-owned']})

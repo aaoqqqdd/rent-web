@@ -40,6 +40,7 @@ export async function readClientAccess(db: { prepare(sql: string): { bind(...val
 export function clientFeatureForPath(path: string, surface: 'console' | 'web'): ClientFeature | null {
   if (/^\/register(?:\/|$)/.test(path)) return 'registration'
   if (surface === 'console') {
+    if (/^\/customer\/rental-program\/settlements(?:\/|$)/.test(path)) return null
     if (/^\/customer\/(?:rental-program|c2c)(?:\/|$)/.test(path)) return 'rentalProgram'
     if (/^\/customer\/referral(?:\/|$)/.test(path)) return 'referralProgram'
     if (/^\/customer\/(?:devices(?:\/|$)|rent\/)/.test(path) || /^\/(?:public\/rental-request|rental-links?\/|rent\/)/.test(path)) return 'newRentals'
@@ -66,6 +67,7 @@ export function consoleEssentialPath(path: string): boolean {
   return /^\/(?:login|logout|forgot-password|reset-password|verify-email|sso|admin|webhooks)(?:\/|$)/.test(path)
     || /^\/customer\/(?:profile|security|orders|rentals|guest)(?:\/|$)/.test(path)
     || path === '/customer/balance'
+    || /^\/customer\/rental-program\/settlements(?:\/|$)/.test(path)
     || /^\/(?:contract|contracts|orders|payment)(?:\/|$)/.test(path)
 }
 export function webEssentialPath(path: string): boolean {

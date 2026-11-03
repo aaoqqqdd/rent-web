@@ -1,3 +1,5 @@
+import {platformStripeFixture} from './fixtures/platformStripe.mjs'
+const platform=await platformStripeFixture()
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
@@ -11,7 +13,7 @@ function setup(t, overrides = {}) {
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     const path = String(url).replace('https://api.stripe.com/v1/', '')
     const params = new URLSearchParams(init?.body)
-    calls.push({ path, params })
+    calls.push({ path, params,headers:init?.headers })
     if (path === 'payment_intents') {
       created = { id: 'pi_test', amount: Number(params.get('amount')), currency: 'aud', status: 'requires_confirmation' }
       return Response.json(created)
@@ -21,10 +23,11 @@ function setup(t, overrides = {}) {
     throw new Error('Unexpected Stripe request: ' + path)
   })
   const context = { env: {
-    STRIPE_SECRET_KEY: 'sk_test_fake', STRIPE_PUBLISHABLE_KEY: 'pk_test_fake',
+    STRIPE_SECRET_KEY: 'sk_test_other_account', STRIPE_PUBLISHABLE_KEY: 'pk_test_other_account',
+    SETTINGS_ENCRYPTION_KEY:platform.encryptionKey,
     RENT: {
       prepare(sql) {
-        const statement = { sql, values: [], bind(...values) { this.values = values; return this }, async run() { statements.push(this); return { success: true } } }
+        const statement = { sql, values: [], bind(...values) { this.values = values; return this }, async first(){return sql.includes("key = 'stripeConfig'")?{value:JSON.stringify(platform.config)}:null}, async run() { statements.push(this); return { success: true } } }
         return statement
       },
       async batch(batch) { return Promise.all(batch.map(statement => statement.run())) },
@@ -119,4 +122,15 @@ test('a captured or unsuccessfully cancelled authorization is kept for review', 
     await assert.rejects(() => settleRejectedApplication(context, { id: 'loser', userId: 'customer', stripe_deposit_payment_intent_id: 'pi_hold' }))
     assert.equal(statements.length, 0)
   }
+})
+
+test('website receipts always use the shared platform account without connected-account transfers',async t=>{
+ const {context,calls}=setup(t)
+ await authorizeCardForOrder(context,'order','customer',1000,'pm_test','visa',1,'cus_test',{amount:50,feeRate:0.025})
+ assert.equal(calls[0].headers.Authorization,'Bearer sk_test_platform')
+ for(const call of calls){
+  assert.equal(call.headers['Stripe-Account'],undefined)
+  assert.equal(call.params.has('transfer_data[destination]'),false)
+  assert.equal(call.params.has('on_behalf_of'),false)
+ }
 })

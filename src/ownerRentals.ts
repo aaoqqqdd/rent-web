@@ -9,7 +9,7 @@ import { esc } from './escape'
 const PHOTO_SLOTS = [['a','A 面（顶盖）'],['b','B 面（屏幕）'],['c','C 面（键盘）'],['d','D 面（底盖）'],['power','屏幕开机画面'],['extra','配件与接口']] as const
 export interface OwnerRental {
   mode: 'self' | 'managed'
-  pickupAddress: string
+  city: string
   photos: Array<{slot:string;label:string;url:string}>
   eligible: boolean
 }
@@ -22,7 +22,7 @@ function photoUrl(value: unknown): string {
 export async function ownerRentals(env: Env): Promise<Map<string,OwnerRental>> {
   const required = PHOTO_SLOTS.filter(([slot])=>slot!=='extra').map(([slot])=>`EXISTS (SELECT 1 FROM c2c_photos p WHERE p.id=json_extract(l.photos_json,'$.${slot}.id') AND p.owner_id=l.owner_id AND p.slot='${slot}' AND p.url=json_extract(l.photos_json,'$.${slot}.url'))`).join(' AND ')
   try {
-    const result = await env.RENT.prepare(`SELECT l.device_id,l.listing_mode,l.pickup_address,l.photos_json,
+    const result = await env.RENT.prepare(`SELECT l.device_id,l.listing_mode,l.public_city,l.pickup_address_json,l.photos_json,
       (l.status='approved' AND u.status='active' AND u.deleted_at IS NULL AND m.user_id IS NOT NULL
       AND l.listing_mode=m.mode AND length(trim(l.pickup_address))>0
       AND (l.listing_mode='self' OR (l.custody_received_at IS NOT NULL AND s.managed_commission_bps IS NOT NULL))
@@ -35,7 +35,7 @@ export async function ownerRentals(env: Env): Promise<Map<string,OwnerRental>> {
         const url=photoUrl(data[slot]?.url)
         return url ? [{slot,label,url}] : []
       })
-      return [String(row.device_id),{mode:row.listing_mode==='managed'?'managed':'self',pickupAddress:String(row.pickup_address || ''),photos,eligible:Number(row.eligible)===1 && photos.filter(photo=>photo.slot!=='extra').length===5}]
+      return [String(row.device_id),{mode:row.listing_mode==='managed'?'managed':'self',city:row.listing_mode==='managed'?'墨尔本':String(row.public_city || (()=>{try{return JSON.parse(String(row.pickup_address_json||'{}')).city || ''}catch{return ''}})() || '城市待完善'),photos,eligible:Number(row.eligible)===1 && photos.filter(photo=>photo.slot!=='extra').length===5}]
     }))
   } catch (error) {
     // Sites predating the rental-program migration still show platform inventory.

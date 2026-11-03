@@ -65,7 +65,7 @@ export function renderProductDetail({ product, config, appUrl = 'https://dashboa
         <p class="hint">最短租期 ${esc(config.minimumRentalDays)} 天。</p>
         <p class="hint detail-date-message" id="detail-date-message" aria-live="polite"></p>
       </div>
-      ${product.ownerRental ? `<div class="owner-rental-pickup"><strong>取件地址</strong><address>${esc(product.ownerRental.pickupAddress)}</address><span>${product.ownerRental.mode==='self'?'仅限自取':'墨尔本平台托管'}</span></div>` : ''}<div class="detail-actions">
+      ${product.ownerRental ? `<div class="owner-rental-pickup"><strong>所在城市</strong><p>${esc(product.ownerRental.city)}</p><span>${product.ownerRental.mode==='self'?'仅限自取':'墨尔本平台托管'}</span></div>` : ''}<div class="detail-actions">
         ${product.ownerRental ? `<a class="btn btn-primary btn-lg" href="${esc(ownerRentalBookingUrl(appUrl,product.id))}">预约这台设备</a>` : `<button class="btn btn-primary btn-lg" id="detail-add-cart" type="button" ${(product.bookable ?? product.available) ? '' : 'disabled'}>加入购物车并查看</button>`}
         <a class="btn btn-ghost btn-lg" href="/about?subject=${encodeURIComponent(`咨询 ${product.name}`)}#contact">咨询这台设备</a>
       </div>

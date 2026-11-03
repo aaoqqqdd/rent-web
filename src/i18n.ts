@@ -1,6 +1,17 @@
 // Client-side copy catalogue. Chinese remains the server-rendered canonical copy;
 // this catalogue supplies the English presentation selected in the header.
 export const ENGLISH_COPY: Record<string, string> = {
+  '所在城市': 'City',
+  '城市待完善': 'City pending',
+  '墨尔本': 'Melbourne',
+  '悉尼': 'Sydney',
+  '布里斯班': 'Brisbane',
+  '珀斯': 'Perth',
+  '阿德莱德': 'Adelaide',
+  '堪培拉': 'Canberra',
+  '霍巴特': 'Hobart',
+  '达尔文': 'Darwin',
+
   "客户反馈": "Customer feedback",
 "个人设备 · 平台托管": "Owner device \u00b7 Platform managed",
 "个人设备 · 自行交付": "Owner device \u00b7 Owner handover",

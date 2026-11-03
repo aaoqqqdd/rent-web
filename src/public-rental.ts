@@ -331,9 +331,7 @@ function base64ToBytes(value: string): Uint8Array {
 }
 
 async function stripeConfig(c: RentalContext): Promise<{ publishableKey: string; secretKey: string }> {
-  if (c.env.STRIPE_SECRET_KEY && c.env.STRIPE_PUBLISHABLE_KEY) {
-    return { publishableKey: c.env.STRIPE_PUBLISHABLE_KEY, secretKey: c.env.STRIPE_SECRET_KEY }
-  }
+  // Never route website rental receipts to an independent environment account.
   const encryptionKey = String(c.env.SETTINGS_ENCRYPTION_KEY || '')
   if (!encryptionKey) throw new Error('Stripe 尚未配置，请联系客服。')
   const row = await c.env.RENT.prepare("SELECT value FROM systemSettings WHERE key = 'stripeConfig'").first<{ value: string }>()
