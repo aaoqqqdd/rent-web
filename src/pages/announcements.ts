@@ -37,7 +37,7 @@ function noticeCard(notice: PublicNotice): string {
       ? `<h2 data-coupon-callout data-coupon-prefix-zh="🎉 新优惠上线！使用优惠码" data-coupon-prefix-en="🎉 New offer live! Enter promo code" data-coupon-benefit-zh="${esc(notice.couponBenefitZh || '')}" data-coupon-benefit-en="${esc(notice.couponBenefitEn || '')}"><span data-coupon-prefix>🎉 新优惠上线！使用优惠码</span> <strong>${esc(notice.couponCode || '')}</strong> <em data-coupon-benefit>${esc(notice.couponBenefitZh || '')}</em></h2>`
       : `<h2${noTranslate}${noticeTitleAttrs(notice)}>${esc(title)}</h2>`
     return `<a class="notice-card" href="${href}">
-  <span class="notice-card-kind">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</span>
+  <span class="notice-card-kind">${notice.kind === 'coupon' ? '优惠活动' : notice.kind === 'advertisement' ? '官网广告' : '网站通告'}</span>
   ${couponTitle}
   <time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time>
   ${noticeMessage(notice, true)}
@@ -65,7 +65,7 @@ export function renderAnnouncementDetail(notice: PublicNotice | null): string {
     const noTranslate = notice.isAdminAnnouncement || notice.titleEn ? ' data-no-translate' : ''
     return `<section class="section">
   <div class="wrap doc legal-document notice-detail-wrap">
-    <div class="kicker">${notice.kind === 'coupon' ? '优惠活动' : '网站通告'}</div>
+    <div class="kicker">${notice.kind === 'coupon' ? '优惠活动' : notice.kind === 'advertisement' ? '官网广告' : '网站通告'}</div>
     <h1${noTranslate}${noticeTitleAttrs(notice)}>${esc(notice.title)}</h1>
     <p class="notice-published"><time datetime="${esc(notice.createdAt)}">${esc(noticeDate(notice.createdAt))}</time></p>
     <article class="notice-detail">

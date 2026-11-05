@@ -404,8 +404,15 @@ p { margin: 0; }
 .site-header.is-scrolled .wrap { height: 64px; }
 .site-announcement { border-bottom: 1px solid var(--border); background: linear-gradient(90deg, rgba(124,108,255,.14), rgba(89,229,193,.07)); }
 .site-announcement-inner { display: flex; align-items: center; gap: 16px; min-height: 42px; }
+.site-announcement-viewport { flex: 1; min-width: 0; overflow: hidden; }
+.site-announcement-slide { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.site-announcement-slide.is-entering { animation: notice-slide-in .35s ease both; }
+.site-announcement-controls { display: flex; flex: none; }
+.site-announcement-controls button { min-width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted-fg); font-size: 20px; cursor: pointer; }
+.site-announcement-controls button:hover { color: var(--secondary); background: var(--muted); }
+@keyframes notice-slide-in { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
 .site-announcement-label { color: var(--secondary); font: 600 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
-.site-announcement-link { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; width: 100%; color: var(--fg); font-size: 13px; }
+.site-announcement-link { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; width: 100%; min-height: 44px; color: var(--fg); font-size: 13px; }
 .site-announcement-link strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .site-announcement-link > span { color: var(--muted-fg); flex: none; font-size: 12px; }
 .site-announcement-link:hover strong { color: var(--secondary); }
@@ -998,9 +1005,11 @@ a.contact-option:hover { border-color: var(--border-bright); }
 @media (max-width: 620px) {
   .header-cart > span { display: none; }
   .header-actions { gap: 5px; }
-  .site-announcement-inner { gap: 10px; min-height: 48px; padding-left: 18px; padding-right: 18px; }
+  .site-announcement-inner { gap: 4px; min-height: 48px; padding-left: 18px; padding-right: 18px; }
   .site-announcement-link { gap: 10px; font-size: 12px; }
   .site-announcement-link > span { font-size: 11px; }
+  .site-announcement-slide { gap: 10px; }
+  .site-announcement-link > [data-site-announcement-action] { display: none; }
   .notice-grid { grid-template-columns: 1fr; }
   .coupon-callout { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
   .coupon-callout .btn { width: 100%; margin-left: 0; }

@@ -1,19 +1,22 @@
 import { NOTICE_ENGLISH_UNAVAILABLE } from '../notice-content'
 
-export function renderAnnouncementUi(): string {
-  return `<dialog class="notice-dialog" id="gs-announcement-dialog" aria-labelledby="gs-announcement-title" data-no-translate>
+function renderNoticeUi(advertisement: boolean): string {
+  const prefix = advertisement ? 'gs-advertisement' : 'gs-announcement'
+  const label = advertisement ? '官网广告' : '网站通告'
+  const close = advertisement ? '关闭广告' : '关闭通知'
+  return `<dialog class="notice-dialog" id="${prefix}-dialog" aria-labelledby="${prefix}-title" data-no-translate>
   <div class="notice-dialog-shell">
     <header class="notice-dialog-header">
       <div class="notice-dialog-heading">
-        <p class="notice-dialog-kicker" data-announcement-kicker>网站通告</p>
-        <h2 id="gs-announcement-title" tabindex="-1"></h2>
+        <p class="notice-dialog-kicker" data-announcement-kicker>${label}</p>
+        <h2 id="${prefix}-title" tabindex="-1"></h2>
       </div>
       <div class="notice-dialog-controls">
         <div class="language-switcher" role="group" aria-label="语言" data-announcement-language>
           <button type="button" data-language="zh" lang="zh-CN">中</button>
           <button type="button" data-language="en" lang="en">EN</button>
         </div>
-        <button type="button" class="notice-dialog-close" data-announcement-close aria-label="关闭通知"><span aria-hidden="true">×</span></button>
+        <button type="button" class="notice-dialog-close" data-announcement-close aria-label="${close}"><span aria-hidden="true">×</span></button>
       </div>
     </header>
     <div class="notice-dialog-body">
@@ -22,30 +25,37 @@ export function renderAnnouncementUi(): string {
     </div>
     <footer class="notice-dialog-footer">
       <a class="btn btn-ghost" data-announcement-detail href="/announcements">查看详情</a>
-      <button class="btn btn-primary" type="button" data-announcement-close data-announcement-dismiss>关闭通知</button>
+      <button class="btn btn-primary" type="button" data-announcement-close data-announcement-dismiss>${close}</button>
     </footer>
   </div>
 </dialog>`
 }
 
-export const ANNOUNCEMENT_SCRIPT = `<script>
+export function renderAnnouncementUi(): string { return renderNoticeUi(false) }
+export function renderAdvertisementUi(): string { return renderNoticeUi(true) }
+
+function readerScript(advertisement: boolean): string {
+  const prefix = advertisement ? 'gs-advertisement' : 'gs-announcement'
+  const label = advertisement ? ['官网广告', 'Website advertisement'] : ['网站通告', 'Site announcement']
+  const close = advertisement ? ['关闭广告', 'Close advertisement'] : ['关闭通知', 'Close notification']
+  return `<script>
 (() => {
-  var dialog = document.getElementById('gs-announcement-dialog');
+  var dialog = document.getElementById('${prefix}-dialog');
   var notice = null;
-  var title = document.getElementById('gs-announcement-title');
+  var title = document.getElementById('${prefix}-title');
   var zh = dialog.querySelector('[data-announcement-lang="zh"]');
   var en = dialog.querySelector('[data-announcement-lang="en"]');
   function renderLanguage() {
     var english = window.GeekSlopeI18n && window.GeekSlopeI18n.language() === 'en';
-    title.textContent = english ? (notice && notice.titleEn || 'Site announcement') : (notice && notice.title || '网站通告');
+    title.textContent = english ? (notice && notice.titleEn || ${JSON.stringify(label[1])}) : (notice && notice.title || ${JSON.stringify(label[0])});
     zh.hidden = Boolean(english);
     en.hidden = !english;
-    dialog.querySelector('[data-announcement-kicker]').textContent = english ? 'Site announcement' : '网站通告';
+    dialog.querySelector('[data-announcement-kicker]').textContent = english ? ${JSON.stringify(label[1])} : ${JSON.stringify(label[0])};
     dialog.querySelector('[data-announcement-detail]').textContent = english ? 'View details' : '查看详情';
-    dialog.querySelector('[data-announcement-dismiss]').textContent = english ? 'Close notification' : '关闭通知';
+    dialog.querySelector('[data-announcement-dismiss]').textContent = english ? ${JSON.stringify(close[1])} : ${JSON.stringify(close[0])};
     dialog.querySelector('[data-announcement-language]').setAttribute('aria-label', english ? 'Language' : '语言');
     dialog.querySelectorAll('[data-announcement-close]').forEach(function (button) {
-      button.setAttribute('aria-label', english ? 'Close notification' : '关闭通知');
+      button.setAttribute('aria-label', english ? ${JSON.stringify(close[1])} : ${JSON.stringify(close[0])});
     });
   }
   function show(item) {
@@ -73,13 +83,19 @@ export const ANNOUNCEMENT_SCRIPT = `<script>
   dialog.querySelectorAll('[data-announcement-close]').forEach(function (button) {
     button.addEventListener('click', function () { dialog.close(); });
   });
-  dialog.addEventListener('close', function () { document.documentElement.classList.remove('gs-dialog-open'); });
+  dialog.addEventListener('close', function () {
+    if (!document.querySelector('dialog[open]')) document.documentElement.classList.remove('gs-dialog-open');
+  });
   dialog.addEventListener('click', function (event) {
     if (event.target !== dialog) return;
     var rect = dialog.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
   });
   window.addEventListener('geekslope:language-change', renderLanguage);
-  window.GeekSlopeAnnouncement = { show: show };
+  window.${advertisement ? 'GeekSlopeAdvertisement' : 'GeekSlopeAnnouncement'} = { show: show };
 })();
 </script>`
+}
+
+export const ANNOUNCEMENT_SCRIPT = readerScript(false)
+export const ADVERTISEMENT_SCRIPT = readerScript(true)

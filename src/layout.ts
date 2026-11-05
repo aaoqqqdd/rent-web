@@ -9,7 +9,7 @@ import { renderSiteHeader } from './components/site-header'
 import { ACCOUNT_STATUS_SCRIPT } from './components/account-status'
 import { renderSiteFooter } from './components/site-footer'
 import { renderFeedbackUi, FEEDBACK_SCRIPT } from './components/feedback'
-import { renderAnnouncementUi, ANNOUNCEMENT_SCRIPT } from './components/announcement'
+import { renderAnnouncementUi, renderAdvertisementUi, ANNOUNCEMENT_SCRIPT, ADVERTISEMENT_SCRIPT } from './components/announcement'
 import { FAVICON_SVG } from './components/brand'
 import { SITE_URL } from './seo'
 
@@ -141,31 +141,32 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Manager"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, opts.contact)}
-<div data-site-announcement hidden>
-<aside class="site-announcement" data-notice-banner="policy" hidden aria-label="协议更新">
+<aside class="site-announcement" data-site-announcement hidden aria-label="通告与优惠" data-no-translate>
   <div class="wrap site-announcement-inner">
-    <span class="site-announcement-label">协议更新</span>
-    <a class="site-announcement-link" data-site-announcement-link href="/announcements">
-      <strong data-site-announcement-title></strong><span data-site-announcement-action>查看详情 <span aria-hidden="true">→</span></span>
-    </a>
+    <div class="site-announcement-viewport">
+      <div class="site-announcement-slide" data-notice-slide>
+        <span class="site-announcement-label" data-site-announcement-label></span>
+        <a class="site-announcement-link" data-site-announcement-link href="/announcements">
+          <strong data-site-announcement-title></strong><span data-site-announcement-action></span>
+        </a>
+      </div>
+    </div>
+    <div class="site-announcement-controls" data-notice-controls hidden>
+      <button type="button" data-notice-previous aria-label="上一条通告">‹</button>
+      <button type="button" data-notice-pause aria-label="暂停轮播" aria-pressed="false">Ⅱ</button>
+      <button type="button" data-notice-next aria-label="下一条通告">›</button>
+    </div>
   </div>
 </aside>
-<aside class="site-announcement" data-notice-banner="coupon" hidden aria-label="优惠码">
-  <div class="wrap site-announcement-inner">
-    <span class="site-announcement-label">优惠码</span>
-    <a class="site-announcement-link" data-site-announcement-link href="/products">
-      <strong data-site-announcement-title></strong><span data-site-announcement-action>去挑选设备 <span aria-hidden="true">→</span></span>
-    </a>
-  </div>
-</aside>
-</div>
 <main id="main-content">
 ${opts.body}
 </main>
 ${renderFeedbackUi()}
 ${renderAnnouncementUi()}
+${renderAdvertisementUi()}
 ${renderSiteFooter(opts.contact)}
 ${ANNOUNCEMENT_SCRIPT}
+${ADVERTISEMENT_SCRIPT}
 <script>${ACCOUNT_STATUS_SCRIPT}</script>
 <script>
 (() => {
@@ -178,6 +179,8 @@ ${ANNOUNCEMENT_SCRIPT}
   var originalDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
   var currentLanguage = 'zh';
   var activeNotices = [];
+  var noticeIndex = 0;
+  var noticePaused = false;
   var SKIP_SELECTOR = 'script,style,[data-no-translate],[data-i18n],[data-i18n-attr]';
   var TRANSLATED_ATTRIBUTES = ['placeholder', 'aria-label', 'title', 'alt', 'value', 'aria-valuetext', 'aria-roledescription', 'label'];
   // NOTE: this whole block lives inside a TS template literal; every regex
@@ -340,30 +343,56 @@ ${ANNOUNCEMENT_SCRIPT}
   function renderNoticeBanners() {
     var announcement = document.querySelector('[data-site-announcement]');
     if (!announcement) return;
-    announcement.querySelectorAll('[data-notice-banner]').forEach(function (banner) {
-      var isCoupon = banner.getAttribute('data-notice-banner') === 'coupon';
-      var notice = activeNotices.find(function (item) {
-        return isCoupon ? item.kind === 'coupon' && item.couponCode
-          : item.kind === 'announcement' && item.isAdminAnnouncement === false;
-      });
-      banner.hidden = !notice;
-      if (!notice) return;
-      banner.querySelector('[data-site-announcement-title]').textContent = announcementTitle(notice, currentLanguage === 'en');
-      banner.querySelector('[data-site-announcement-link]').href = isCoupon
-        ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
-        : '/announcements/' + encodeURIComponent(notice.id);
-      banner.querySelector('[data-site-announcement-action]').firstChild.textContent = currentCopy(isCoupon ? '去挑选设备 ' : '查看详情 ', isCoupon ? 'Browse devices ' : 'View details ');
-    });
-    announcement.hidden = !announcement.querySelector('[data-notice-banner]:not([hidden])');
+    var notice = activeNotices[noticeIndex];
+    announcement.hidden = !notice;
+    if (!notice) return;
+    var isCoupon = notice.kind === 'coupon' && notice.couponCode;
+    announcement.setAttribute('aria-label', currentCopy('通告与优惠', 'Updates and offers'));
+    announcement.querySelector('[data-site-announcement-label]').textContent = isCoupon
+      ? currentCopy('优惠码', 'Promo code')
+      : notice.kind === 'advertisement' ? currentCopy('官网广告', 'Website advertisement')
+      : notice.isAdminAnnouncement ? currentCopy('网站通告', 'Announcement') : currentCopy('协议更新', 'Policy update');
+    announcement.querySelector('[data-site-announcement-title]').textContent = announcementTitle(notice, currentLanguage === 'en');
+    announcement.querySelector('[data-site-announcement-link]').href = isCoupon
+      ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
+      : '/announcements/' + encodeURIComponent(notice.id);
+    announcement.querySelector('[data-site-announcement-action]').textContent = currentCopy(isCoupon ? '去挑选设备' : '查看详情', isCoupon ? 'Browse devices' : 'View details') + ' →';
+    announcement.querySelector('[data-notice-controls]').hidden = activeNotices.length < 2;
+    announcement.querySelector('[data-notice-previous]').setAttribute('aria-label', currentCopy('上一条通告', 'Previous announcement'));
+    announcement.querySelector('[data-notice-next]').setAttribute('aria-label', currentCopy('下一条通告', 'Next announcement'));
+    var pause = announcement.querySelector('[data-notice-pause]');
+    pause.setAttribute('aria-label', currentCopy(noticePaused ? '继续轮播' : '暂停轮播', noticePaused ? 'Resume carousel' : 'Pause carousel'));
+    pause.setAttribute('aria-pressed', String(noticePaused));
+    pause.textContent = noticePaused ? '▷' : 'Ⅱ';
   }
-  function showAnnouncementNotice(notice) {
-    if (!notice || !window.GeekSlopeAnnouncement || document.querySelector('dialog[open]')) return;
-    var seenKey = 'geekslope-announcement-seen';
-    var version = JSON.stringify(notice);
-    try { if (sessionStorage.getItem(seenKey) === version) return; } catch (_) {}
-    if (!window.GeekSlopeAnnouncement.show(notice)) return;
-    // Keep navigation within this visit quiet; updated notices can still appear.
-    try { sessionStorage.setItem(seenKey, version); } catch (_) {}
+  function changeNotice(direction) {
+    if (activeNotices.length < 2) return;
+    noticeIndex = (noticeIndex + direction + activeNotices.length) % activeNotices.length;
+    renderNoticeBanners();
+    var slide = document.querySelector('[data-notice-slide]');
+    slide.classList.remove('is-entering');
+    void slide.offsetWidth;
+    slide.classList.add('is-entering');
+  }
+  var pendingAnnouncement = null;
+  var pendingAdvertisement = null;
+  function showPendingNotice() {
+    if (document.querySelector('dialog[open]')) return;
+    while (pendingAnnouncement || pendingAdvertisement) {
+      // Announcements always take priority over the separate advertisement dialog.
+      var isAdvertisement = !pendingAnnouncement;
+      var notice = pendingAnnouncement || pendingAdvertisement;
+      if (isAdvertisement) pendingAdvertisement = null; else pendingAnnouncement = null;
+      var reader = isAdvertisement ? window.GeekSlopeAdvertisement : window.GeekSlopeAnnouncement;
+      if (!reader) continue;
+      var seenKey = 'geekslope-' + (isAdvertisement ? 'advertisement' : 'announcement') + '-seen:' + notice.id;
+      var version = JSON.stringify(notice);
+      try { if (sessionStorage.getItem(seenKey) === version) continue; } catch (_) {}
+      if (!reader.show(notice)) return;
+      // Seeing the latest publication never causes an older one to pop up.
+      try { sessionStorage.setItem(seenKey, version); } catch (_) {}
+      return;
+    }
   }
   function updateMeta(english) {
     var title = english ? (englishFor(originalTitle) || originalTitle) : originalTitle;
@@ -561,15 +590,32 @@ ${ANNOUNCEMENT_SCRIPT}
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
   if (announcement) {
+    announcement.querySelector('[data-notice-previous]').addEventListener('click', function () { changeNotice(-1); });
+    announcement.querySelector('[data-notice-next]').addEventListener('click', function () { changeNotice(1); });
+    announcement.querySelector('[data-notice-pause]').addEventListener('click', function () {
+      noticePaused = !noticePaused;
+      renderNoticeBanners();
+    });
+    window.setInterval(function () {
+      if (noticePaused || document.hidden || announcement.matches(':hover') || announcement.contains(document.activeElement)
+        || document.querySelector('dialog[open]') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+      changeNotice(1);
+    }, 6000);
+    // A pending announcement waits for any existing confirmation to finish.
+    document.addEventListener('close', function (event) {
+      if (event.target.tagName === 'DIALOG') window.setTimeout(showPendingNotice, 0);
+    }, true);
     fetch('/api/public-notices?limit=100', { headers: { accept: 'application/json' } })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (data) {
         activeNotices = data && Array.isArray(data.notices) ? data.notices : [];
         renderNoticeBanners();
         syncOverlayOffset();
-        showAnnouncementNotice(activeNotices.find(function (notice) {
+        pendingAnnouncement = activeNotices.find(function (notice) {
           return notice.kind === 'announcement' && notice.isAdminAnnouncement === true;
-        }));
+        }) || null;
+        pendingAdvertisement = activeNotices.find(function (notice) { return notice.kind === 'advertisement'; }) || null;
+        showPendingNotice();
       })
       .catch(function () {});
   }
