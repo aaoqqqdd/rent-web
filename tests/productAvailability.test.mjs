@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
@@ -74,7 +75,7 @@ test('current and consecutive rentals show the next free date and remain bookabl
   assert.ok(detail.includes(label))
   const checkout = renderApply({ products: [product], config, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })
   for (const page of [html, detail, renderCartPage([product], config), checkout]) {
-    for (const [, script] of page.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(script))
+    for (const { code: script } of htmlScripts(page)) assert.doesNotThrow(() => new Function(script))
   }
   for (const page of [renderCartPage([product], config), checkout]) assert.match(page, /"available":true/)
   const pattern = ENGLISH_PATTERNS.find(([pattern]) => new RegExp(pattern).test(label))
@@ -140,7 +141,7 @@ test('detail calendar disables occupied dates and dates that cross another renta
   const [product] = await listProducts(env)
   const config = await getRentalConfig(env)
   const html = renderProductDetail({ product, config })
-  const script = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+  const script = htmlScripts(html).at(-1).code
   const prefix = script.slice(0, script.indexOf('  var renderPicker ='))
   const elements = new Map()
   function element(id) {
@@ -172,7 +173,7 @@ test('detail and cart calendars block closed endpoints while allowing rentals ac
   db.prepare("INSERT INTO systemSettings VALUES ('rentalRules', ?)").run(JSON.stringify({ unavailablePickupRanges: [{ start: date(5) + 'T00:00', end: date(7) + 'T00:00' }] }))
   const config = await getRentalConfig(env), [product] = await listProducts(env)
   const html = renderProductDetail({ product, config })
-  const script = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+  const script = htmlScripts(html).at(-1).code
   const prefix = script.slice(0, script.indexOf('  var renderPicker ='))
   const elements = new Map()
   function element(id) { if (!elements.has(id)) elements.set(id, { value: '', min: '', dataset: {}, addEventListener() {}, setCustomValidity() {} }); return elements.get(id) }
@@ -183,7 +184,7 @@ test('detail and cart calendars block closed endpoints while allowing rentals ac
   assert.equal(context.check.rangeUnavailable(date(3), date(8)), false)
   assert.equal(context.check.rangeUnavailable(date(3), date(6)), true)
   const cart = renderCartPage([product], config)
-  const cartScript = [...cart.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+  const cartScript = htmlScripts(cart).at(-1).code
   const cartContext = { document: { getElementById: element }, window: {}, Intl, Date }
   runInNewContext(cartScript.slice(0, cartScript.indexOf('  function loadAvailability')) + `globalThis.check = { dateUnavailable, termRangeUnavailable }; })();`, cartContext)
   assert.equal(cartContext.check.dateUnavailable('pc', date(5)), true)

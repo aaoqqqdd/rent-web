@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
@@ -42,7 +43,7 @@ test('demo dates appear on home, catalogue and details with English translation'
   const detail = renderProductDetail({ product, config })
   for (const html of [home, catalogue, detail]) {
     assert.ok(html.includes(label))
-    for (const [, script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(script))
+    for (const { code: script } of htmlScripts(html)) assert.doesNotThrow(() => new Function(script))
   }
   assert.match(catalogue, /data-available="false"/)
   assert.match(catalogue, /预约咨询/)

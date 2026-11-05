@@ -28,6 +28,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { htmlScripts } from './lib/html-scripts.mjs'
 
 const require = createRequire(import.meta.url)
 const ts = require('typescript')
@@ -633,14 +634,12 @@ function scanFile(relativePath) {
         for (const chunk of flattenStringExpression(node)) {
           if (!chunk || !hasHan(chunk)) continue
           // Separate inline <script> blocks from markup.
-          const scriptRe = /<script\b[^>]*>([\s\S]*?)<\/script>/gi
           let lastIndex = 0
-          let scriptMatch
           const htmlParts = []
-          while ((scriptMatch = scriptRe.exec(chunk))) {
-            htmlParts.push(chunk.slice(lastIndex, scriptMatch.index))
-            processScriptChunk(scriptMatch[1], relativePath, line, resolveLine)
-            lastIndex = scriptMatch.index + scriptMatch[0].length
+          for (const script of htmlScripts(chunk)) {
+            htmlParts.push(chunk.slice(lastIndex, script.startIndex))
+            processScriptChunk(script.code, relativePath, line, resolveLine)
+            lastIndex = script.endIndex
           }
           htmlParts.push(chunk.slice(lastIndex))
           processHtmlChunk(htmlParts.join('\n'), relativePath, line, resolveLine)

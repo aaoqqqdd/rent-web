@@ -3,12 +3,15 @@
  * Noncommercial use, modification, and distribution are permitted.
  * Keep this notice and the LICENSE file with all copies and modified versions. */
 
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { buildSync } from 'esbuild'
 import { Hono } from 'hono'
+import { runInNewContext } from 'node:vm'
+import { DomUtils, parseDocument } from 'htmlparser2'
 
 async function bundle(path) {
   const result = buildSync({entryPoints:[path],bundle:true,write:false,format:'esm',platform:'browser'})
@@ -72,7 +75,31 @@ test('public policy defaults and maintenance scripts',()=>{
   assert.equal(clientFeatureForPath('/api/square-gift-card-preview','web'),'giftCards')
   for(const custom of ['', '</script><script>alert(1)</script>']) {
     const html=clientMaintenanceHtml(custom)
-    for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(()=>new Function(script[1]))
+    for(const { code } of htmlScripts(html)) assert.doesNotThrow(()=>new Function(code))
     assert.doesNotMatch(html,/<script>alert\(1\)/)
+  }
+})
+
+test('maintenance copy switches to English while custom messages stay inert on both surfaces',()=>{
+  const custom='</script><SCRIPT>alert(1)</SCRIPT>\u2028\u2029'
+  for(const surface of ['web','console']) for(const featureClosed of [false,true]) for(const message of ['',custom]) {
+    const html=clientMaintenanceHtml(message,featureClosed,surface)
+    const document=parseDocument(html)
+    const elements=Object.fromEntries(['main','h1','p'].map(tag=>{
+      const node=DomUtils.getElementsByTagName(tag,document.children)[0]
+      return [tag,{textContent:DomUtils.textContent(node),getAttribute:name=>node.attribs[name]}]
+    }))
+    for(const node of DomUtils.getElementsByTagName('a',document.children)) elements[`a[href="${node.attribs.href}"]`]={textContent:DomUtils.textContent(node)}
+    const browserDocument={documentElement:{lang:'zh-CN'},title:'',querySelector:selector=>elements[selector]||null}
+    const scripts=htmlScripts(html)
+    assert.equal(scripts.length,1,'custom messages cannot introduce scripts')
+    assert.equal(scripts[0].code,htmlScripts(clientMaintenanceHtml())[0].code,'all maintenance scripts are static')
+    runInNewContext(scripts[0].code,{document:browserDocument,localStorage:{getItem:()=>null},navigator:{language:'en-AU'}})
+    assert.equal(browserDocument.documentElement.lang,'en')
+    assert.equal(browserDocument.title,featureClosed?'Feature unavailable':'Under maintenance')
+    assert.equal(elements.h1.textContent,browserDocument.title)
+    assert.equal(elements.p.textContent,message||(featureClosed?'Please check back later.':'We are carrying out maintenance. Please try again later.'))
+    assert.equal(elements['a[href="/login"]'].textContent,'Sign in')
+    if(surface==='console') assert.equal(elements['a[href="/customer/orders"]'].textContent,'My orders')
   }
 })

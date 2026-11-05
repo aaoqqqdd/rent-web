@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { runInNewContext } from 'node:vm'
@@ -137,7 +138,8 @@ test('website session endpoint validates cookies and returns no account details'
     assert.deepEqual(await response.json(), { authenticated: expected })
     assert.match(response.headers.get('cache-control'), /private, no-store/)
     assert.equal(response.headers.get('vary'), 'Cookie')
-    assert.ok(response.headers.get('content-security-policy').includes(DASHBOARD))
+    const connectSources = response.headers.get('content-security-policy').split(';').map(directive => directive.trim().split(/\s+/)).find(([name]) => name === 'connect-src')
+    assert.ok(connectSources.slice(1).includes(DASHBOARD))
   }
 })
 
@@ -161,7 +163,7 @@ test('logged-in website users bypass login and guests start on the login tab', a
 test('both header states render valid scripts and translated dashboard copy', () => {
   for (const sessionUser of [null, user]) {
     const html = renderPage({ title: 'Test', description: '', body: '', path: '/', appUrl: DASHBOARD, contact: { name: 'GeekSlope', email: '', phone: '', logo: '' }, user: sessionUser })
-    for (const [, script] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) {
+    for (const { code: script } of htmlScripts(html)) {
       if (script.trim().startsWith('{')) continue
       assert.doesNotThrow(() => new Function(script))
     }

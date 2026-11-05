@@ -5,7 +5,9 @@
 
 import { ownerRentals, type OwnerRental } from './ownerRentals'
 import type { Env } from './index'
-import { prepareNoticeContent } from './notice-content'
+import { esc } from './escape'
+import { noticePlainText, prepareNoticeContent } from './notice-content'
+import { sanitizeDocument } from './rich-content'
 import { readPickupClosures } from './pickup-availability'
 import { resolveRentalDiscounts } from './rental-pricing'
 
@@ -116,7 +118,7 @@ export interface LegalDocumentData {
 
 export interface PublicNotice {
   id: string
-  kind: 'announcement' | 'coupon'
+  kind: 'announcement' | 'coupon' | 'advertisement'
   isAdminAnnouncement?: boolean
   title: string
   message: string
@@ -370,33 +372,50 @@ const POLICY_NAME_EN: Record<string, string> = {
   '可接受使用政策': 'Acceptable use policy',
   '澳大利亚消费者法下的权利': 'Rights under Australian Consumer Law',
   '设备租赁协议': 'Device rental agreement',
+  '租赁协议': 'Rental agreement',
   '相关条款': 'the relevant terms',
 }
 
-function buildPolicyUpdateNotice(raw: string): { title: string; message: string; titleEn: string; messageEn: string } {
-  const decoded = decodeNoticeEntities(raw)
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>\s*<p[^>]*>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
+function buildPolicyUpdateNotice(raw: string, createdAt: string): { title: string; message: string; titleEn: string; messageEn: string } {
+  const decoded = noticePlainText(sanitizeDocument(decodeNoticeEntities(raw)))
   const match = decoded.match(/协议内容[：:]\s*([^。\n]+)|更新[《「]([^》」]+)[》」]/)
   const policyName = (match?.[1] || match?.[2] || '相关条款').trim()
+  const policies = policyName.split(/[、，,；;]+/).map(name => name.trim()).filter(Boolean)
+  const policiesEn = policies.map(name => POLICY_NAME_EN[name] || name)
+  const normalized = createdAt.trim().replace(' ', 'T')
+  const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`)
+  let dateZh = ''
+  let dateEn = ''
+  if (!Number.isNaN(date.getTime())) {
+    const options = { timeZone: 'Australia/Melbourne', year: 'numeric', month: '2-digit', day: '2-digit' } as const
+    const parts = new Intl.DateTimeFormat('zh-CN', options).formatToParts(date)
+    const part = (type: string) => parts.find(item => item.type === type)?.value || ''
+    dateZh = `${part('year')}年${part('month')}月${part('day')}日`
+    dateEn = new Intl.DateTimeFormat('en-AU', { ...options, month: 'long', day: 'numeric' }).format(date)
+  }
   const title = `${policyName}协议内容已更新`
   const message = [
-    `我们已更新《${policyName}》。`,
-    '',
-    `最新版本已发布于本网站的相关页面，并自公布之日起生效。继续使用我们的服务，即表示您已阅读并同意更新后的《${policyName}》。`,
-    '',
-    '如果您不同意更新后的内容，请停止使用相关服务，并可通过联系我们获取进一步协助。',
-  ].join('\n')
-  const policyNameEn = POLICY_NAME_EN[policyName] || policyName
+    '<p>尊敬的客户：</p>',
+    `<p>${dateZh ? `我们已于 <strong>${esc(dateZh)}</strong> 更新以下服务政策及协议：` : '我们已更新以下服务政策及协议：'}</p>`,
+    `<ul>${policies.map(name => `<li>${esc(name)}</li>`).join('')}</ul>`,
+    '<p><strong>上述政策及协议的最新版本已在官方网站公布，并自公布之日起生效。</strong> 建议您仔细阅读更新内容，以了解相关服务规则及您的权利与义务。</p>',
+    '<p>本次更新不影响您依据澳大利亚消费者法（Australian Consumer Law）享有的法定权利。对于依法需要另行取得同意的变更，我们将按照适用法律处理。</p>',
+    '<p>如对更新内容有任何疑问或异议，请联系我们的客服团队。</p>',
+    '<p>感谢您对 GeekSlope 的支持与信任。</p>',
+    '<p><strong>GeekSlope 团队</strong></p>',
+  ].join('')
+  const policyNameEn = policiesEn.join(', ')
   const titleEn = `${policyNameEn} has been updated`
   const messageEn = [
-    `We have updated the ${policyNameEn}.`,
-    '',
-    `The latest version is published on the relevant page of this website and takes effect from the date of publication. By continuing to use our services, you confirm that you have read and agree to the updated ${policyNameEn}.`,
-    '',
-    'If you do not agree to the updated terms, please stop using the relevant services. Contact us for further assistance.',
-  ].join('\n')
+    '<p>Dear Customer,</p>',
+    `<p>We updated the following service policies and agreements${dateEn ? ` on <strong>${esc(dateEn)}</strong>` : ''}:</p>`,
+    `<ul>${policiesEn.map(name => `<li>${esc(name)}</li>`).join('')}</ul>`,
+    '<p><strong>The latest versions of the above policies and agreements have been published on our official website and take effect from the date of publication.</strong> Please read the updates carefully to understand the relevant service rules and your rights and obligations.</p>',
+    '<p>This update does not affect your statutory rights under Australian Consumer Law. Where changes require separate consent by law, we will handle them in accordance with applicable law.</p>',
+    '<p>If you have any questions or concerns about the updates, please contact our customer service team.</p>',
+    '<p>Thank you for your support and trust in GeekSlope.</p>',
+    '<p><strong>The GeekSlope Team</strong></p>',
+  ].join('')
   return { title, message, titleEn, messageEn }
 }
 
@@ -455,7 +474,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     for (const row of result.results ?? []) {
       const type = String(row.type ?? 'announcement')
       const isPublicUpdate = PUBLIC_UPDATE_TYPES.has(type)
-      const policyInfo = isPublicUpdate ? buildPolicyUpdateNotice(String(row.message ?? '')) : null
+      const policyInfo = isPublicUpdate ? buildPolicyUpdateNotice(String(row.message ?? ''), String(row.created_at ?? '')) : null
       const title = policyInfo ? policyInfo.title : String(row.title ?? '最新通告')
       const message = policyInfo ? policyInfo.message : String(row.message ?? '')
       const titleEn = policyInfo?.titleEn || String(row.title_en || '') || undefined
@@ -477,6 +496,25 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     }
   } catch {
     // 通知表尚未初始化时，优惠码和其他官网内容仍应正常展示。
+  }
+  try {
+    const result = await env.RENT.prepare(
+      `SELECT id, title, message, title_en, message_en, created_at, expires_at
+       FROM website_advertisements
+       WHERE active = 1 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+       ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+    ).bind(Math.max(1, Math.min(100, limit))).all<Record<string, unknown>>()
+    for (const row of result.results ?? []) {
+      notices.push({
+        id: `advertisement:${String(row.id ?? '')}`,
+        kind: 'advertisement',
+        ...prepareNoticeContent(String(row.title ?? ''), String(row.message ?? ''), String(row.title_en ?? ''), String(row.message_en ?? '')),
+        createdAt: String(row.created_at ?? ''),
+        expiresAt: row.expires_at ? String(row.expires_at) : undefined,
+      })
+    }
+  } catch {
+    // 广告迁移尚未应用时，现有通告与优惠仍可正常展示。
   }
   try {
     let result: { results?: Record<string, unknown>[] }
@@ -567,7 +605,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
 }
 
 export async function getPublicNotice(env: Env, id: string): Promise<PublicNotice | null> {
-  if (!id.startsWith('announcement:') && !id.startsWith('coupon:')) return null
+  if (!id.startsWith('announcement:') && !id.startsWith('coupon:') && !id.startsWith('advertisement:')) return null
   const notices = await listPublicNotices(env, 100)
   return notices.find((notice) => notice.id === id) ?? null
 }

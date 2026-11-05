@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
@@ -60,7 +61,7 @@ test('public lookup and dynamically rendered order info use the same login-prote
   assert.deepEqual(queries[0].values, ['OD-PAID', 'owner@example.test'])
   assert.equal(result.order.refundUrl, `${dashboard}/customer/orders/order-1/refund-request`)
   const html = renderOrderLookup(dashboard)
-  const script = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1]).find(script => script.includes('function renderOrder'))
+  const script = htmlScripts(html).map(({ code }) => code).find(script => script.includes('function renderOrder'))
   assert.doesNotThrow(() => new Function(script))
   const rendering = script.slice(script.indexOf('  function formatDate'), script.indexOf('  form.addEventListener'))
   const context = { document: { createElement: tag => new Element(tag) } }

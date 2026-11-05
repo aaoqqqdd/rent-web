@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import {platformStripeFixture} from './fixtures/platformStripe.mjs'
 const platform=await platformStripeFixture()
 import test from 'node:test'
@@ -81,7 +82,7 @@ test('checkout renders valid scripts and shows the combined authorization summar
   const pageBundle = buildSync({ entryPoints: ['src/pages/apply.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', minify: true })
   const { renderApply } = await import('data:text/javascript;base64,' + Buffer.from(pageBundle.outputFiles[0].text).toString('base64'))
   const html = renderApply({ products: [{ id: 'device', name: '电脑', brand: 'Test', model: '', cpu: '', ram: '', storage: '', gpu: '', os: '', pricePerDay: 50, weeklyDiscountPercent: 0, monthlyDiscountPercent: 0, depositAmount: 1000, description: '', available: true, category: 'ultrabook', categoryLabel: '笔记本', specs: [] }], selectedId: 'device', config: { minimumRentalDays: 1, bufferDays: 0, unavailableDates: [], unavailableTimeSlots: {}, serviceFeeHours: [], unavailablePickupHours: [], businessHours: { start: '09:00', end: '17:00' }, serviceFeeRate: 0, pickupLocations: ['门店'], deliveryAreas: [], deliveryNote: '' }, appUrl: 'https://rent.example.test', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })
-  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1])
+  const scripts = htmlScripts(html).map(({ code }) => code)
   assert.ok(scripts.length)
   for (const script of scripts) assert.doesNotThrow(() => new Function(script))
   assert.match(html, /预计预授权总额/)

@@ -1,5 +1,6 @@
 // Read-only checks against a running Worker. Usage: node scripts/verify-seo.mjs [base URL]
 import assert from 'node:assert/strict'
+import { htmlScripts } from './lib/html-scripts.mjs'
 
 const base = process.argv[2] || 'http://127.0.0.1:8811'
 const canonicalOrigin = 'https://geekslope.de5.net'
@@ -20,12 +21,12 @@ async function page(path, { canonicalPath = path.split('?')[0], noindex = false,
   const robots = text.match(/<meta name="robots" content="([^"]+)"/)?.[1] || ''
   assert.equal(robots.includes('noindex'), noindex, `${path}: index policy`)
   if (!noindex) assert.equal([...text.matchAll(/<h1(?:\s[^>]*)?>/g)].length, 1, `${path}: one h1`)
-  const scripts = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
-  const graph = scripts.filter(([, attrs]) => attrs.includes('application/ld+json')).flatMap(([, , json]) => JSON.parse(json)['@graph'])
+  const scripts = htmlScripts(text)
+  const graph = scripts.filter(({ attributes }) => attributes.type === 'application/ld+json').flatMap(({ code }) => JSON.parse(code)['@graph'])
   assert.ok(graph.some((item) => item['@type'] === 'Organization'), `${path}: organization`)
   assert.equal(new Set(graph.map((item) => item['@id']).filter(Boolean)).size, graph.filter((item) => item['@id']).length, `${path}: unique schema IDs`)
-  for (const [, attrs, script] of scripts) {
-    if (!attrs.includes('application/ld+json') && !attrs.includes('src=')) new Function(script)
+  for (const { attributes, code } of scripts) {
+    if (attributes.type !== 'application/ld+json' && !('src' in attributes)) new Function(code)
   }
   const faq = graph.find((item) => item['@type'] === 'FAQPage')
   for (const item of faq?.mainEntity || []) {

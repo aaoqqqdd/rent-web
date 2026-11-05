@@ -3,6 +3,7 @@
  * Noncommercial use, modification, and distribution are permitted.
  * Keep this notice and the LICENSE file with all copies and modified versions. */
 
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
@@ -16,7 +17,7 @@ const { renderProductDetail } = await bundled('src/pages/product-detail.ts')
 const { renderCartPage, renderApply } = await bundled('src/pages/apply.ts')
 const product = { id:'pc', name:'PC', brand:'Test', model:'Test', description:'', category:'laptop', categoryLabel:'电脑', specs:[], available:true, bookable:true, pricePerDay:20, depositAmount:100, weeklyDiscountPercent:0, monthlyDiscountPercent:0 }
 const config = { minimumRentalDays:1, bufferDays:0, unavailableDates:[], unavailableTimeSlots:{}, businessHours:{start:'09:00',end:'20:00'}, serviceFeeHours:[{start:'07:00',end:'08:00'},{start:'21:00',end:'23:00'}], unavailablePickupHours:[], unavailablePickupRanges:[], serviceFeeRate:0.1, pickupLocations:[], deliveryAreas:[], deliveryNote:'' }
-const scriptOf = html => [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+const scriptOf = html => htmlScripts(html).at(-1).code
 function harness(at, availability={}, overrides={}) {
   const elements = new Map()
   const element = id => { if (!elements.has(id)) elements.set(id,{value:'',min:'',dataset:{},error:'',setCustomValidity(message){this.error=message}});return elements.get(id) }

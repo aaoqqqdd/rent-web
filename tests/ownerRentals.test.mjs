@@ -3,6 +3,7 @@
  * Noncommercial use, modification, and distribution are permitted.
  * Keep this notice and the LICENSE file with all copies and modified versions. */
 
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
@@ -45,7 +46,7 @@ test('catalogue shows reviewed owner devices with verified Cloudinary photos and
   const owner=products.find(product=>product.id==='d-c2c-owned')
   assert.equal(owner.ownerRental.mode,'self');assert.equal(owner.ownerRental.photos.length,5)
   assert.match(renderProducts({products}),/个人设备 · 自行交付/)
-  assert.match(renderProducts({products}),/https:\/\/res.cloudinary.com\/demo\/image\/upload\/test-a.jpg/)
+  assert.match(renderProducts({products}),/https:\/\/res\.cloudinary\.com\/demo\/image\/upload\/test-a\.jpg/)
   const originalRevision=await ownerRentalRevision(env)
   for(const status of ['pending','rejected','paused']){
     db.prepare('UPDATE c2c_listings SET status=?').run(status)
@@ -80,7 +81,7 @@ test('owner preview shows gallery and city only; full pickup address stays in co
   assert.match(html,/href="https:\/\/console.example.test\/customer\/rent\/d-c2c-owned"/)
   assert.match(html,/屏幕开机画面/);assert.match(html,/墨尔本/);assert.doesNotMatch(html,/123 Test Street|Carlton VIC 3053/)
   assert.doesNotMatch(html,/id="detail-add-cart"/)
-  for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(()=>new Function(script[1]))
+  for(const { code } of htmlScripts(html)) assert.doesNotThrow(()=>new Function(code))
   const response=await handleRentalRequest({env,req:{header(){return ''}},json(body,status){return Response.json(body,{status})}},{deviceIds:['d-c2c-owned']})
   assert.equal(response.status,409)
   assert.match((await response.json()).redirectUrl,/\/customer\/rent\/d-c2c-owned$/)

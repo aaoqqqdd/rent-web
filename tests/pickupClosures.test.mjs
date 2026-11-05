@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
@@ -36,7 +37,7 @@ test('checkout switches an unavailable default to open business hours instead of
   const { renderApply } = await import('data:text/javascript;base64,' + Buffer.from(result.outputFiles[0].text).toString('base64'))
   const product = { id: 'pc', name: 'PC', model: '', specs: [], pricePerDay: 20, depositAmount: 100, available: true }
   const html = renderApply({ products: [product], config: { ...config, minimumRentalDays: 1, bufferDays: 0, unavailableDates: [], unavailableTimeSlots: {}, serviceFeeRate: 0.1, pickupLocations: [], deliveryAreas: [], deliveryNote: '' }, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })
-  const script = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].at(-1)[1]
+  const script = htmlScripts(html).at(-1).code
   const code = script.slice(script.indexOf('  function refreshPickupTimeOptions'), script.indexOf('  function refreshSummary'))
   const pickup = { value: '09:00', options: ['07:00', '09:00', '10:00'].map(value => ({ value })), parentElement: { querySelector() { return null } } }
   const returned = { value: '10:00', options: [{ value: '10:00' }], parentElement: { querySelector() { return null } } }

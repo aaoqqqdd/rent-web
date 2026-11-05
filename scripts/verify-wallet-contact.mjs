@@ -2,6 +2,7 @@
 // Usage: node scripts/verify-wallet-contact.mjs
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
+import { htmlScripts } from './lib/html-scripts.mjs'
 
 const bundle = await build({
   entryPoints: [new URL('../src/pages/apply.ts', import.meta.url).pathname],
@@ -9,7 +10,7 @@ const bundle = await build({
 })
 const { renderApply } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`)
 const html = renderApply({
-  products: [{ id: 'test-device', name: 'Test device', pricePerDay: 10 }],
+  products: [{ id: 'test-device', name: 'Test device', pricePerDay: 10, depositAmount: 0 }],
   selectedId: 'test-device', appUrl: 'https://dashboard.geekslope.de5.net',
   turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false,
   config: {
@@ -18,9 +19,9 @@ const html = renderApply({
     unavailableDates: [], unavailableTimeSlots: [], unavailablePickupHours: [],
   },
 })
-const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
-  .filter(([, attrs]) => !attrs.includes('src=') && !attrs.includes('application/ld+json'))
-  .map(([, , script]) => script)
+const scripts = htmlScripts(html)
+  .filter(({ attributes }) => !('src' in attributes) && attributes.type !== 'application/ld+json')
+  .map(({ code }) => code)
 assert.ok(scripts.length > 0)
 scripts.forEach((script) => new Function(script))
 const checkout = scripts.find((script) => script.includes('function applyWalletContact('))

@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
@@ -16,7 +17,7 @@ const { renderProductDetail } = await bundle('src/pages/product-detail.ts')
 const { previewRentalCoupon } = await bundle('src/public-rental.ts')
 const product = { id: 'pc', name: 'PC', model: '', specs: [], pricePerDay: 25, weeklyDiscountPercent: 10, monthlyDiscountPercent: 20, depositAmount: 300, available: true }
 const config = { minimumRentalDays: 1, bufferDays: 0, unavailableDates: [], unavailableTimeSlots: {}, serviceFeeHours: [], unavailablePickupHours: [], businessHours: { start: '09:00', end: '20:00' }, serviceFeeRate: 0.1, pickupLocations: [], deliveryAreas: [], deliveryNote: '' }
-const scriptOf = html => [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1]).find(script => script.includes('function rentalFee') || script.includes('function checkoutAmounts'))
+const scriptOf = html => htmlScripts(html).map(({ code }) => code).find(script => script.includes('function rentalFee') || script.includes('function checkoutAmounts'))
 const script = scriptOf(renderApply({ products: [product], config, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false }))
 
 function pricingSetup(t, { overrides = true } = {}) {
@@ -55,7 +56,7 @@ test('NULL device overrides inherit global discounts across product pages, check
   for (const html of [renderCartPage([selected], rules), renderApply({ products: [selected], config: rules, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })]) {
     assert.match(html, /"weeklyDiscountPercent":10/)
     assert.match(html, /"monthlyDiscountPercent":20/)
-    for (const [, code] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new Function(code)
+    for (const { code: code } of htmlScripts(html)) new Function(code)
   }
   const context = { env, req: { header() {} } }
   for (const [days, rent, discount] of [[7, 157.5, 15.75], [30, 600, 60]]) {
@@ -232,7 +233,7 @@ test('risk-adjusted checkout and cart quotes agree and render valid scripts', ()
     const pages = [renderCartPage([product], config, '', riskLevel), renderApply({ products: [product], config, riskLevel, selectedId: '', appUrl: '', turnstileSiteKey: '', squareGiftCardConfig: null, deliveryQuoteEnabled: false })]
     for (const html of pages) {
       assert.match(html, new RegExp('"deposit":' + expected + '[,}]'))
-      for (const [, code] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new Function(code)
+      for (const { code: code } of htmlScripts(html)) new Function(code)
     }
   }
   assert.equal(rentalPaymentPlan(61, 'FULL', 'stripe', 450, false).deposit, 450)

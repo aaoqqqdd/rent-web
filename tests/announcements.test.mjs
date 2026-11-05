@@ -1,3 +1,4 @@
+import { htmlScripts } from '../scripts/lib/html-scripts.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildSync } from 'esbuild'
@@ -74,6 +75,18 @@ test('the public data layer returns sanitized bilingual content from shared noti
   assert.doesNotMatch(notices[0].message, /<h2>/)
 })
 
+test('policy updates parse HTML and encoded templates without exposing script contents or signatures', async () => {
+  const template = '<SCRIPT data-note=">">协议内容：退款政策。</SCRIPT ignored="yes"><p>协议内容：<strong>隐私政策</strong></p><p>PRIVATE_SIGNATURE</p>'
+  for (const message of [template, template.replaceAll('<', '&lt;').replaceAll('>', '&gt;'), '<p>协议内容：隐私政策<br>PRIVATE_SIGNATURE</p>']) {
+    const rows = [{ id: 'policy', type: 'policy_update', message, created_at: '2026-11-05 00:00:00' }]
+    const notices = await listPublicNotices({ RENT: { prepare(sql) { return { bind() { return this }, async all() { return { results: sql.includes('FROM notifications') ? rows : [] } } } } } })
+    assert.equal(notices.length, 1)
+    assert.equal(notices[0].title, '隐私政策协议内容已更新')
+    assert.equal(notices[0].titleEn, 'Privacy policy has been updated')
+    assert.doesNotMatch(notices[0].messageHtml + notices[0].messageHtmlEn, /PRIVATE_SIGNATURE|退款政策|<script/i)
+  }
+})
+
 test('detail pages render separate rich language panes and list cards use plain text previews', () => {
   const notice = { id: 'announcement:holiday', kind: 'announcement', isAdminAnnouncement: true, createdAt: '2026-10-31', ...prepareNoticeContent(title, html) }
   const detail = renderAnnouncementDetail(notice)
@@ -99,7 +112,7 @@ test('unpublished English content shows the same explicit availability behavior 
 test('the announcement reader and language scripts compile in rendered pages', () => {
   const page = renderPage({ title: 'Test', description: '', body: '', path: '/', appUrl: 'https://dashboard.geekslope.de5.net', contact: { name: 'GeekSlope', email: '', phone: '', logo: '' } })
   assert.match(page, /id="gs-announcement-dialog"/)
-  for (const [, script] of page.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) {
+  for (const { code: script } of htmlScripts(page)) {
     if (script.trim().startsWith('{')) continue
     assert.doesNotThrow(() => new Function(script))
   }
