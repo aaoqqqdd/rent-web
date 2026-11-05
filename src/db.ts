@@ -116,7 +116,7 @@ export interface LegalDocumentData {
 
 export interface PublicNotice {
   id: string
-  kind: 'announcement' | 'coupon'
+  kind: 'announcement' | 'coupon' | 'advertisement'
   isAdminAnnouncement?: boolean
   title: string
   message: string
@@ -479,6 +479,25 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     // 通知表尚未初始化时，优惠码和其他官网内容仍应正常展示。
   }
   try {
+    const result = await env.RENT.prepare(
+      `SELECT id, title, message, title_en, message_en, created_at, expires_at
+       FROM website_advertisements
+       WHERE active = 1 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+       ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+    ).bind(Math.max(1, Math.min(100, limit))).all<Record<string, unknown>>()
+    for (const row of result.results ?? []) {
+      notices.push({
+        id: `advertisement:${String(row.id ?? '')}`,
+        kind: 'advertisement',
+        ...prepareNoticeContent(String(row.title ?? ''), String(row.message ?? ''), String(row.title_en ?? ''), String(row.message_en ?? '')),
+        createdAt: String(row.created_at ?? ''),
+        expiresAt: row.expires_at ? String(row.expires_at) : undefined,
+      })
+    }
+  } catch {
+    // 广告迁移尚未应用时，现有通告与优惠仍可正常展示。
+  }
+  try {
     let result: { results?: Record<string, unknown>[] }
     try {
       result = await env.RENT.prepare(
@@ -567,7 +586,7 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
 }
 
 export async function getPublicNotice(env: Env, id: string): Promise<PublicNotice | null> {
-  if (!id.startsWith('announcement:') && !id.startsWith('coupon:')) return null
+  if (!id.startsWith('announcement:') && !id.startsWith('coupon:') && !id.startsWith('advertisement:')) return null
   const notices = await listPublicNotices(env, 100)
   return notices.find((notice) => notice.id === id) ?? null
 }
