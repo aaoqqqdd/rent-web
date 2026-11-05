@@ -53,7 +53,7 @@ test('website ads read only published, unexpired bilingual content and sanitize 
   assert.equal(notices[0].kind, 'advertisement')
   assert.equal(notices[0].titleEn, 'Website offer')
   assert.match(notices[0].messageHtmlEn, /<p>Offer body<\/p>/)
-  assert.doesNotMatch(JSON.stringify(notices), /<script>|admin-private-id/)
+  assert.doesNotMatch(JSON.stringify(notices), /<script\b[^>]*>|admin-private-id/i)
   assert.equal((await getPublicNotice(env, 'advertisement:live')).title, '官网促销')
   assert.equal(await getPublicNotice(env, 'advertisement:hidden'), null)
   assert.equal(await getPublicNotice(env, 'advertisement:expired'), null)
