@@ -407,9 +407,6 @@ p { margin: 0; }
 .site-announcement-viewport { flex: 1; min-width: 0; overflow: hidden; }
 .site-announcement-slide { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .site-announcement-slide.is-entering { animation: notice-slide-in .35s ease both; }
-.site-announcement-controls { display: flex; flex: none; }
-.site-announcement-controls button { min-width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted-fg); font-size: 20px; cursor: pointer; }
-.site-announcement-controls button:hover { color: var(--secondary); background: var(--muted); }
 @keyframes notice-slide-in { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
 .site-announcement-label { color: var(--secondary); font: 600 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
 .site-announcement-link { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; width: 100%; min-height: 44px; color: var(--fg); font-size: 13px; }

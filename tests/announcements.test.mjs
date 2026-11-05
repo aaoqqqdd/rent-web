@@ -81,8 +81,8 @@ test('policy updates parse HTML and encoded templates without exposing script co
     const rows = [{ id: 'policy', type: 'policy_update', message, created_at: '2026-11-05 00:00:00' }]
     const notices = await listPublicNotices({ RENT: { prepare(sql) { return { bind() { return this }, async all() { return { results: sql.includes('FROM notifications') ? rows : [] } } } } } })
     assert.equal(notices.length, 1)
-    assert.equal(notices[0].title, '隐私政策协议内容已更新')
-    assert.equal(notices[0].titleEn, 'Privacy policy has been updated')
+    assert.equal(notices[0].title, '服务政策及协议更新公告')
+    assert.equal(notices[0].titleEn, 'Service policies and agreements update notice')
     assert.doesNotMatch(notices[0].messageHtml + notices[0].messageHtmlEn, /PRIVATE_SIGNATURE|退款政策|<script/i)
   }
 })

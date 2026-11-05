@@ -151,11 +151,6 @@ ${renderSiteHeader({ path: opts.path, user: opts.user, appUrl: opts.appUrl }, op
         </a>
       </div>
     </div>
-    <div class="site-announcement-controls" data-notice-controls hidden>
-      <button type="button" data-notice-previous aria-label="上一条通告">‹</button>
-      <button type="button" data-notice-pause aria-label="暂停轮播" aria-pressed="false">Ⅱ</button>
-      <button type="button" data-notice-next aria-label="下一条通告">›</button>
-    </div>
   </div>
 </aside>
 <main id="main-content">
@@ -180,7 +175,6 @@ ${ADVERTISEMENT_SCRIPT}
   var currentLanguage = 'zh';
   var activeNotices = [];
   var noticeIndex = 0;
-  var noticePaused = false;
   var SKIP_SELECTOR = 'script,style,[data-no-translate],[data-i18n],[data-i18n-attr]';
   var TRANSLATED_ATTRIBUTES = ['placeholder', 'aria-label', 'title', 'alt', 'value', 'aria-valuetext', 'aria-roledescription', 'label'];
   // NOTE: this whole block lives inside a TS template literal; every regex
@@ -357,13 +351,6 @@ ${ADVERTISEMENT_SCRIPT}
       ? '/products?coupon=' + encodeURIComponent(notice.couponCode)
       : '/announcements/' + encodeURIComponent(notice.id);
     announcement.querySelector('[data-site-announcement-action]').textContent = currentCopy(isCoupon ? '去挑选设备' : '查看详情', isCoupon ? 'Browse devices' : 'View details') + ' →';
-    announcement.querySelector('[data-notice-controls]').hidden = activeNotices.length < 2;
-    announcement.querySelector('[data-notice-previous]').setAttribute('aria-label', currentCopy('上一条通告', 'Previous announcement'));
-    announcement.querySelector('[data-notice-next]').setAttribute('aria-label', currentCopy('下一条通告', 'Next announcement'));
-    var pause = announcement.querySelector('[data-notice-pause]');
-    pause.setAttribute('aria-label', currentCopy(noticePaused ? '继续轮播' : '暂停轮播', noticePaused ? 'Resume carousel' : 'Pause carousel'));
-    pause.setAttribute('aria-pressed', String(noticePaused));
-    pause.textContent = noticePaused ? '▷' : 'Ⅱ';
   }
   function changeNotice(direction) {
     if (activeNotices.length < 2) return;
@@ -590,14 +577,8 @@ ${ADVERTISEMENT_SCRIPT}
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
   if (announcement) {
-    announcement.querySelector('[data-notice-previous]').addEventListener('click', function () { changeNotice(-1); });
-    announcement.querySelector('[data-notice-next]').addEventListener('click', function () { changeNotice(1); });
-    announcement.querySelector('[data-notice-pause]').addEventListener('click', function () {
-      noticePaused = !noticePaused;
-      renderNoticeBanners();
-    });
     window.setInterval(function () {
-      if (noticePaused || document.hidden || announcement.matches(':hover') || announcement.contains(document.activeElement)
+      if (document.hidden || announcement.matches(':hover') || announcement.contains(document.activeElement)
         || document.querySelector('dialog[open]') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
       changeNotice(1);
     }, 6000);

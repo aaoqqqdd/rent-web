@@ -393,7 +393,7 @@ function buildPolicyUpdateNotice(raw: string, createdAt: string): { title: strin
     dateZh = `${part('year')}年${part('month')}月${part('day')}日`
     dateEn = new Intl.DateTimeFormat('en-AU', { ...options, month: 'long', day: 'numeric' }).format(date)
   }
-  const title = `${policyName}协议内容已更新`
+  const title = '服务政策及协议更新公告'
   const message = [
     '<p>尊敬的客户：</p>',
     `<p>${dateZh ? `我们已于 <strong>${esc(dateZh)}</strong> 更新以下服务政策及协议：` : '我们已更新以下服务政策及协议：'}</p>`,
@@ -405,7 +405,7 @@ function buildPolicyUpdateNotice(raw: string, createdAt: string): { title: strin
     '<p><strong>GeekSlope 团队</strong></p>',
   ].join('')
   const policyNameEn = policiesEn.join(', ')
-  const titleEn = `${policyNameEn} has been updated`
+  const titleEn = 'Service policies and agreements update notice'
   const messageEn = [
     '<p>Dear Customer,</p>',
     `<p>We updated the following service policies and agreements${dateEn ? ` on <strong>${esc(dateEn)}</strong>` : ''}:</p>`,
