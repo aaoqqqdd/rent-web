@@ -139,7 +139,7 @@ test('website session endpoint validates cookies and returns no account details'
     assert.match(response.headers.get('cache-control'), /private, no-store/)
     assert.equal(response.headers.get('vary'), 'Cookie')
     const connectSources = response.headers.get('content-security-policy').split(';').map(directive => directive.trim().split(/\s+/)).find(([name]) => name === 'connect-src')
-    assert.ok(connectSources.slice(1).includes(DASHBOARD))
+    assert.ok(connectSources.slice(1).some(source => source === DASHBOARD))
   }
 })
 
