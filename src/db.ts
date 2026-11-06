@@ -227,7 +227,7 @@ export async function listProducts(env: Env): Promise<Product[]> {
         const lifecycle = String(row.lifecycle_status ?? row.lifecycleStatus ?? '').toUpperCase()
         const status = String(row.status ?? '').toLowerCase()
         return !row.deleted_at && lifecycle !== 'RETIRED' && status !== 'retired'
-          && (owners.has(String(row.id)) ? owners.get(String(row.id))!.eligible : !String(row.id).startsWith('d-c2c-'))
+          && (owners.has(String(row.id)) ? owners.get(String(row.id))!.eligible : !String(row.id).startsWith('d-rp-'))
       })
       .map((row) => ({...toProduct(row, config),ownerRental:owners.get(String(row.id))}))
       .sort((a, b) => a.pricePerDay - b.pricePerDay)
