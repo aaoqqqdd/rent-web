@@ -143,6 +143,10 @@ export interface PublicNotice {
   couponBenefitZh?: string
   couponBenefitEn?: string
   couponMessageEn?: string
+  /** 广告「查看详情」按钮；不填链接时官网隐藏该按钮。 */
+  linkUrl?: string
+  linkText?: string
+  linkTextEn?: string
 }
 
 const CATEGORY_LABEL: Record<Product['category'], string> = {
@@ -503,12 +507,23 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
     // 通知表尚未初始化时，优惠码和其他官网内容仍应正常展示。
   }
   try {
-    const result = await env.RENT.prepare(
-      `SELECT id, title, message, title_en, message_en, created_at, expires_at
-       FROM website_advertisements
-       WHERE active = 1 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-       ORDER BY created_at DESC, rowid DESC LIMIT ?`,
-    ).bind(Math.max(1, Math.min(100, limit))).all<Record<string, unknown>>()
+    let result: { results?: Record<string, unknown>[] }
+    try {
+      result = await env.RENT.prepare(
+        `SELECT id, title, message, title_en, message_en, created_at, expires_at, link_url, link_text, link_text_en
+         FROM website_advertisements
+         WHERE active = 1 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+         ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+      ).bind(Math.max(1, Math.min(100, limit))).all<Record<string, unknown>>()
+    } catch {
+      // 查看详情按钮的链接列尚未迁移时，回退到没有该列的旧表结构。
+      result = await env.RENT.prepare(
+        `SELECT id, title, message, title_en, message_en, created_at, expires_at
+         FROM website_advertisements
+         WHERE active = 1 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+         ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+      ).bind(Math.max(1, Math.min(100, limit))).all<Record<string, unknown>>()
+    }
     for (const row of result.results ?? []) {
       notices.push({
         id: `advertisement:${String(row.id ?? '')}`,
@@ -516,6 +531,9 @@ export async function listPublicNotices(env: Env, limit = 20): Promise<PublicNot
         ...prepareNoticeContent(String(row.title ?? ''), String(row.message ?? ''), String(row.title_en ?? ''), String(row.message_en ?? '')),
         createdAt: String(row.created_at ?? ''),
         expiresAt: row.expires_at ? String(row.expires_at) : undefined,
+        linkUrl: row.link_url ? String(row.link_url) : undefined,
+        linkText: row.link_text ? String(row.link_text) : undefined,
+        linkTextEn: row.link_text_en ? String(row.link_text_en) : undefined,
       })
     }
   } catch {
