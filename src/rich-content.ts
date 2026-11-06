@@ -9,7 +9,7 @@ export function sanitizeDocument(html: string): string {
     ],
     allowedAttributes: { a: ['href', 'target', 'rel'], img: ['src', 'alt'], '*': ['class', 'style'] },
     allowedSchemes: ['http', 'https', 'mailto', 'data'],
-    allowedSchemesByTag: { a: ['http', 'https', 'mailto'], img: ['data'] },
+    allowedSchemesByTag: { a: ['http', 'https', 'mailto'], img: ['data', 'http', 'https'] },
     allowedStyles: {
       '*': {
         color: [/^#[0-9a-f]{3,8}$/i, /^rgb\([\d\s,.%]+\)$/i],

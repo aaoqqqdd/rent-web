@@ -551,7 +551,7 @@ app.get('/announcements', (c) =>
     return renderPage({
       title: `通告与优惠 — ${contact.name}`,
       description: '查看网站最新通告和当前有效的租赁优惠码。',
-      body: renderAnnouncements(notices),
+      body: renderAnnouncements(notices.filter((notice) => notice.kind !== 'advertisement')),
       contact,
       appUrl: appUrl(c.env),
       path: '/announcements',
