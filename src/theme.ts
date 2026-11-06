@@ -614,7 +614,7 @@ html[lang^="en"] .header-cart { font-size: 12px; }
 .process-heading { max-width: 680px; margin: 0 auto 64px; text-align: center; }
 .process-heading h2 { font-size: clamp(32px, 4vw, 46px); }
 .process-heading p { margin-top: 14px; color: var(--muted-fg); font-size: 14px; }
-.guide-steps { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 22px; }
+.guide-steps { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; }
 .guide-steps::before { content: ""; position: absolute; left: 10%; right: 10%; top: 43px; height: 1px; background: linear-gradient(90deg, rgba(89,229,193,.18), rgba(89,229,193,.62), rgba(89,229,193,.18)); }
 .guide-steps article { position: relative; z-index: 1; padding: 0 8px; text-align: center; }
 .guide-steps article > span { display: grid; place-items: center; width: 86px; height: 86px; margin: 0 auto; border: 2px solid rgba(89,229,193,.7); border-radius: 50%; background: var(--bg); box-shadow: 0 0 28px rgba(89,229,193,.06), inset 0 0 18px rgba(89,229,193,.025); color: var(--secondary); font-family: var(--mono); font-size: 22px; font-weight: 800; letter-spacing: -.03em; }
