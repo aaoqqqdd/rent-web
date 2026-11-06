@@ -27,8 +27,8 @@ function setup(t){
     CREATE TABLE c2c_photos (id TEXT,owner_id TEXT,slot TEXT,url TEXT);
     INSERT INTO users VALUES ('owner','active',NULL);
     INSERT INTO c2c_memberships VALUES ('owner','self');INSERT INTO c2c_settings VALUES (1500);
-    INSERT INTO devices VALUES ('platform','Platform PC','M3',20,100,'available','READY',NULL),('d-c2c-owned','Owner PC','M4',25,200,'available','READY',NULL);
-    INSERT INTO c2c_listings VALUES ('d-c2c-owned','owner','approved','self','Level 1\n123 Test Street\nCarlton VIC 3053','{}','墨尔本','{}',NULL);`)
+    INSERT INTO devices VALUES ('platform','Platform PC','M3',20,100,'available','READY',NULL),('d-rp-owned','Owner PC','M4',25,200,'available','READY',NULL);
+    INSERT INTO c2c_listings VALUES ('d-rp-owned','owner','approved','self','Level 1\n123 Test Street\nCarlton VIC 3053','{}','墨尔本','{}',NULL);`)
   const photos={}
   for(const [i,slot] of ['a','b','c','d','power'].entries()){
     const id='c2cp-'+String(i).padStart(16,'0'),url=`https://res.cloudinary.com/demo/image/upload/test-${slot}.jpg`
@@ -43,7 +43,7 @@ test('catalogue shows reviewed owner devices with verified Cloudinary photos and
   const {db,env,photos}=setup(t)
   let products=await listProducts(env)
   assert.equal(products.length,2)
-  const owner=products.find(product=>product.id==='d-c2c-owned')
+  const owner=products.find(product=>product.id==='d-rp-owned')
   assert.equal(owner.ownerRental.mode,'self');assert.equal(owner.ownerRental.photos.length,5)
   assert.match(renderProducts({products}),/个人设备 · 自行交付/)
   assert.match(renderProducts({products}),/https:\/\/res\.cloudinary\.com\/demo\/image\/upload\/test-a\.jpg/)
@@ -78,12 +78,12 @@ test('owner preview shows gallery and city only; full pickup address stays in co
   assert.equal(product.ownerRental.city,'墨尔本')
   const config={pickupLocations:[],deliveryAreas:[],deliveryNote:'',minimumRentalDays:1,unavailableDates:[],unavailableTimeSlots:{}}
   const html=renderProductDetail({product,config,appUrl:'https://console.example.test'})
-  assert.match(html,/href="https:\/\/console.example.test\/customer\/rent\/d-c2c-owned"/)
+  assert.match(html,/href="https:\/\/console.example.test\/customer\/rent\/d-rp-owned"/)
   assert.match(html,/屏幕开机画面/);assert.match(html,/墨尔本/);assert.doesNotMatch(html,/123 Test Street|Carlton VIC 3053/)
   assert.doesNotMatch(html,/id="detail-add-cart"/)
   for(const { code } of htmlScripts(html)) assert.doesNotThrow(()=>new Function(code))
-  const response=await handleRentalRequest({env,req:{header(){return ''}},json(body,status){return Response.json(body,{status})}},{deviceIds:['d-c2c-owned']})
+  const response=await handleRentalRequest({env,req:{header(){return ''}},json(body,status){return Response.json(body,{status})}},{deviceIds:['d-rp-owned']})
   assert.equal(response.status,409)
-  assert.match((await response.json()).redirectUrl,/\/customer\/rent\/d-c2c-owned$/)
+  assert.match((await response.json()).redirectUrl,/\/customer\/rent\/d-rp-owned$/)
   assert.equal((await ownerRentals(env)).size,1)
 })
