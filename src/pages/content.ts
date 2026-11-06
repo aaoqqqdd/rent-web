@@ -59,9 +59,8 @@ export function renderRentalGuide(config: RentalConfig): string {
     <div class="guide-steps">
       <article><span>01</span><h3>选择设备</h3><p>浏览产品目录，按用途、配置、价格与现货状态选择适合你的设备。</p></article>
       <article><span>02</span><h3>提交申请</h3><p>填写租期、取还方式与联系方式，并验证付款方式；验证过程不会立即扣款。</p></article>
-      <article><span>03</span><h3>签约付款</h3><p>审核通过后查看并签署电子合同，再按确认后的订单金额完成付款。</p></article>
-      <article><span>04</span><h3>配送或自取</h3><p>按确认时间安排墨尔本本地配送，或前往约定地点自取并完成验机。</p></article>
-      <article><span>05</span><h3>到期归还</h3><p>租期结束前联系我们安排归还；设备与配件验收完成后处理押金。</p></article>
+      <article><span>03</span><h3>配送或自取</h3><p>审核通过并确认合同与付款后，按约定时间安排墨尔本本地配送，或前往约定地点自取并完成验机。</p></article>
+      <article><span>04</span><h3>到期归还</h3><p>租期结束前联系我们安排归还；设备与配件验收完成后处理押金。</p></article>
     </div>
   </div>
 </section>
