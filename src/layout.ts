@@ -9,6 +9,7 @@ import { renderSiteHeader } from './components/site-header'
 import { ACCOUNT_STATUS_SCRIPT } from './components/account-status'
 import { renderSiteFooter } from './components/site-footer'
 import { renderFeedbackUi, FEEDBACK_SCRIPT } from './components/feedback'
+import { renderContactWidget, CONTACT_WIDGET_SCRIPT } from './components/contact-widget'
 import { renderAnnouncementUi, renderAdvertisementUi, ANNOUNCEMENT_SCRIPT, ADVERTISEMENT_SCRIPT } from './components/announcement'
 import { FAVICON_SVG } from './components/brand'
 import { SITE_URL } from './seo'
@@ -160,8 +161,10 @@ ${renderFeedbackUi()}
 ${renderAnnouncementUi()}
 ${renderAdvertisementUi()}
 ${renderSiteFooter(opts.contact)}
+${renderContactWidget(opts.contact)}
 ${ANNOUNCEMENT_SCRIPT}
 ${ADVERTISEMENT_SCRIPT}
+${CONTACT_WIDGET_SCRIPT}
 <script>${ACCOUNT_STATUS_SCRIPT}</script>
 <script>
 (() => {
