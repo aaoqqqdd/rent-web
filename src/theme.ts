@@ -1307,6 +1307,31 @@ input:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
 }
 /* 长英文 / 长地址不撑破卡片。 */
 .legal-document__content, .card, .lookup-data-list, .order-record-section, .gs-dialog-copy, .address-suggestion { overflow-wrap: anywhere; }
+
+/* ---------- 右下角悬浮通讯软件入口 ---------- */
+/* bottom 留出 86px，避免叠在 Tawk.to 气泡（约 60px 高 + 20px 边距）正上方，点击互不干扰。 */
+.gs-contact-widget { position: fixed; right: 20px; bottom: 86px; z-index: 900; display: grid; justify-items: end; gap: 10px; }
+.gs-contact-list { display: grid; gap: 10px; justify-items: end; }
+.gs-contact-item {
+  display: inline-flex; align-items: center; gap: 10px; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--gs-contact-color, var(--primary)); color: #fff; box-shadow: 0 10px 28px -8px rgba(0,0,0,.55);
+  cursor: pointer; transition: transform .18s ease, box-shadow .18s ease; overflow: hidden;
+}
+.gs-contact-item svg, .gs-contact-item .gs-contact-icon svg { width: 24px; height: 24px; flex: none; margin: 0 12px; }
+.gs-contact-item .gs-contact-label { display: none; }
+.gs-contact-item:hover { transform: translateY(-2px); box-shadow: 0 14px 34px -8px rgba(0,0,0,.65); }
+.gs-contact-fab { position: relative; }
+.gs-contact-fab-open { display: inline-flex; align-items: center; margin: 0 12px; }
+.gs-contact-fab-close { display: none; align-items: center; margin: 0 12px; }
+.gs-contact-widget.is-open .gs-contact-fab-open { display: none; }
+.gs-contact-widget.is-open .gs-contact-fab-close { display: inline-flex; }
+@media (hover: hover) {
+  .gs-contact-list .gs-contact-item { width: auto; padding-right: 16px; }
+  .gs-contact-list .gs-contact-item .gs-contact-label { display: inline-block; font-size: 13px; font-weight: 600; white-space: nowrap; }
+}
+@supports (padding: env(safe-area-inset-bottom)) {
+  .gs-contact-widget { bottom: calc(86px + env(safe-area-inset-bottom)); right: calc(20px + env(safe-area-inset-right)); }
+}
 `
 
 export const OWNER_RENTAL_STYLES = `.product-visual{position:relative}.owner-rental-image{width:100%;height:100%;min-height:180px;object-fit:contain;display:block;border-radius:12px}.owner-rental-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%;position:relative;z-index:1;padding:20px;box-sizing:border-box}.owner-rental-gallery figure{margin:0;background:#fff;border:1px solid #dfe5ea;border-radius:12px;overflow:hidden}.owner-rental-gallery img{width:100%;height:150px;object-fit:contain;display:block}.owner-rental-gallery figcaption{padding:8px 12px;font-size:12px;color:#526171}.owner-rental-pickup{padding:16px;border:1px solid #dfe5ea;border-radius:12px;margin:18px 0}.owner-rental-pickup address{white-space:pre-line;font-style:normal;margin:8px 0;overflow-wrap:anywhere}.owner-rental-pickup>span{font-size:13px;color:#526171}@media(max-width:600px){.owner-rental-gallery{padding:12px;gap:8px}.owner-rental-gallery img{height:110px}}`

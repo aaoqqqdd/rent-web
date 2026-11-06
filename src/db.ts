@@ -58,6 +58,11 @@ export interface SiteContact {
   xiaohongshuQrUrl?: string
   douyinUrl?: string
   douyinQrUrl?: string
+  whatsappUrl?: string
+  telegramUrl?: string
+  messengerUrl?: string
+  lineUrl?: string
+  viberUrl?: string
 }
 
 export interface ReferralConfig {
@@ -671,7 +676,10 @@ export async function getSiteContact(env: Env): Promise<SiteContact> {
       if (parsed.contact) fallback.contact = parsed.contact
       if (parsed.website) fallback.website = parsed.website
       if (parsed.logo) fallback.logo = parsed.logo
-      for (const key of ['wechatUrl', 'wechatQrUrl', 'xiaohongshuUrl', 'xiaohongshuQrUrl', 'douyinUrl', 'douyinQrUrl'] as const) {
+      for (const key of [
+        'wechatUrl', 'wechatQrUrl', 'xiaohongshuUrl', 'xiaohongshuQrUrl', 'douyinUrl', 'douyinQrUrl',
+        'whatsappUrl', 'telegramUrl', 'messengerUrl', 'lineUrl', 'viberUrl',
+      ] as const) {
         if (typeof parsed[key] === 'string') fallback[key] = parsed[key]
       }
     }

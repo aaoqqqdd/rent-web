@@ -3,7 +3,7 @@ import type { SiteContact } from '../db'
 import { renderBrand } from './brand'
 import { FOOTER_BRAND_ICONS as icons } from './footer-icons'
 
-function publicHttpsUrl(value: string | undefined): string {
+export function publicHttpsUrl(value: string | undefined): string {
   try {
     const url = new URL(value || '')
     return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''
