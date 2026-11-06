@@ -592,13 +592,15 @@ ${CONTACT_WIDGET_SCRIPT}
     fetch('/api/public-notices?limit=100', { headers: { accept: 'application/json' } })
       .then(function (response) { return response.ok ? response.json() : null; })
       .then(function (data) {
-        activeNotices = data && Array.isArray(data.notices) ? data.notices : [];
+        var notices = data && Array.isArray(data.notices) ? data.notices : [];
+        // The sticky top banner never carries ads; only the separate advertisement dialog does.
+        activeNotices = notices.filter(function (notice) { return notice.kind !== 'advertisement'; });
         renderNoticeBanners();
         syncOverlayOffset();
-        pendingAnnouncement = activeNotices.find(function (notice) {
+        pendingAnnouncement = notices.find(function (notice) {
           return notice.kind === 'announcement' && notice.isAdminAnnouncement === true;
         }) || null;
-        pendingAdvertisement = activeNotices.find(function (notice) { return notice.kind === 'advertisement'; }) || null;
+        pendingAdvertisement = notices.find(function (notice) { return notice.kind === 'advertisement'; }) || null;
         showPendingNotice();
       })
       .catch(function () {});
