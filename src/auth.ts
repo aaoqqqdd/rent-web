@@ -8,6 +8,7 @@ import { readClientAccess } from './clientAccess'
 import type { Context } from 'hono'
 import type { Env } from './index'
 import { verifyTurnstile } from './turnstile'
+import { getDeliveryRuntimeConfig } from './delivery'
 
 const PBKDF2_ITERATIONS = 100000
 
@@ -161,6 +162,28 @@ async function lockReferral(env: Env, referrerId: string, refereeId: string, cod
   }
 }
 
+/**
+ * 注册成功后异步触发欢迎邮件：通过 RENT_SERVICE service binding 调用 rent 的
+ * POST /internal/welcome-email（鉴权复用配送管理 Token，见 ./delivery
+ * getDeliveryRuntimeConfig 的说明）。失败只记日志，不影响注册结果。
+ */
+async function sendWelcomeEmail(c: Context<{ Bindings: Env }>, email: string, name: string): Promise<void> {
+  const service = c.env.RENT_SERVICE
+  if (!service) return
+  try {
+    const adminToken = (await getDeliveryRuntimeConfig(c)).adminToken
+    if (!adminToken) return
+    const response = await service.fetch(new Request('https://rent.internal/internal/welcome-email', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email, name }),
+    }))
+    if (!response.ok) console.error('Rent welcome email request failed', response.status)
+  } catch (error) {
+    console.error('Rent welcome email request failed', error instanceof Error ? error.message : String(error))
+  }
+}
+
 export interface RegisterResult {
   ok: boolean
   message: string
@@ -304,6 +327,8 @@ export async function registerCustomer(
     } catch {
       /* 协议确认列不存在时跳过 */
     }
+
+    c.executionCtx.waitUntil(sendWelcomeEmail(c, email, name))
 
     return { ok: true, code: 'created', message: '账号创建成功，请使用该邮箱和密码登录。' }
   } catch (err) {

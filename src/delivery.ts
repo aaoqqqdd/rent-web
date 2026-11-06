@@ -86,7 +86,12 @@ async function readStoredDeliveryConfig(c: DeliveryContext): Promise<StoredDeliv
   return (stored as StoredDeliveryConfig | null) ?? {}
 }
 
-async function getDeliveryRuntimeConfig(c: DeliveryContext): Promise<DeliveryRuntimeConfig> {
+/**
+ * 导出供 auth.ts 复用：adminToken 是目前官网与 rent 两个 Worker 之间唯一已共享的
+ * 内部密钥，rent 侧 /internal/delivery-status-email、/internal/welcome-email 都用它
+ * 做 Bearer 鉴权（见 rent src/services/deliveryNotifications.ts、welcomeEmail.ts）。
+ */
+export async function getDeliveryRuntimeConfig(c: DeliveryContext): Promise<DeliveryRuntimeConfig> {
   const stored = await readStoredDeliveryConfig(c)
   // secret 解密统一走 src/settings.ts（与 Turnstile 等配置同一套 AES-GCM 约定）。
   const [apiToken, customerApiKey, webhookSecret, adminToken] = await Promise.all([
