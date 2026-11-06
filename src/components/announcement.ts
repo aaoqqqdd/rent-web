@@ -51,7 +51,11 @@ function readerScript(advertisement: boolean): string {
     zh.hidden = Boolean(english);
     en.hidden = !english;
     dialog.querySelector('[data-announcement-kicker]').textContent = english ? ${JSON.stringify(label[1])} : ${JSON.stringify(label[0])};
-    dialog.querySelector('[data-announcement-detail]').textContent = english ? 'View details' : '查看详情';
+    ${advertisement
+      ? `var detailLink = dialog.querySelector('[data-announcement-detail]');
+    detailLink.hidden = !(notice && notice.linkUrl);
+    if (notice && notice.linkUrl) detailLink.textContent = english ? (notice.linkTextEn || notice.linkText || 'View details') : (notice.linkText || '查看详情');`
+      : `dialog.querySelector('[data-announcement-detail]').textContent = english ? 'View details' : '查看详情';`}
     dialog.querySelector('[data-announcement-dismiss]').textContent = english ? ${JSON.stringify(close[1])} : ${JSON.stringify(close[0])};
     dialog.querySelector('[data-announcement-language]').setAttribute('aria-label', english ? 'Language' : '语言');
     dialog.querySelectorAll('[data-announcement-close]').forEach(function (button) {
@@ -60,8 +64,11 @@ function readerScript(advertisement: boolean): string {
   }
   function show(item) {
     if (document.querySelector('dialog[open]')) return false;
-    var href = '/announcements/' + encodeURIComponent(item.id);
-    if (typeof dialog.showModal !== 'function') { window.location.href = href; return false; }
+    ${advertisement
+      ? `var href = item.linkUrl || '';
+    if (typeof dialog.showModal !== 'function') { if (href) window.location.href = href; return false; }`
+      : `var href = '/announcements/' + encodeURIComponent(item.id);
+    if (typeof dialog.showModal !== 'function') { window.location.href = href; return false; }`}
     notice = item;
     // Only use the server-sanitized rich fields, never raw message HTML.
     if (item.messageHtml) zh.innerHTML = item.messageHtml;
