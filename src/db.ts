@@ -324,7 +324,7 @@ export async function getDeviceAvailability(
         const endPeriod = bufferDays ? 'PM' : (String(row.endPeriod || 'AM') === 'PM' ? 'PM' : 'AM')
         const startIndex = Date.parse(`${date}T00:00:00Z`) / 86400000 * 2 + (startPeriod === 'PM' ? 1 : 0)
         const endIndex = Date.parse(`${endDate}T00:00:00Z`) / 86400000 * 2 + (endPeriod === 'PM' ? 1 : 0)
-        for (let index = startIndex; index < endIndex; index += 1) {
+        for (let index = startIndex; index <= endIndex; index += 1) {
           const periodDate = new Date(Math.floor(index / 2) * 86400000).toISOString().slice(0, 10)
           const period = index % 2 ? 'PM' : 'AM'
           const periods = availability.unavailablePeriods[periodDate] || []
