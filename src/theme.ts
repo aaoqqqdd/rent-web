@@ -269,7 +269,8 @@ p { margin: 0; }
 .date-picker-grid button { min-height: 30px; border: 0; border-radius: 6px; color: var(--fg); background: transparent; cursor: pointer; }
 .date-picker-grid button:hover:not(:disabled), .date-picker-grid button.is-selected { color: #fff; background: var(--primary); }
 .date-picker-grid button.is-outside { color: #555d71; }
-.date-picker-grid button:disabled { opacity: .22; cursor: not-allowed; }
+.date-picker-grid button:disabled { color: #454b60; cursor: not-allowed; }
+.date-picker-grid button.is-outside:disabled { color: #363b4d; }
 .term-status { margin-top: 12px; color: var(--secondary) !important; font-size: 12px !important; }
 .term-status[data-state="error"] { color: #ff9b9b !important; }
 .cart-page-summary .is-disabled { opacity: .45; cursor: not-allowed; }
