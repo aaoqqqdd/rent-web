@@ -1,11 +1,11 @@
-// 右下角悬浮通讯软件入口：WhatsApp + 主流聊天 App，rent 后台未填链接的渠道整项隐藏。
+// 右下角悬浮通讯软件入口：主流聊天 App，rent 后台未填链接的渠道整项隐藏。
+// WhatsApp 已在 footer 展示过，这里不再重复显示悬浮按钮。
 import { esc } from '../escape'
 import type { SiteContact } from '../db'
 import { publicHttpsUrl } from './site-footer'
 import { CONTACT_CHANNEL_ICONS, type ContactChannelKey } from './contact-icons'
 
 const CHANNELS: Array<{ key: ContactChannelKey; field: keyof SiteContact; label: string }> = [
-  { key: 'whatsapp', field: 'whatsappUrl', label: 'WhatsApp' },
   { key: 'telegram', field: 'telegramUrl', label: 'Telegram' },
   { key: 'messenger', field: 'messengerUrl', label: 'Messenger' },
   { key: 'line', field: 'lineUrl', label: 'Line' },
