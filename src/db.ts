@@ -59,6 +59,8 @@ export interface SiteContact {
   douyinUrl?: string
   douyinQrUrl?: string
   whatsappUrl?: string
+  instagramUrl?: string
+  facebookUrl?: string
   telegramUrl?: string
   messengerUrl?: string
   lineUrl?: string
@@ -696,7 +698,7 @@ export async function getSiteContact(env: Env): Promise<SiteContact> {
       if (parsed.logo) fallback.logo = parsed.logo
       for (const key of [
         'wechatUrl', 'wechatQrUrl', 'xiaohongshuUrl', 'xiaohongshuQrUrl', 'douyinUrl', 'douyinQrUrl',
-        'whatsappUrl', 'telegramUrl', 'messengerUrl', 'lineUrl', 'viberUrl',
+        'whatsappUrl', 'instagramUrl', 'facebookUrl', 'telegramUrl', 'messengerUrl', 'lineUrl', 'viberUrl',
       ] as const) {
         if (typeof parsed[key] === 'string') fallback[key] = parsed[key]
       }
